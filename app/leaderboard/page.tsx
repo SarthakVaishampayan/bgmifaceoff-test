@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import LeaderboardClient from './LeaderboardClient'
 import type { Metadata } from 'next'
 
@@ -73,6 +73,21 @@ export default async function LeaderboardPage() {
 
   const ranked = filteredRows.map((row, idx) => ({ ...row, rank: idx + 1 }))
 
+  // Get current user's team_id for "My Slots" filter
+  let userTeamId: string | null = null
+  try {
+    const userClient = await createClient()
+    const { data: { user } } = await userClient.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('team_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      userTeamId = profile?.team_id || null
+    }
+  } catch {}
+
   return (
     <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>Loading Leaderboard...</div>}>
       <LeaderboardClient
@@ -80,6 +95,7 @@ export default async function LeaderboardPage() {
         allMatches={filteredMatches}
         slots={slotsResult.data || []}
         bookings={filteredBookings as any[]}
+        userTeamId={userTeamId}
       />
     </Suspense>
   )

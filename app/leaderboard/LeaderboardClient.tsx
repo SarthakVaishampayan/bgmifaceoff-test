@@ -50,9 +50,10 @@ interface Props {
   allMatches: MatchEntry[]
   slots: SlotItem[]
   bookings?: BookingEntry[]
+  userTeamId?: string | null
 }
 
-export default function LeaderboardClient({ rows, allMatches, slots, bookings = [] }: Props) {
+export default function LeaderboardClient({ rows, allMatches, slots, bookings = [], userTeamId = null }: Props) {
   const searchParams = useSearchParams()
   const urlSlotId = searchParams ? searchParams.get('slot_id') : null
   const urlTab = searchParams ? searchParams.get('tab') : null
@@ -62,6 +63,16 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
   )
   const [search, setSearch] = useState('')
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null)
+  const [mySlotsOnly, setMySlotsOnly] = useState(false)
+
+  // Slots filtered by "My Slots" toggle
+  const filteredSlots = useMemo(() => {
+    if (!mySlotsOnly || !userTeamId) return slots
+    const bookedSlotIds = new Set(
+      bookings.filter(b => b.team_id === userTeamId).map(b => b.slot_id)
+    )
+    return slots.filter(s => bookedSlotIds.has(s.slot_id))
+  }, [slots, mySlotsOnly, userTeamId, bookings])
 
   // Default selected slot to the URL slot_id or most recent one
   const [selectedSlotId, setSelectedSlotId] = useState<string>(
@@ -76,6 +87,13 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
       setViewMode('slot')
     }
   }, [urlSlotId, urlTab])
+
+  // Auto-select first slot when toggle changes
+  useEffect(() => {
+    if (filteredSlots.length > 0) {
+      setSelectedSlotId(filteredSlots[0].slot_id)
+    }
+  }, [mySlotsOnly])
 
   // Filter overall standings
   const filteredOverall = useMemo(() =>
@@ -161,8 +179,8 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
   }, [selectedSlotId, allMatches, bookings])
 
   const selectedSlot = useMemo(() =>
-    slots.find(s => s.slot_id === selectedSlotId),
-    [slots, selectedSlotId]
+    filteredSlots.find(s => s.slot_id === selectedSlotId),
+    [filteredSlots, selectedSlotId]
   )
 
   function getRankBadgeClass(rank: number) {
@@ -424,15 +442,55 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
           <>
             {/* Slot Dropdown Selector Bar */}
             <div className={styles.slotSelectorBar}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#facc15', marginBottom: '8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  SELECT SLOT TO VIEW RESULTS
-                </label>
-                <CustomSlotDropdown
-                  slots={slots}
-                  selectedSlotId={selectedSlotId}
-                  onSelectSlot={id => setSelectedSlotId(id)}
-                />
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#facc15', letterSpacing: '0.08em', textTransform: 'uppercase', width: '100%', marginBottom: '0' }}>
+                SELECT SLOT TO VIEW RESULTS
+              </label>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <CustomSlotDropdown
+                    slots={filteredSlots}
+                    selectedSlotId={selectedSlotId}
+                    onSelectSlot={id => setSelectedSlotId(id)}
+                    emptyMessage={mySlotsOnly ? 'Select your slots' : undefined}
+                  />
+                </div>
+
+                {userTeamId && (
+                  <button
+                    type="button"
+                    onClick={() => setMySlotsOnly(!mySlotsOnly)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '12px 14px', borderRadius: '8px',
+                      background: mySlotsOnly ? 'rgba(251, 191, 36, 0.15)' : '#161616',
+                      border: mySlotsOnly ? '1px solid rgba(251, 191, 36, 0.4)' : '1px solid #2a2a2a',
+                      color: mySlotsOnly ? '#fbbf24' : '#888',
+                      fontSize: '0.72rem', fontWeight: 700,
+                      cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                      letterSpacing: '0.04em', textTransform: 'uppercase',
+                      transition: 'all 0.2s ease',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{
+                      width: '28px', height: '14px', borderRadius: '7px',
+                      background: mySlotsOnly ? '#fbbf24' : '#333',
+                      position: 'relative', transition: 'background 0.2s ease',
+                      flexShrink: 0,
+                    }}>
+                      <div style={{
+                        width: '10px', height: '10px', borderRadius: '50%',
+                        background: mySlotsOnly ? '#111' : '#666',
+                        position: 'absolute', top: '2px',
+                        left: mySlotsOnly ? '16px' : '2px',
+                        transition: 'left 0.2s ease',
+                      }} />
+                    </div>
+                    MY SLOTS ONLY
+                  </button>
+                )}
               </div>
 
               {selectedSlot && (
@@ -613,10 +671,12 @@ function CustomSlotDropdown({
   slots,
   selectedSlotId,
   onSelectSlot,
+  emptyMessage,
 }: {
   slots: SlotItem[]
   selectedSlotId: string
   onSelectSlot: (id: string) => void
+  emptyMessage?: string
 }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -656,7 +716,7 @@ function CustomSlotDropdown({
         }}
       >
         <span style={{ color: slots.length === 0 ? '#888888' : '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {slots.length === 0 ? 'No slots created yet' : getLabel(selectedSlot)}
+          {slots.length === 0 ? (emptyMessage || 'No slots created yet') : getLabel(selectedSlot)}
         </span>
         <ChevronDown
           size={18}
