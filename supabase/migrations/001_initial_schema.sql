@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS payouts (
 -- =============================================
 -- LEADERBOARD VIEW
 -- =============================================
+DROP VIEW IF EXISTS leaderboard CASCADE;
 CREATE OR REPLACE VIEW leaderboard AS
 SELECT
   t.team_id,

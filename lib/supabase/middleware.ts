@@ -1,6 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// In-memory cache for maintenance mode (persists across requests in same worker)
+let maintenanceCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
+const CACHE_TTL_MS = 30_000 // re-check every 30 seconds
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -12,7 +16,6 @@ export async function updateSession(request: NextRequest) {
     (supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://'))
   )
 
-  // Safety fallback if Supabase credentials are missing or placeholder
   if (!isValidUrl || !supabaseAnonKey || supabaseUrl?.includes('your_supabase')) {
     return supabaseResponse
   }
@@ -42,7 +45,7 @@ export async function updateSession(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     const pathname = request.nextUrl.pathname
 
-    // Maintenance Mode Check
+    // Skip maintenance check on allowed paths (no DB hit needed)
     const isAllowedPath =
       pathname.startsWith('/admin') ||
       pathname.startsWith('/login') ||
@@ -52,13 +55,22 @@ export async function updateSession(request: NextRequest) {
       pathname.startsWith('/_next')
 
     if (!isAllowedPath) {
-      const { data: configData } = await supabase
-        .from('config')
-        .select('value')
-        .eq('key', 'maintenance_mode')
-        .maybeSingle()
+      // Use cached value if fresh
+      const now = Date.now()
+      if (now - maintenanceCache.checkedAt > CACHE_TTL_MS) {
+        const { data: configData } = await supabase
+          .from('config')
+          .select('value')
+          .eq('key', 'maintenance_mode')
+          .maybeSingle()
 
-      if (configData?.value === 'true') {
+        maintenanceCache = {
+          value: configData?.value === 'true',
+          checkedAt: now,
+        }
+      }
+
+      if (maintenanceCache.value) {
         let isAdmin = false
         if (user) {
           const { data: userData } = await supabase
@@ -81,18 +93,17 @@ export async function updateSession(request: NextRequest) {
     }
 
     // Protected routes
-    const adminPaths = ['/admin']
-
     if (pathname.startsWith('/onboard')) {
       const url = request.nextUrl.clone()
       url.pathname = user ? '/dashboard' : '/login'
       return NextResponse.redirect(url)
     }
 
-    if (adminPaths.some(p => pathname.startsWith(p))) {
+    // Admin routes: redirect to dedicated admin login (skip /admin/login itself)
+    if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/login')) {
       if (!user) {
         const url = request.nextUrl.clone()
-        url.pathname = '/login'
+        url.pathname = '/admin/login'
         return NextResponse.redirect(url)
       }
     }

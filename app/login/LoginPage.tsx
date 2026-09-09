@@ -67,6 +67,7 @@ export default function LoginPage() {
     const userId = data.user?.id
     if (userId) {
       setLoading(false)
+      window.dispatchEvent(new Event('app:showLoader'))
       window.location.href = getRedirectUrl()
     } else {
       setLoading(false)
@@ -178,6 +179,7 @@ export default function LoginPage() {
     const userId = data?.user?.id
     if (userId) {
       setLoading(false)
+      window.dispatchEvent(new Event('app:showLoader'))
       window.location.href = getRedirectUrl()
     } else {
       setLoading(false)

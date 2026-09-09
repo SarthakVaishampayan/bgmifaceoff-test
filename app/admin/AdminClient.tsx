@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate } from '@/lib/utils/formatDate'
@@ -21,9 +22,23 @@ interface Props {
 
 export default function AdminClient({ userRole = 'admin', slots, teams, payouts: initialPayouts, bookings, coupons, config, usersList = [] }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   const [tab, setTab] = useState<AdminTab>('scores')
   const [payouts, setPayouts] = useState(initialPayouts)
   const [users, setUsers] = useState(usersList)
+  const [adminEmail, setAdminEmail] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setAdminEmail(data.user.email || '')
+    })
+  }, [])
+
+  async function handleSignOut() {
+    window.dispatchEvent(new Event('app:showLoader'))
+    await supabase.auth.signOut()
+    router.push('/admin/login')
+  }
 
   const isSuperAdmin = userRole === 'admin'
 
@@ -119,6 +134,40 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
             </button>
           ))}
         </nav>
+
+        {/* User Info + Sign Out */}
+        <div style={{ marginTop: 'auto', padding: '1rem 1rem 1.25rem', borderTop: '1px solid var(--border-subtle)' }}>
+          {adminEmail && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '50%',
+                background: 'rgba(251, 191, 36, 0.15)',
+                border: '1px solid rgba(251, 191, 36, 0.3)',
+                color: '#fbbf24', fontSize: '0.8rem', fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                {adminEmail.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{adminEmail}</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Administrator</div>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={handleSignOut}
+            style={{
+              width: '100%', padding: '0.6rem 1rem',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: 'var(--radius-md)',
+              color: '#f87171', fontSize: '0.8rem', fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'var(--font-body)',
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* Main content */}

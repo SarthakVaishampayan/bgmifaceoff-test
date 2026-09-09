@@ -120,6 +120,30 @@
   box-shadow: 0 4px 14px rgba(251, 191, 36, 0.35);
 }
 
+.registerBtn {
+  background: #dc2626;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: 1px solid #dc2626;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.registerBtn:hover {
+  background: #ef4444;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+}
+
 .secondaryBtn {
   background: #272727;
   color: #ffffff;

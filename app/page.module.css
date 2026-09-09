@@ -153,6 +153,29 @@
   color: #fbbf24;
 }
 
+.registerCta {
+  background: #dc2626;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 14px 28px;
+  border-radius: 6px;
+  border: 1px solid #dc2626;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.35);
+}
+
+.registerCta:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(220, 38, 38, 0.55);
+}
+
 .heroStats {
   display: flex;
   align-items: center;

@@ -8,7 +8,7 @@ export default async function AdminPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/login')
+  if (!user) redirect('/admin/login')
 
   const admin = await createAdminClient()
 
@@ -22,15 +22,7 @@ export default async function AdminPage() {
   let role = userProfile?.role
 
   if (role !== 'admin' && role !== 'admin_scores') {
-    // Auto-promote logged in user to admin in local dev mode so owner never gets blocked
-    if (process.env.NODE_ENV !== 'production' || userProfile?.is_test_account) {
-      await admin
-        .from('users')
-        .upsert({ user_id: user.id, email: user.email, role: 'admin' }, { onConflict: 'user_id' })
-      role = 'admin'
-    } else {
-      redirect('/')
-    }
+    redirect('/')
   }
 
   // Fetch data for admin

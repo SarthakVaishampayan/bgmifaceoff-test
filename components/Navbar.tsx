@@ -14,6 +14,9 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const supabase = createClient()
 
+  // Hide navbar on admin routes
+  if (pathname.startsWith('/admin')) return null
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
@@ -22,6 +25,7 @@ export default function Navbar() {
   }, [])
 
   const handleSignOut = async () => {
+    window.dispatchEvent(new Event('app:showLoader'))
     await supabase.auth.signOut()
     router.push('/')
     setMenuOpen(false)
@@ -69,25 +73,35 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Right Side Actions: Dashboard & Login */}
+        {/* Right Side Actions */}
         <div className={styles.actions}>
-          <Link
-            href="/dashboard"
-            className={`${styles.secondaryBtn} ${pathname === '/dashboard' ? styles.activeBtn : ''}`}
-          >
-            Dashboard
-          </Link>
           {user ? (
-            <button onClick={handleSignOut} className={styles.secondaryBtn}>
-              Sign Out
-            </button>
+            <>
+              <Link
+                href="/dashboard"
+                className={`${styles.secondaryBtn} ${pathname === '/dashboard' ? styles.activeBtn : ''}`}
+              >
+                Dashboard
+              </Link>
+              <button onClick={handleSignOut} className={styles.secondaryBtn}>
+                Sign Out
+              </button>
+            </>
           ) : (
-            <Link
-              href="/login"
-              className={`${styles.ctaBtn} ${pathname === '/login' ? styles.activeCta : ''}`}
-            >
-              Login
-            </Link>
+            <>
+              <Link
+                href="/register"
+                className={styles.registerBtn}
+              >
+                Sign Up
+              </Link>
+              <Link
+                href="/login"
+                className={`${styles.ctaBtn} ${pathname === '/login' ? styles.activeCta : ''}`}
+              >
+                Login
+              </Link>
+            </>
           )}
         </div>
 
@@ -126,9 +140,14 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <Link href="/login" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
-              Join Tournament
-            </Link>
+            <>
+              <Link href="/register" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
+                Sign Up
+              </Link>
+              <Link href="/login" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
+                Login
+              </Link>
+            </>
           )}
         </div>
       )}

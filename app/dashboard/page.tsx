@@ -20,7 +20,7 @@ export default async function DashboardPage() {
 
   const admin = await createAdminClient()
 
-  // Fetch user profile
+  // Step 1: Fetch user profile (must be first — determines teamId)
   let { data: userProfile } = await admin
     .from('users')
     .select('*')
@@ -29,9 +29,8 @@ export default async function DashboardPage() {
 
   let teamId = userProfile?.team_id
 
-  // If user has no team or no profile yet, automatically set up a default team so they never get trapped in an onboard redirect
+  // Step 2: Auto-provision team if missing (must be sequential — depends on step 1)
   if (!teamId) {
-    // Check if team already exists for this captain
     let { data: existingTeam } = await admin
       .from('teams')
       .select('*')
@@ -40,17 +39,13 @@ export default async function DashboardPage() {
 
     if (!existingTeam) {
       const defaultTeamName =
-        user.user_metadata?.display_name?.trim() ||
-        user.user_metadata?.team_name?.trim() ||
+        user.user_metadata?.display_name?.trim() || user.user_metadata?.team_name?.trim() ||
         user.user_metadata?.full_name?.trim() ||
         (user.email ? `${user.email.split('@')[0]} Squad` : `Team ${user.id.slice(0, 5)}`)
 
       const { data: newTeam } = await admin
         .from('teams')
-        .insert({
-          team_name: defaultTeamName,
-          captain_user_id: user.id,
-        })
+        .insert({ team_name: defaultTeamName, captain_user_id: user.id })
         .select()
         .maybeSingle()
 
@@ -62,19 +57,13 @@ export default async function DashboardPage() {
       await admin
         .from('users')
         .upsert(
-          {
-            user_id: user.id,
-            email: user.email,
-            team_id: teamId,
-            role: 'captain',
-            display_name: existingTeam.team_name,
-          },
+          { user_id: user.id, email: user.email, team_id: teamId, role: 'captain', display_name: existingTeam.team_name },
           { onConflict: 'user_id' }
         )
     }
   }
 
-  // Fetch team info
+  // Step 3: Fetch team info + collect all user team IDs (sequential — depends on teamId)
   const { data: team } = await admin
     .from('teams')
     .select('team_id, team_name, captain_user_id, name_changed')
@@ -88,7 +77,6 @@ export default async function DashboardPage() {
     name_changed: false,
   }
 
-  // Collect all team IDs owned by or linked to this user (for legacy & new accounts compatibility)
   const { data: userCaptainedTeams } = await admin
     .from('teams')
     .select('team_id')
@@ -96,44 +84,78 @@ export default async function DashboardPage() {
 
   const allUserTeamIds = Array.from(
     new Set(
-      [
-        safeTeam.team_id,
-        userProfile?.team_id,
-        ...(userCaptainedTeams || []).map(t => t.team_id)
-      ].filter(Boolean)
+      [safeTeam.team_id, userProfile?.team_id, ...(userCaptainedTeams || []).map(t => t.team_id)].filter(Boolean)
     )
   )
 
-  // Fetch booked slots for this user/team with slot details & whatsapp_link
-  let bookings: any[] = []
-  if (allUserTeamIds.length > 0) {
-    let { data: bData, error: bookingErr } = await admin
-      .from('bookings')
-      .select(
-        'booking_id, slot_id, payment_status, amount_paid, coupon_used, created_at, room_slot_number, slots(slot_id, date, time_label, status, entry_fee, is_grand_finals, whatsapp_link)'
-      )
-      .in('team_id', allUserTeamIds)
-      .order('created_at', { ascending: false })
+  // Step 4: ALL independent queries in parallel
+  const [
+    bookingsResult,
+    matchesResult,
+    configResult,
+    leaderboardResult,
+    payoutsResult,
+    couponsResult,
+  ] = await Promise.all([
+    // Bookings
+    allUserTeamIds.length > 0
+      ? admin
+          .from('bookings')
+          .select('booking_id, slot_id, payment_status, amount_paid, coupon_used, created_at, room_slot_number, slots(slot_id, date, time_label, status, entry_fee, is_grand_finals, whatsapp_link)')
+          .in('team_id', allUserTeamIds)
+          .order('created_at', { ascending: false })
+          .then(res => {
+            // Fallback: if room_slot_number column missing, retry without it
+            if (res.error?.message?.includes('room_slot_number')) {
+              return admin
+                .from('bookings')
+                .select('booking_id, slot_id, payment_status, amount_paid, coupon_used, created_at, slots(slot_id, date, time_label, status, entry_fee, is_grand_finals, whatsapp_link)')
+                .in('team_id', allUserTeamIds)
+                .order('created_at', { ascending: false })
+            }
+            return res
+          })
+      : Promise.resolve({ data: [], error: null }),
 
-    if (bookingErr && bookingErr.message?.includes('room_slot_number')) {
-      const fallback = await admin
-        .from('bookings')
-        .select(
-          'booking_id, slot_id, payment_status, amount_paid, coupon_used, created_at, slots(slot_id, date, time_label, status, entry_fee, is_grand_finals, whatsapp_link)'
-        )
-        .in('team_id', allUserTeamIds)
-        .order('created_at', { ascending: false })
-      bData = fallback.data as any[]
-    }
-    bookings = bData || []
-  }
+    // Matches
+    admin
+      .from('matches')
+      .select('match_id, slot_id, match_number, map_name, position, kills, position_points, elimination_points, total_points, played_at')
+      .eq('team_id', safeTeam.team_id),
 
-  // Populate missing slot objects directly from slots table if join returned null
+    // Config (whatsapp link)
+    admin
+      .from('config')
+      .select('value')
+      .eq('key', 'whatsapp_invite_link')
+      .maybeSingle(),
+
+    // Leaderboard
+    admin
+      .from('leaderboard')
+      .select('team_id, best_16_total, matches_played, total_kills')
+      .order('best_16_total', { ascending: false })
+      .order('total_kills', { ascending: false }),
+
+    // Payouts
+    admin
+      .from('payouts')
+      .select('amount, status')
+      .eq('team_id', safeTeam.team_id),
+
+    // Coupons
+    admin
+      .from('coupons')
+      .select('coupon_id, code, type, status, issued_at')
+      .eq('team_id', safeTeam.team_id)
+      .order('issued_at', { ascending: false }),
+  ])
+
+  let bookings: any[] = bookingsResult.data || []
+
+  // Populate missing slot objects if join returned null
   if (bookings.length > 0) {
-    const missingSlotIds = bookings
-      .filter(b => !b.slots && b.slot_id)
-      .map(b => b.slot_id)
-
+    const missingSlotIds = bookings.filter(b => !b.slots && b.slot_id).map(b => b.slot_id)
     if (missingSlotIds.length > 0) {
       const { data: fetchedSlots } = await admin
         .from('slots')
@@ -152,8 +174,8 @@ export default async function DashboardPage() {
     }
   }
 
-  // Fetch all confirmed team bookings for these slots to show room slot layout table
-  const slotIds = Array.from(new Set((bookings || []).map(b => b.slot_id).filter(Boolean)))
+  // Fetch room slot layout for booked slots
+  const slotIds = Array.from(new Set(bookings.map(b => b.slot_id).filter(Boolean)))
   let slotBookingsMap: Record<string, any[]> = {}
 
   if (slotIds.length > 0) {
@@ -176,60 +198,24 @@ export default async function DashboardPage() {
     }
   }
 
-  // Fetch recorded match score results for past/completed slots
-  const { data: teamMatches } = await admin
-    .from('matches')
-    .select('match_id, slot_id, match_number, map_name, position, kills, position_points, elimination_points, total_points, played_at')
-    .eq('team_id', safeTeam.team_id)
-
-  // Fetch global whatsapp link fallback
-  const { data: configWA } = await admin
-    .from('config')
-    .select('value')
-    .eq('key', 'whatsapp_invite_link')
-    .maybeSingle()
-  const globalWhatsappLink = configWA?.value || 'https://chat.whatsapp.com/BGFS'
-
-  // Fetch full leaderboard standings to calculate team rank and stats
-  const { data: allLeaderboard } = await admin
-    .from('leaderboard')
-    .select('team_id, best_16_total, matches_played, total_kills')
-    .order('best_16_total', { ascending: false })
-    .order('total_kills', { ascending: false })
-
-  const rankedList = allLeaderboard || []
+  const rankedList = leaderboardResult.data || []
   const teamIndex = rankedList.findIndex(r => r.team_id === safeTeam.team_id)
   const rank = teamIndex >= 0 ? teamIndex + 1 : 0
   const leaderboardEntry = teamIndex >= 0 ? rankedList[teamIndex] : null
-
-  // Fetch payouts for this team
-  const { data: payouts } = await admin
-    .from('payouts')
-    .select('amount, status')
-    .eq('team_id', safeTeam.team_id)
-
-  // Fetch coupons/rewards for this team
-  const { data: coupons } = await admin
-    .from('coupons')
-    .select('coupon_id, code, type, status, issued_at')
-    .eq('team_id', safeTeam.team_id)
-    .order('issued_at', { ascending: false })
-
-  // Check test account status from user profile or team
   const isTestAccount = Boolean(userProfile?.is_test_account || (team as any)?.is_test_account)
 
   return (
     <DashboardClient
       team={safeTeam}
       userEmail={user.email || ''}
-      bookings={bookings || []}
+      bookings={bookings}
       slotBookingsMap={slotBookingsMap}
-      teamMatches={teamMatches || []}
-      globalWhatsappLink={globalWhatsappLink}
+      teamMatches={matchesResult.data || []}
+      globalWhatsappLink={configResult.data?.value || 'https://chat.whatsapp.com/BGFS'}
       leaderboardEntry={leaderboardEntry}
       rank={rank}
-      payouts={payouts || []}
-      coupons={coupons || []}
+      payouts={payoutsResult.data || []}
+      coupons={couponsResult.data || []}
       isCaptain={safeTeam.captain_user_id === user.id}
       isTestAccount={isTestAccount}
     />

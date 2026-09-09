@@ -20,12 +20,13 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS amount_paid INT DEFAULT 0;
 
 -- 4. Update the leaderboard view to include teams with a confirmed booking
 --    (even if they have 0 matches played yet)
+DROP VIEW IF EXISTS leaderboard CASCADE;
 CREATE OR REPLACE VIEW leaderboard AS
 SELECT
   t.team_id,
   t.team_name,
   COUNT(DISTINCT m.match_id) AS matches_played,
-  COALESCE(SUM(m.total_kills), 0) AS total_kills,
+  COALESCE(SUM(m.kills), 0) AS total_kills,
   COALESCE((
     SELECT SUM(pts)
     FROM (
@@ -46,16 +47,31 @@ ORDER BY best_16_total DESC, total_kills DESC;
 --    Service role bypasses RLS by default — these are for anon/authenticated role coverage
 
 -- Allow authenticated users to update their own bookings (for future use)
-CREATE POLICY IF NOT EXISTS "bookings_update_own" ON bookings FOR UPDATE
-  USING (team_id = (SELECT team_id FROM users WHERE user_id = auth.uid()));
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'bookings_update_own' AND tablename = 'bookings') THEN
+    CREATE POLICY "bookings_update_own" ON bookings FOR UPDATE
+      USING (team_id = (SELECT team_id FROM users WHERE user_id = auth.uid()));
+  END IF;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Allow admin to insert/update coupons
-CREATE POLICY IF NOT EXISTS "coupons_insert_admin" ON coupons FOR INSERT
-  WITH CHECK ((SELECT role FROM users WHERE user_id = auth.uid()) = 'admin');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'coupons_insert_admin' AND tablename = 'coupons') THEN
+    CREATE POLICY "coupons_insert_admin" ON coupons FOR INSERT
+      WITH CHECK ((SELECT role FROM users WHERE user_id = auth.uid()) = 'admin');
+  END IF;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY IF NOT EXISTS "coupons_update_admin" ON coupons FOR UPDATE
-  USING ((SELECT role FROM users WHERE user_id = auth.uid()) IN ('admin')
-    OR team_id = (SELECT team_id FROM users WHERE user_id = auth.uid()));
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'coupons_update_admin' AND tablename = 'coupons') THEN
+    CREATE POLICY "coupons_update_admin" ON coupons FOR UPDATE
+      USING ((SELECT role FROM users WHERE user_id = auth.uid()) IN ('admin')
+        OR team_id = (SELECT team_id FROM users WHERE user_id = auth.uid()));
+  END IF;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 6. Prevent slots from exceeding capacity at DB level
 -- (soft guard — trigger-based hard guard already exists)

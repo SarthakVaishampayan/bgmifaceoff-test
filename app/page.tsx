@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Users, Calendar, Crosshair, Trophy, Medal, Award, Zap, Check, ArrowRight, ShieldCheck } from 'lucide-react'
 import CountdownTimer from '@/components/CountdownTimer'
+import HeroCTA from '@/components/HeroCTA'
 import { createClient } from '@/lib/supabase/server'
 import styles from './page.module.css'
 
@@ -52,14 +53,7 @@ export default async function LandingPage() {
               <CountdownTimer targetDate={grandFinalsDate} />
 
               {/* Action buttons */}
-              <div className={styles.heroCta}>
-                <Link href="/slots" className={styles.primaryCta}>
-                  REGISTER NOW
-                </Link>
-                <Link href="/leaderboard" className={styles.secondaryCta}>
-                  VIEW LEADERBOARD
-                </Link>
-              </div>
+              <HeroCTA />
             </div>
           </div>
         </section>
