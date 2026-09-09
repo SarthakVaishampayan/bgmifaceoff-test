@@ -1,0 +1,138 @@
+.page {
+  padding-bottom: 5rem;
+  background: #0d0d0d;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+}
+
+.hero {
+  background: radial-gradient(circle at 50% 0%, rgba(251, 191, 36, 0.12) 0%, rgba(13, 13, 13, 1) 75%);
+  padding: 4rem 0 3rem;
+  text-align: center;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.eyebrow {
+  color: #fbbf24;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.5rem;
+}
+
+.heroTitle {
+  font-size: 2.4rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.01em;
+}
+
+.gold {
+  color: #fbbf24;
+}
+
+.heroDesc {
+  color: #a0a0a0;
+  font-size: 1.02rem;
+  max-width: 680px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.section {
+  padding: 3.5rem 0;
+}
+
+.legalContent {
+  max-width: 800px;
+  margin: 0 auto;
+  background: #141414;
+  border: 1px solid #222222;
+  border-radius: 16px;
+  padding: 2.5rem;
+}
+
+.legalMeta {
+  color: #777777;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #222222;
+}
+
+.legalSection {
+  margin-bottom: 1.75rem;
+}
+
+.legalSectionTitle {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #ffffff;
+  margin-bottom: 0.85rem;
+}
+
+.legalBody {
+  color: #bbbbbb;
+  font-size: 0.94rem;
+  line-height: 1.65;
+  margin-bottom: 0.75rem;
+}
+
+.legalList {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.legalList li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  color: #cccccc;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.legalBullet {
+  color: #fbbf24;
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.legalDivider {
+  border: none;
+  border-top: 1px solid #222222;
+  margin: 1.75rem 0;
+}
+
+.noteBox {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-top: 2rem;
+  color: #dddddd;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .heroTitle {
+    font-size: 1.75rem;
+  }
+
+  .legalContent {
+    padding: 1.5rem 1.15rem;
+    border-radius: 12px;
+  }
+}

@@ -1,0 +1,831 @@
+/* ── HERO ── */
+.hero {
+  position: relative;
+  width: 100%;
+  min-height: 88vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 4.5rem 0 4rem;
+  background-color: #111111;
+  background-image: url('/images/homepagewallpaper.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+/* Dark gradient overlay over left ~50-60%, fading to transparent */
+.heroOverlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(11, 11, 11, 0.96) 0%, rgba(11, 11, 11, 0.88) 35%, rgba(11, 11, 11, 0.55) 60%, rgba(11, 11, 11, 0) 80%),
+    linear-gradient(to bottom, rgba(17, 17, 17, 0.5) 0%, transparent 20%, transparent 80%, #111111 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.heroGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  z-index: 1;
+  mask-image: radial-gradient(ellipse at left, black 35%, transparent 80%);
+  pointer-events: none;
+}
+
+.heroContainer {
+  width: 100%;
+  max-width: 1400px;
+  padding-left: clamp(1.25rem, 3.5vw, 3rem);
+  padding-right: 1.5rem;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 2;
+  max-width: 820px;
+}
+
+.heroLogoWrapper {
+  margin-bottom: 2rem;
+}
+
+.heroLogoImg {
+  height: 240px;
+  width: auto;
+  max-width: 720px;
+  object-fit: contain;
+  display: block;
+}
+
+.heroTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(2.6rem, 5.5vw, 4.8rem);
+  font-weight: 900;
+  line-height: 1.05;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  margin-bottom: 1.25rem;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+}
+
+.goldText {
+  color: #fbbf24;
+  text-shadow: 0 0 25px rgba(251, 191, 36, 0.35);
+}
+
+.heroDesc {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.1rem;
+  color: #d1d5db;
+  line-height: 1.7;
+  max-width: 580px;
+  margin-bottom: 2rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.heroCountdown {
+  margin-bottom: 2rem;
+  display: inline-block;
+  background: rgba(29, 29, 29, 0.88);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 12px;
+  padding: 1.25rem 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.heroCta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+}
+
+.primaryCta {
+  background: rgba(251, 191, 36, 0.95);
+  color: #111111;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 14px 28px;
+  border-radius: 6px;
+  border: 1px solid #fbbf24;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(251, 191, 36, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.primaryCta:hover {
+  background: #fde047;
+  border-color: #fde047;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(251, 191, 36, 0.55);
+}
+
+.secondaryCta {
+  background: rgba(39, 39, 39, 0.75);
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 14px 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.secondaryCta:hover {
+  background: rgba(50, 50, 50, 0.9);
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+
+.heroStats {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  background: rgba(21, 21, 21, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  backdrop-filter: blur(8px);
+  width: fit-content;
+}
+
+.heroStat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.heroStatVal {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #fbbf24;
+}
+
+.heroStatLabel {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b8b8b8;
+}
+
+.heroStatDivider {
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Carousel Slide Indicators */
+
+
+/* ── HOW IT WORKS ── */
+.howItWorks {
+  background: #0d0d0d;
+  padding: 5rem 0;
+  border-top: 1px solid #212121;
+}
+
+.sectionCenter {
+  text-align: center;
+}
+
+.sectionTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  margin-bottom: 0.5rem;
+}
+
+.sectionSubtitle {
+  font-family: 'Inter', sans-serif;
+  color: #b8b8b8;
+  font-size: 1rem;
+  margin-bottom: 3rem;
+}
+
+.stepsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.stepCard {
+  background: #181818;
+  border: 1px solid #282828;
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.stepCard:hover {
+  border-color: #fbbf24;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.stepBgNum {
+  position: absolute;
+  top: -12px;
+  right: 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 5.5rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #fbbf24;
+  opacity: 0.22;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 2;
+}
+
+.stepNum {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: #facc15;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.stepIconLucide {
+  color: #facc15;
+  flex-shrink: 0;
+}
+
+.stepTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin-bottom: 0.5rem;
+  position: relative;
+  z-index: 2;
+}
+
+.stepDesc {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.88rem;
+  color: #aaaaaa;
+  line-height: 1.6;
+  position: relative;
+  z-index: 2;
+}
+
+/* ── GRAND FINALS PRIZE POOL ── */
+.prizesSection {
+  background: #161616;
+  padding: 5rem 0;
+  border-top: 1px solid #242424;
+  border-bottom: 1px solid #242424;
+}
+
+.gfContainer {
+  background: #111111;
+  border: 1px solid #262626;
+  border-left: 4px solid #fbbf24;
+  border-radius: 4px;
+  padding: 2.5rem 2.5rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.gfHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #222222;
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.gfTag {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: #fbbf24;
+  text-transform: uppercase;
+}
+
+.gfSubTag {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #777777;
+  text-transform: uppercase;
+}
+
+.gfHeroSplit {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 2.5rem;
+  align-items: center;
+}
+
+.gfAmountBlock {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.gfAmountHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.gfInlineTrophy {
+  flex-shrink: 0;
+}
+
+.gfMainNumber {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(3.5rem, 7vw, 5.2rem);
+  font-weight: 900;
+  color: #fbbf24;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.gfAmountLabel {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #ffffff;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.gfAmountDesc {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #888888;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.gfFeatureList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.gfFeatureRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #181818;
+  border: 1px solid #242424;
+  border-radius: 2px;
+  transition: border-color 0.2s ease;
+}
+
+.gfFeatureRow:hover {
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.gfFeatureNum {
+  font-family: monospace, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.gfFeatureHeading {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.gfFeatureText {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  color: #888888;
+  line-height: 1.45;
+  margin: 0;
+}
+
+@media (max-width: 820px) {
+  .gfContainer {
+    padding: 1.75rem 1.25rem;
+  }
+
+  .gfHeroSplit {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+
+.prizeNote {
+  max-width: 650px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #1d1d1d;
+  border: 1px solid #323232;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  color: #b8b8b8;
+}
+
+/* ── SCORING ── */
+.scoringSection {
+  background: #0d0d0d;
+  padding: 5rem 0;
+  border-top: 1px solid #212121;
+}
+
+.scoringInner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4rem;
+  align-items: center;
+}
+
+.scoringDesc {
+  font-family: 'Inter', sans-serif;
+  color: #b8b8b8;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+}
+
+.scoringFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.scoringFeature {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  color: #b8b8b8;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.scoringTable {
+  background: #181818;
+  border: 1px solid #282828;
+  border-radius: 12px;
+  overflow: hidden;
+  min-width: 280px;
+}
+
+.tableHeading {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #fbbf24;
+  padding: 1.25rem 1.25rem 0.75rem;
+}
+
+/* ── CTA ── */
+.ctaSection {
+  background: #161616;
+  padding: 5rem 0;
+  border-top: 1px solid #242424;
+}
+
+.ctaBox {
+  text-align: center;
+  background: #111111;
+  border: 1px solid #fbbf24;
+  border-radius: 16px;
+  padding: 4rem 2rem;
+  box-shadow: 0 0 25px rgba(251, 191, 36, 0.12);
+}
+
+.ctaTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin-bottom: 1rem;
+}
+
+.ctaDesc {
+  font-family: 'Inter', sans-serif;
+  color: #b8b8b8;
+  max-width: 540px;
+  margin: 0 auto 2rem;
+  font-size: 1.05rem;
+}
+
+/* ── FOOTER ── */
+.footer {
+  background: #0d0d0d;
+  border-top: 1px solid #212121;
+  padding: 2.5rem 0;
+}
+
+.footerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footerLinks {
+  display: flex;
+  gap: 1.5rem;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1024px) {
+  .stepsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .scoringInner {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+
+  .scoringTable {
+    max-width: 400px;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero {
+    min-height: auto;
+    padding: 3rem 0 3.5rem;
+    background-position: center center;
+  }
+
+  .heroContainer {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .heroLogoImg {
+    height: 120px;
+    max-width: 380px;
+  }
+
+  .heroOverlay {
+    background:
+      linear-gradient(to right, rgba(11, 11, 11, 0.95) 0%, rgba(11, 11, 11, 0.88) 100%),
+      linear-gradient(to bottom, rgba(17, 17, 17, 0.4) 0%, transparent 20%, transparent 80%, #111111 100%);
+  }
+
+  .heroStats {
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .prizesGrid {
+    grid-template-columns: 1fr;
+    max-width: 340px;
+  }
+
+  .stepsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .footerInner {
+    flex-direction: column;
+    gap: 1.5rem;
+    text-align: center;
+  }
+
+  .heroCountdown {
+    padding: 1rem 1.25rem;
+  }
+}
+
+/* ── SKILL DISCLAIMER COMPACT BANNER ── */
+.skillSection {
+  background: #161616;
+  border-top: 1px solid #242424;
+  border-bottom: 1px solid #242424;
+  padding: 1.1rem 0;
+}
+
+.skillBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.skillContent {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.skillIcon {
+  flex-shrink: 0;
+}
+
+.skillText {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #cccccc;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.skillHighlight {
+  color: #ffffff;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  margin-right: 0.35rem;
+}
+
+.fairPlayBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.9rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 4px;
+  color: #fbbf24;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.fairPlayBtn:hover {
+  background: rgba(251, 191, 36, 0.16);
+  border-color: #fbbf24;
+  color: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .skillBar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .skillText {
+    font-size: 0.825rem;
+  }
+
+  .fairPlayBtn {
+    align-self: flex-start;
+  }
+}
+
+/* ── TRUSTED INFRASTRUCTURE STRIP ── */
+.infraSection {
+  background: #181818;
+  border-top: 1px solid #282828;
+  border-bottom: 1px solid #282828;
+  padding: 4.5rem 0;
+}
+
+.infraContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.infraLabel {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #777777;
+}
+
+.infraGrid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4.5rem;
+}
+
+.infraItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.infraCaption {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #aaaaaa;
+}
+
+.infraLogo {
+  height: 46px;
+  width: auto;
+  object-fit: contain;
+}
+
+.infraLogoVercel {
+  height: 33px;
+  width: auto;
+  object-fit: contain;
+  filter: brightness(1.15);
+}
+
+.infraDivider {
+  width: 1px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+@media (max-width: 640px) {
+  .infraSection {
+    padding: 2.5rem 0;
+  }
+
+  .infraGrid {
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .infraLogo {
+    height: 37px;
+  }
+
+  .infraLogoVercel {
+    height: 27px;
+  }
+
+  .infraDivider {
+    width: 80px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+  }
+}
+
+

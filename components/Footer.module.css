@@ -1,0 +1,153 @@
+/* ── FOOTER SHELL ── */
+.footer {
+  background: #0a0a0a;
+  border-top: 1px solid #1c1c1c;
+  padding: 3.5rem 0 0;
+  font-family: 'Inter', sans-serif;
+  position: relative;
+}
+
+/* ── TOP: 3-COLUMN GRID ── */
+.footerTop {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3rem;
+  padding-bottom: 3rem;
+  border-bottom: 1px solid #181818;
+}
+
+/* ── LINK GROUP ── */
+.linkGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.groupTitle {
+  font-size: 0.65rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #ffffff;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.footerLink {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: #666;
+  text-decoration: none;
+  transition: color 0.15s ease;
+  width: fit-content;
+  letter-spacing: 0.01em;
+}
+
+.footerLink:hover {
+  color: #cccccc;
+}
+
+/* ── TRUST BADGES ── */
+.trustBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+}
+
+.trustChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid #222;
+  border-radius: 4px;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #555;
+  text-transform: uppercase;
+}
+
+/* ── BOTTOM BAR ── */
+.footerBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 0 1.5rem;
+  gap: 2rem;
+}
+
+.copyright {
+  color: #3a3a3a;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  max-width: 65%;
+}
+
+.legalLinks {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.legalLink {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #404040;
+  text-decoration: none;
+  transition: color 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.legalLink:hover {
+  color: #fbbf24;
+}
+
+.dot {
+  color: #2a2a2a;
+  font-size: 0.65rem;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .footerTop {
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+
+  .footerBottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding-bottom: 2rem;
+  }
+
+  .copyright {
+    max-width: 100%;
+  }
+
+  .legalLinks {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .footerTop {
+    grid-template-columns: 1fr;
+    gap: 1.75rem;
+  }
+
+  .footerBottom {
+    align-items: center;
+    text-align: center;
+  }
+
+  .legalLinks {
+    justify-content: center;
+  }
+}

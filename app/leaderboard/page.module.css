@@ -1,0 +1,551 @@
+.page {
+  padding: 2.5rem 0 4rem;
+  min-height: 100vh;
+  background: #111111;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem 0 1.5rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #212121;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  font-family: 'Inter', sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+.subtitle {
+  font-family: 'Inter', sans-serif;
+  color: #b8b8b8;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  width: 240px;
+  background: #1d1d1d;
+  border: 1px solid #272727;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  border-radius: 6px;
+  padding: 8px 14px;
+}
+
+.searchInput:focus {
+  border-color: #fbbf24;
+}
+
+.tableInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+/* Mode Switcher Segmented Tabs */
+.tabGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.tabBtn {
+  background: #1c1c1c;
+  color: #a0a0a0;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1;
+}
+
+.tabBtn:hover {
+  background: #252525;
+  color: #ffffff;
+  border-color: #3e3e3e;
+}
+
+.tabActive {
+  background: #facc15 !important;
+  color: #111111 !important;
+  border-color: #facc15 !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 10px rgba(250, 204, 21, 0.25);
+}
+
+.tabActive svg {
+  color: #111111 !important;
+}
+
+/* Slot Selector Section */
+.slotSelectorBar {
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* Custom Dropdown Styling */
+.customDropdownWrapper {
+  position: relative;
+  min-width: 320px;
+}
+
+@media (max-width: 640px) {
+  .customDropdownWrapper {
+    min-width: 100%;
+    width: 100%;
+  }
+}
+
+.customDropdownTrigger {
+  width: 100%;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.customDropdownTrigger:hover,
+.customDropdownTrigger.dropdownOpen {
+  border-color: #facc15;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.15);
+  background: #1c1c1c;
+}
+
+.customDropdownTrigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-color: #2a2a2a !important;
+  box-shadow: none !important;
+}
+
+.dropdownText {
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdownPlaceholder {
+  color: #888888;
+  font-weight: 500;
+}
+
+.chevronIcon {
+  color: #facc15;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.chevronRotated {
+  transform: rotate(180deg);
+}
+
+.dropdownBackdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+}
+
+.customDropdownMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #161616;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(250, 204, 21, 0.1);
+  padding: 6px;
+  margin: 0;
+  list-style: none;
+  z-index: 50;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.customDropdownItem {
+  padding: 10px 14px;
+  border-radius: 6px;
+  color: #d1d1d1;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  transition: all 0.15s ease;
+}
+
+.customDropdownItem:hover {
+  background: #252525;
+  color: #ffffff;
+}
+
+.customDropdownItem.itemSelected {
+  background: rgba(250, 204, 21, 0.1);
+  color: #facc15;
+  font-weight: 700;
+}
+
+.slotInfoBadge {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #facc15;
+  text-transform: uppercase;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  padding: 6px 14px;
+  border-radius: 6px;
+}
+
+/* Prize Tag Badges in Per-Slot Table */
+.prizeTagGold {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.prizeTagSilver {
+  background: rgba(192, 192, 192, 0.15);
+  color: #c0c0c0;
+  border: 1px solid rgba(192, 192, 192, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.prizeTagBronze {
+  background: rgba(205, 127, 50, 0.15);
+  color: #cd7f32;
+  border: 1px solid rgba(205, 127, 50, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Desktop table */
+.tableWrapper {
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tableWrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tableWrapper thead th {
+  background: #161616;
+  color: #facc15;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.teamRow {
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.teamRow:nth-child(4n+1) {
+  background: #0d0d0d;
+}
+
+.teamRow:nth-child(4n+3) {
+  background: #141414;
+}
+
+.teamRow:hover {
+  background: #1f1f1f !important;
+}
+
+/* Highlighting Qualifying Rows (Ranks 1 to 16) */
+.qualifies {
+  background: rgba(251, 191, 36, 0.04) !important;
+  border-left: 4px solid #fbbf24 !important;
+}
+
+.rank1 {
+  background: rgba(251, 191, 36, 0.08) !important;
+  border-left: 4px solid #fbbf24 !important;
+}
+
+.rank2 {
+  background: rgba(251, 191, 36, 0.05) !important;
+  border-left: 4px solid #c0c0c0 !important;
+}
+
+.rank3 {
+  background: rgba(251, 191, 36, 0.05) !important;
+  border-left: 4px solid #cd7f32 !important;
+}
+
+.qualifiedTag {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.cutoffRow {
+  background: #1a1608 !important;
+}
+
+.cutoffBanner {
+  padding: 0.6rem 1rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border-top: 1px dashed rgba(251, 191, 36, 0.5);
+  border-bottom: 1px dashed rgba(251, 191, 36, 0.5);
+}
+
+.cutoffBannerMobile {
+  margin: 0.5rem 0;
+  padding: 0.6rem 1rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px dashed rgba(251, 191, 36, 0.5);
+  border-radius: 8px;
+}
+
+.teamRow.expanded {
+  background: #1c1c1c !important;
+}
+
+.teamNameCell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.teamNameText {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+}
+
+.mobileTeamNameRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mobileQualifiedTag {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.expandIcon {
+  font-size: 0.7rem;
+  color: #777777;
+}
+
+.expandedCell {
+  background: #161616;
+  padding: 0 !important;
+  border-bottom: 2px solid #facc15 !important;
+}
+
+/* Mobile list */
+.mobileList {
+  display: none;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mobileCard {
+  background: #1d1d1d;
+  border: 1px solid #272727;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.mobileCard:hover {
+  border-color: #fbbf24;
+}
+
+.mobileCardHeader {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+}
+
+.mobileCardLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mobileTeamName {
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  text-align: left;
+  color: #ffffff;
+}
+
+.mobileTeamMeta {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  color: #777777;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.mobileCardRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mobileStatVal {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #fbbf24;
+  text-align: right;
+}
+
+.mobileStatLabel {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #777777;
+  text-align: right;
+}
+
+.mobileExpanded {
+  border-top: 1px solid #212121;
+  padding: 0.85rem 1.25rem 1.25rem;
+  background: #151515;
+}
+
+.mobileStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .tableWrapper {
+    display: none;
+  }
+
+  .mobileList {
+    display: flex;
+  }
+
+  .searchInput {
+    width: 100%;
+  }
+
+  .headerRight {
+    width: 100%;
+  }
+}

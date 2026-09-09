@@ -1,0 +1,329 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1rem;
+  background: #0d0d0d;
+  position: relative;
+}
+
+.topBar {
+  position: absolute;
+  top: 1.25rem;
+  left: 1.25rem;
+  z-index: 10;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #9ca3af;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.825rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.backLink:hover {
+  color: #ffffff;
+}
+
+.card {
+  position: relative;
+  z-index: 1;
+  background: #151515;
+  border: 1px solid #262626;
+  border-radius: 16px;
+  padding: 2.25rem 2rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.headerArea {
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.brandTag {
+  display: inline-block;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  margin-bottom: 0.65rem;
+}
+
+.title {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.45rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin-bottom: 0.35rem;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  font-family: 'Inter', sans-serif;
+  color: #888888;
+  font-size: 0.825rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Segmented Control Tab Switcher */
+.modeTabs {
+  display: flex;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 1.1rem;
+  gap: 4px;
+  width: 100%;
+}
+
+.modeBtn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #999999;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.modeBtnActive {
+  background: #fbbf24;
+  color: #111111;
+  font-weight: 900;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.25);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.725rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.input {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 14px 14px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 16px; /* 16px prevents iOS Safari auto-zoom */
+  width: 100%;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease;
+}
+
+.input:focus {
+  border-color: #fbbf24;
+}
+
+.input::placeholder {
+  color: #555555;
+  font-size: 15px;
+}
+
+.passwordWrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.passwordInput {
+  padding-right: 44px !important;
+}
+
+.eyeBtn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: #888888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  transition: color 0.15s ease;
+  z-index: 2;
+}
+
+.eyeBtn:hover {
+  color: #fbbf24;
+}
+
+.otpInput {
+  font-size: 1.5rem !important;
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-weight: 800;
+  background: #1f1f1f;
+  border: 1px solid #333333;
+  color: #fbbf24;
+}
+
+.errorMsg {
+  color: #ef4444;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.825rem;
+  text-align: center;
+  padding: 0.6rem 0.85rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  margin: 0;
+}
+
+.submitBtn {
+  width: 100%;
+  padding: 16px;
+  background: #fbbf24;
+  color: #111111;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 0.35rem;
+  transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.submitBtn:hover {
+  background: #f59e0b;
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resendRow {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+}
+
+.resendBtn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 0.15s ease;
+}
+
+.resendBtn:hover {
+  color: #ffffff;
+}
+
+.resendBtnGold {
+  color: #fbbf24;
+}
+
+.signupFooter {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #222222;
+  text-align: center;
+}
+
+.signupText {
+  font-family: 'Inter', sans-serif;
+  color: #777777;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.signupLink {
+  font-family: 'Inter', sans-serif;
+  color: #fbbf24;
+  font-weight: 800;
+  font-size: 0.825rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.signupLink:hover {
+  color: #ffffff;
+}
+
+/* ── MOBILE FIRST AUDIT (Screens <= 480px) ── */
+@media (max-width: 480px) {
+  .page {
+    padding: 1rem 1rem;
+    justify-content: flex-start;
+  }
+
+  .topBar {
+    position: static;
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+
+  .card {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    max-width: 100%;
+  }
+
+  .title {
+    font-size: 1.3rem;
+  }
+}
+
