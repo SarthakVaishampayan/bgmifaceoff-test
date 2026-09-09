@@ -1,153 +1,150 @@
-/* ── FOOTER SHELL ── */
+/* ── FOOTER ── */
 .footer {
-  background: #0a0a0a;
-  border-top: 1px solid #1c1c1c;
-  padding: 3.5rem 0 0;
+  background: #151515;
+  padding: 0 42px;
   font-family: 'Inter', sans-serif;
-  position: relative;
 }
 
-/* ── TOP: 3-COLUMN GRID ── */
-.footerTop {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3rem;
-  padding-bottom: 3rem;
-  border-bottom: 1px solid #181818;
-}
-
-/* ── LINK GROUP ── */
-.linkGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.groupTitle {
-  font-size: 0.65rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: #ffffff;
-  margin-bottom: 0.65rem;
-  padding-bottom: 0.65rem;
-  border-bottom: 1px solid #1e1e1e;
-}
-
-.footerLink {
-  font-size: 0.82rem;
-  font-weight: 400;
-  color: #666;
-  text-decoration: none;
-  transition: color 0.15s ease;
-  width: fit-content;
-  letter-spacing: 0.01em;
-}
-
-.footerLink:hover {
-  color: #cccccc;
-}
-
-/* ── TRUST BADGES ── */
-.trustBadges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.85rem;
-}
-
-.trustChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid #222;
-  border-radius: 4px;
-  padding: 0.22rem 0.55rem;
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #555;
-  text-transform: uppercase;
-}
-
-/* ── BOTTOM BAR ── */
-.footerBottom {
+/* ── TOP ROW: Logo + Social ── */
+.topRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 0 1.5rem;
-  gap: 2rem;
+  padding: 32px 0;
 }
 
-.copyright {
-  color: #3a3a3a;
-  font-size: 0.72rem;
-  line-height: 1.6;
-  max-width: 65%;
-}
-
-.legalLinks {
+.logoLink {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
+  gap: 16px;
 }
 
-.legalLink {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: #404040;
+.logoImg {
+  height: 48px;
+  width: auto;
+  opacity: 0.9;
+}
+
+.socials {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.socialIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #858585;
+  transition: color 0.2s ease;
+}
+
+.socialIcon:hover {
+  color: #ffffff;
+}
+
+/* ── DIVIDER ── */
+.divider {
+  height: 1px;
+  background: #292929;
+  margin: 0;
+}
+
+/* ── NAVIGATION LINKS ── */
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  padding: 28px 0;
+  flex-wrap: wrap;
+}
+
+.navLink {
+  font-size: 16px;
+  font-weight: 700;
+  color: #858585;
   text-decoration: none;
-  transition: color 0.15s ease;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  transition: color 0.2s ease;
+  white-space: nowrap;
 }
 
-.legalLink:hover {
-  color: #fbbf24;
+.navLink:hover {
+  color: #ffffff;
 }
 
-.dot {
-  color: #2a2a2a;
-  font-size: 0.65rem;
+/* ── COPYRIGHT ── */
+.copyright {
+  font-size: 13px;
+  color: #5f5f5f;
+  padding-bottom: 32px;
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ── RESPONSIVE ── */
+@media (max-width: 1024px) {
+  .footer {
+    padding: 0 24px;
+  }
+
+  .navLinks {
+    gap: 24px;
+  }
+}
+
 @media (max-width: 768px) {
-  .footerTop {
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+  .footer {
+    padding: 0 20px;
   }
 
-  .footerBottom {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.85rem;
-    padding-bottom: 2rem;
+  .topRow {
+    padding: 24px 0;
   }
 
-  .copyright {
-    max-width: 100%;
+  .logoImg {
+    height: 28px;
   }
 
-  .legalLinks {
-    flex-wrap: wrap;
+  .navLinks {
+    gap: 16px 24px;
+    padding: 20px 0;
+  }
+
+  .navLink {
+    font-size: 14px;
   }
 }
 
 @media (max-width: 480px) {
-  .footerTop {
-    grid-template-columns: 1fr;
-    gap: 1.75rem;
+  .footer {
+    padding: 0 16px;
   }
 
-  .footerBottom {
-    align-items: center;
-    text-align: center;
+  .topRow {
+    padding: 20px 0;
   }
 
-  .legalLinks {
-    justify-content: center;
+  .logoImg {
+    height: 24px;
+  }
+
+  .socials {
+    gap: 12px;
+  }
+
+  .navLinks {
+    gap: 12px 20px;
+    padding: 16px 0;
+  }
+
+  .navLink {
+    font-size: 12px;
+  }
+
+  .copyright {
+    font-size: 11px;
+    padding-bottom: 24px;
   }
 }
