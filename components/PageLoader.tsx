@@ -18,12 +18,12 @@ export default function PageLoader() {
       hideTimerRef.current = setTimeout(() => {
         setLoading(false)
         setProgress(0)
-      }, 300)
+      }, 350)
       prevPath.current = pathname
     }
   }, [pathname])
 
-  // Listen for custom show/hide events (login, signout, etc.)
+  // Listen for custom show/hide events & dev preview key 'L'
   useEffect(() => {
     const handleShow = () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
@@ -33,10 +33,10 @@ export default function PageLoader() {
       let p = 0
       if (timerRef.current) clearInterval(timerRef.current)
       timerRef.current = setInterval(() => {
-        p += Math.random() * 20 + 5
-        if (p > 85) p = 85
+        p += Math.random() * 18 + 7
+        if (p > 90) p = 90
         setProgress(p)
-      }, 120)
+      }, 100)
     }
 
     const handleHide = () => {
@@ -45,14 +45,29 @@ export default function PageLoader() {
       setTimeout(() => {
         setLoading(false)
         setProgress(0)
-      }, 300)
+      }, 350)
     }
 
     window.addEventListener('app:showLoader', handleShow)
     window.addEventListener('app:hideLoader', handleHide)
+
+    // Press 'L' to preview the loader in real-time
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'l' || e.key === 'L') {
+        const tag = (e.target as HTMLElement)?.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return
+        handleShow()
+        setTimeout(() => {
+          handleHide()
+        }, 3200)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+
     return () => {
       window.removeEventListener('app:showLoader', handleShow)
       window.removeEventListener('app:hideLoader', handleHide)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
 
@@ -73,10 +88,10 @@ export default function PageLoader() {
       let p = 0
       if (timerRef.current) clearInterval(timerRef.current)
       timerRef.current = setInterval(() => {
-        p += Math.random() * 25 + 5
-        if (p > 85) p = 85
+        p += Math.random() * 20 + 8
+        if (p > 90) p = 90
         setProgress(p)
-      }, 120)
+      }, 100)
     }
 
     document.addEventListener('click', handleClick)
@@ -89,6 +104,13 @@ export default function PageLoader() {
 
   if (!loading) return null
 
+  const isComplete = progress >= 95
+
+  // Map progress (0 -> 100) to bottom-to-top reveal across visible logo bounds in faceofflogo.png (25% top to 75% bottom)
+  // At progress 0: top inset is 75% (0% of logo revealed)
+  // At progress 100: top inset is 24% (100% of logo revealed)
+  const insetTopPercent = Math.max(24, 75 - (progress / 100) * 51)
+
   return (
     <div style={{
       position: 'fixed',
@@ -98,111 +120,62 @@ export default function PageLoader() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'rgba(10, 10, 10, 0.92)',
-      backdropFilter: 'blur(12px)',
-      WebkitBackdropFilter: 'blur(12px)',
+      background: 'rgba(10, 10, 10, 0.94)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+      userSelect: 'none',
     }}>
-      {/* Crosshair / Scope Animation */}
-      <div style={{ position: 'relative', width: '120px', height: '120px', marginBottom: '2rem' }}>
-        <div style={{
-          position: 'absolute', inset: 0,
-          border: '2px solid rgba(251, 191, 36, 0.3)',
-          borderRadius: '50%',
-          animation: 'scopeSpin 3s linear infinite',
-        }} />
-        <div style={{
-          position: 'absolute', inset: '12px',
-          border: '2px solid rgba(251, 191, 36, 0.5)',
-          borderRadius: '50%',
-          animation: 'scopeSpin 2s linear infinite reverse',
-        }} />
-        <div style={{
-          position: 'absolute', inset: '24px',
-          border: '1.5px solid rgba(251, 191, 36, 0.7)',
-          borderRadius: '50%',
-          animation: 'scopePulse 1.5s ease-in-out infinite',
-        }} />
-        <div style={{ position: 'absolute', top: '50%', left: '0', right: '0', height: '1px', background: 'rgba(251, 191, 36, 0.4)', transform: 'translateY(-50%)' }} />
-        <div style={{ position: 'absolute', left: '50%', top: '0', bottom: '0', width: '1px', background: 'rgba(251, 191, 36, 0.4)', transform: 'translateX(-50%)' }} />
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          width: '8px', height: '8px',
-          background: '#fbbf24',
-          borderRadius: '50%',
-          transform: 'translate(-50%, -50%)',
-          boxShadow: '0 0 12px rgba(251, 191, 36, 0.6), 0 0 24px rgba(251, 191, 36, 0.3)',
-          animation: 'dotPulse 1s ease-in-out infinite',
-        }} />
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          width: '40px', height: '40px',
-          transform: 'translate(-50%, -50%)',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(251, 191, 36, 0.4) 0%, transparent 70%)',
-          animation: 'flash 0.8s ease-out infinite',
-        }} />
-      </div>
-
+      {/* Centered Logo Container */}
       <div style={{
-        fontFamily: "'Inter', sans-serif",
-        fontSize: '0.7rem',
-        fontWeight: 800,
-        letterSpacing: '0.25em',
-        color: 'rgba(251, 191, 36, 0.6)',
-        textTransform: 'uppercase',
-        marginBottom: '1.5rem',
+        position: 'relative',
+        width: '260px',
+        height: '260px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
-        BGFS
-      </div>
+        {/* 1. Base Ghost Logo: raw logo at 20% opacity */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/faceofflogo.png"
+          alt="BGFS Faceoff Series"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            opacity: 0.2,
+            display: 'block',
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        />
 
-      <div style={{
-        width: '200px',
-        height: '4px',
-        background: 'rgba(255, 255, 255, 0.08)',
-        borderRadius: '2px',
-        overflow: 'hidden',
-      }}>
+        {/* 2. Active Raw Logo filling from bottom to top */}
         <div style={{
-          height: '100%',
-          width: `${progress}%`,
-          background: 'linear-gradient(90deg, #dc2626, #fbbf24)',
-          borderRadius: '2px',
-          transition: 'width 150ms ease',
-          boxShadow: '0 0 8px rgba(251, 191, 36, 0.4)',
-        }} />
+          position: 'absolute',
+          inset: 0,
+          clipPath: `inset(${insetTopPercent}% 0 0 0)`,
+          WebkitClipPath: `inset(${insetTopPercent}% 0 0 0)`,
+          transition: 'clip-path 100ms ease-out, -webkit-clip-path 100ms ease-out',
+          pointerEvents: 'none',
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/faceofflogo.png"
+            alt="BGFS Faceoff Series Active"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              display: 'block',
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
       </div>
-
-      <div style={{
-        fontFamily: "'Inter', sans-serif",
-        fontSize: '0.65rem',
-        fontWeight: 600,
-        letterSpacing: '0.15em',
-        color: 'rgba(255, 255, 255, 0.3)',
-        textTransform: 'uppercase',
-        marginTop: '0.75rem',
-      }}>
-        LOADING
-      </div>
-
-      <style>{`
-        @keyframes scopeSpin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        @keyframes scopePulse {
-          0%, 100% { opacity: 0.5; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.05); }
-        }
-        @keyframes dotPulse {
-          0%, 100% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
-          50% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
-        }
-        @keyframes flash {
-          0% { opacity: 0.8; transform: translate(-50%, -50%) scale(0.5); }
-          50% { opacity: 0.3; transform: translate(-50%, -50%) scale(1.5); }
-          100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
-        }
-      `}</style>
     </div>
   )
 }
