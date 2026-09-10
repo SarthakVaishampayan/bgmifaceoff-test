@@ -446,8 +446,8 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                 SELECT SLOT TO VIEW RESULTS
               </label>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div className={styles.slotControlsRow}>
+                <div className={styles.slotDropdownContainer}>
                   <CustomSlotDropdown
                     slots={filteredSlots}
                     selectedSlotId={selectedSlotId}
@@ -460,19 +460,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                   <button
                     type="button"
                     onClick={() => setMySlotsOnly(!mySlotsOnly)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      padding: '12px 14px', borderRadius: '8px',
-                      background: mySlotsOnly ? 'rgba(251, 191, 36, 0.15)' : '#161616',
-                      border: mySlotsOnly ? '1px solid rgba(251, 191, 36, 0.4)' : '1px solid #2a2a2a',
-                      color: mySlotsOnly ? '#fbbf24' : '#888',
-                      fontSize: '0.72rem', fontWeight: 700,
-                      cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-                      letterSpacing: '0.04em', textTransform: 'uppercase',
-                      transition: 'all 0.2s ease',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                    }}
+                    className={`${styles.mySlotsToggleBtn} ${mySlotsOnly ? styles.mySlotsToggleBtnActive : ''}`}
                   >
                     <div style={{
                       width: '28px', height: '14px', borderRadius: '7px',
@@ -491,13 +479,13 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     MY SLOTS ONLY
                   </button>
                 )}
-              </div>
 
-              {selectedSlot && (
-                <div className={styles.slotInfoBadge}>
-                  ⚡ {formatMonthDay(selectedSlot.date)} • {selectedSlot.time_label} • 3 MATCHES
-                </div>
-              )}
+                {selectedSlot && (
+                  <div className={styles.slotInfoBadge}>
+                    ⚡ {formatMonthDay(selectedSlot.date)} • {selectedSlot.time_label} • 3 MATCHES
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Per-Slot Desktop Table */}
@@ -689,18 +677,19 @@ function CustomSlotDropdown({
   }
 
   return (
-    <div style={{ position: 'relative', minWidth: '320px', width: '100%' }}>
+    <div className={styles.customDropdownWrapper}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={slots.length === 0}
         style={{
           width: '100%',
+          height: '46px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '12px',
-          padding: '12px 16px',
+          padding: '0 16px',
           borderRadius: '8px',
           background: '#161616',
           border: isOpen ? '1px solid #facc15' : '1px solid #2a2a2a',
@@ -713,6 +702,7 @@ function CustomSlotDropdown({
           transition: 'all 0.2s ease',
           outline: 'none',
           boxShadow: isOpen ? '0 0 12px rgba(250, 204, 21, 0.15)' : 'none',
+          boxSizing: 'border-box',
         }}
       >
         <span style={{ color: slots.length === 0 ? '#888888' : '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
