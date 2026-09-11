@@ -27,11 +27,33 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
   const [payouts, setPayouts] = useState(initialPayouts)
   const [users, setUsers] = useState(usersList)
   const [adminEmail, setAdminEmail] = useState('')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setAdminEmail(data.user.email || '')
     })
+  }, [])
+
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileMenuOpen])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setMobileMenuOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   async function handleSignOut() {
@@ -113,22 +135,66 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
     }
   }
 
+  const activeTabObj = visibleTabs.find(t => t.id === tab)
+
   return (
     <div className={styles.adminPage}>
-      {/* Sidebar */}
-      <aside className={styles.sidebar}>
-        <div className={styles.sidebarLogo}>
-          <span className={styles.logoText}>BGFS</span>
-          <span className={styles.logoLabel}>
+      {/* Mobile Top Bar */}
+      <header className={styles.mobileHeader}>
+        <button
+          className={styles.hamburgerBtn}
+          onClick={() => setMobileMenuOpen(prev => !prev)}
+          aria-label="Toggle navigation menu"
+          aria-expanded={mobileMenuOpen}
+        >
+          <span className={`${styles.hamburgerLine} ${mobileMenuOpen ? styles.lineOpen1 : ''}`} />
+          <span className={`${styles.hamburgerLine} ${mobileMenuOpen ? styles.lineOpen2 : ''}`} />
+          <span className={`${styles.hamburgerLine} ${mobileMenuOpen ? styles.lineOpen3 : ''}`} />
+        </button>
+        <div className={styles.mobileHeaderBrand}>
+          <span className={styles.mobileLogoText}>BGFS</span>
+          <span className={styles.mobileRoleBadge}>
             {isSuperAdmin ? 'Super Admin' : 'Score Admin'}
           </span>
+          <span className={styles.mobileHeaderDivider}>•</span>
+          <span className={styles.mobileHeaderTitle}>{activeTabObj?.label || 'Score Entry'}</span>
         </div>
+      </header>
+
+      {/* Backdrop for Mobile Drawer */}
+      <div
+        className={`${styles.drawerBackdrop} ${mobileMenuOpen ? styles.backdropActive : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Sidebar (Desktop sticky sidebar & Mobile left off-canvas drawer) */}
+      <aside className={`${styles.sidebar} ${mobileMenuOpen ? styles.sidebarOpen : ''}`}>
+        <div className={styles.sidebarLogo}>
+          <div className={styles.sidebarLogoContent}>
+            <span className={styles.logoText}>BGFS</span>
+            <span className={styles.logoLabel}>
+              {isSuperAdmin ? 'Super Admin' : 'Score Admin'}
+            </span>
+          </div>
+          <button
+            className={styles.sidebarCloseBtn}
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close navigation menu"
+          >
+            ✕
+          </button>
+        </div>
+
         <nav className={styles.sidebarNav}>
           {visibleTabs.map(t => (
             <button
               key={t.id}
               className={`${styles.sidebarBtn} ${tab === t.id ? styles.sidebarActive : ''}`}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setTab(t.id)
+                setMobileMenuOpen(false)
+              }}
             >
               {t.label}
             </button>
@@ -136,34 +202,26 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
         </nav>
 
         {/* User Info + Sign Out */}
-        <div style={{ marginTop: 'auto', padding: '1rem 1rem 1.25rem', borderTop: '1px solid var(--border-subtle)' }}>
+        <div className={styles.sidebarFooter}>
           {adminEmail && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%',
-                background: 'rgba(251, 191, 36, 0.15)',
-                border: '1px solid rgba(251, 191, 36, 0.3)',
-                color: '#fbbf24', fontSize: '0.8rem', fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              }}>
+            <div className={styles.userInfo}>
+              <div className={styles.userAvatar}>
                 {adminEmail.charAt(0).toUpperCase()}
               </div>
-              <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{adminEmail}</div>
-                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Administrator</div>
+              <div className={styles.userDetails}>
+                <div className={styles.userEmail}>{adminEmail}</div>
+                <div className={styles.userRole}>
+                  {isSuperAdmin ? 'Administrator' : 'Score Admin'}
+                </div>
               </div>
             </div>
           )}
           <button
-            onClick={handleSignOut}
-            style={{
-              width: '100%', padding: '0.6rem 1rem',
-              background: 'rgba(239, 68, 68, 0.08)',
-              border: '1px solid rgba(239, 68, 68, 0.25)',
-              borderRadius: 'var(--radius-md)',
-              color: '#f87171', fontSize: '0.8rem', fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'var(--font-body)',
+            onClick={() => {
+              setMobileMenuOpen(false)
+              handleSignOut()
             }}
+            className={styles.signOutBtn}
           >
             Sign Out
           </button>
@@ -519,7 +577,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
         </div>
 
         {/* 💾 Instant Backup & Restore Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -527,7 +585,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
             onClick={handleExportBackup}
             disabled={isExporting}
           >
-            {isExporting ? 'Exporting...' : '📥 Export Leaderboard Backup (JSON)'}
+            {isExporting ? 'Exporting...' : '📥 Export Backup'}
           </button>
           
           <label
@@ -557,17 +615,17 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: '1rem' }}>
+      <div className={styles.scoreEntryLayout}>
         {/* Main Entry Form */}
-        <div style={{ background: '#121212', border: '1px solid #222222', borderRadius: '10px', padding: '1rem' }}>
+        <div className={styles.scoreFormCard}>
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {/* Top Row: Slot & Team Selection */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem' }}>
+            <div className={styles.scoreFormTopRow}>
               <div>
                 <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Select Slot</label>
                 <select
                   className="form-input"
-                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
                   value={selectedSlot}
                   onChange={e => {
                     setSelectedSlot(e.target.value)
@@ -591,7 +649,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
                 </label>
                 <select
                   className="form-input"
-                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
                   value={selectedTeam}
                   onChange={e => setSelectedTeam(e.target.value)}
                   required
@@ -618,8 +676,8 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
             </div>
 
             {/* Second Row: Match #, Position, Eliminations */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '0.75rem', alignItems: 'flex-end' }}>
-              <div>
+            <div className={styles.scoreFormMidRow}>
+              <div className={styles.matchNumCol}>
                 <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Match Number</label>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {[1, 2, 3].map(n => (
@@ -654,7 +712,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
                 <input
                   type="number"
                   className="form-input"
-                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
                   min={1}
                   max={24}
                   value={position}
@@ -669,7 +727,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
                 <input
                   type="number"
                   className="form-input"
-                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
                   min={0}
                   max={99}
                   value={kills}
@@ -680,20 +738,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
             </div>
 
             {/* Compact Live Mathematical Calculation Strip */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#181818',
-                border: '1px solid #282828',
-                borderRadius: '8px',
-                padding: '0.45rem 0.85rem',
-                fontSize: '0.78rem',
-                color: '#cccccc',
-                marginTop: '0.25rem',
-              }}
-            >
+            <div className={styles.calcStrip}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <span style={{ color: '#888888', textTransform: 'uppercase', fontSize: '0.68rem', fontWeight: 700 }}>Pos Pts:</span>
                 <strong style={{ color: '#fbbf24', fontSize: '0.9rem' }}>{position ? positionPoints : '—'}</strong>
@@ -726,7 +771,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
               </div>
 
               {selectedTeam && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', borderLeft: '1px solid #333', paddingLeft: '0.6rem' }}>
+                <div className={styles.calcCumulative}>
                   <span style={{ color: '#888888', textTransform: 'uppercase', fontSize: '0.68rem', fontWeight: 700 }}>Cumul. Slot Total:</span>
                   <strong style={{ color: '#60a5fa', fontSize: '0.95rem', fontWeight: 900 }}>
                     {(teamSlotTotals[selectedTeam]?.total_points || 0) + (editingMatchId ? 0 : (position ? totalPoints : 0))} PTS
@@ -766,23 +811,15 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
         </div>
 
         {/* Reference Cheat Sheet Box */}
-        <div
-          style={{
-            background: '#121212',
-            border: '1px solid #222222',
-            borderRadius: '10px',
-            padding: '0.85rem',
-            height: 'fit-content',
-          }}
-        >
+        <div className={styles.cheatSheetCard}>
           <h3 style={{ fontSize: '0.78rem', fontWeight: 800, color: '#fbbf24', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             BGIS Position Points Table
           </h3>
           <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #2a2a2a', textAlign: 'left', color: '#777777' }}>
-                <th style={{ padding: '3px 4px' }}>Position</th>
-                <th style={{ padding: '3px 4px', textAlign: 'right' }}>Points</th>
+                <th style={{ padding: '4px 6px' }}>Position</th>
+                <th style={{ padding: '4px 6px', textAlign: 'right' }}>Points</th>
               </tr>
             </thead>
             <tbody>
@@ -797,13 +834,13 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
                 ['16th–24th Place', '0 Pts'],
               ].map(([posStr, ptStr]) => (
                 <tr key={posStr} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                  <td style={{ padding: '4px 4px', color: '#cccccc', fontWeight: 500 }}>{posStr}</td>
-                  <td style={{ padding: '4px 4px', textAlign: 'right', color: '#fbbf24', fontWeight: 700 }}>{ptStr}</td>
+                  <td style={{ padding: '4px 6px', color: '#cccccc', fontWeight: 500 }}>{posStr}</td>
+                  <td style={{ padding: '4px 6px', textAlign: 'right', color: '#fbbf24', fontWeight: 700 }}>{ptStr}</td>
                 </tr>
               ))}
               <tr style={{ borderTop: '1px solid #2a2a2a' }}>
-                <td style={{ padding: '5px 4px', color: '#4ade80', fontWeight: 600 }}>Each Elimination</td>
-                <td style={{ padding: '5px 4px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>1 Pt</td>
+                <td style={{ padding: '5px 6px', color: '#4ade80', fontWeight: 600 }}>Each Elimination</td>
+                <td style={{ padding: '5px 6px', textAlign: 'right', color: '#4ade80', fontWeight: 700 }}>1 Pt</td>
               </tr>
             </tbody>
           </table>

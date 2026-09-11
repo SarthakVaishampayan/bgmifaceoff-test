@@ -20,7 +20,7 @@
 }
 
 .logoImg {
-  height: 48px;
+  height: 68px;
   width: auto;
   opacity: 0.9;
 }
@@ -37,6 +37,11 @@
   justify-content: center;
   color: #858585;
   transition: color 0.2s ease;
+}
+
+.socialIcon svg {
+  width: 26px;
+  height: 26px;
 }
 
 .socialIcon:hover {
@@ -60,7 +65,7 @@
 }
 
 .navLink {
-  font-size: 16px;
+  font-size: 21px;
   font-weight: 700;
   color: #858585;
   text-decoration: none;
@@ -76,7 +81,7 @@
 
 /* ── COPYRIGHT ── */
 .copyright {
-  font-size: 13px;
+  font-size: 17px;
   color: #5f5f5f;
   padding-bottom: 32px;
   margin: 0;
@@ -92,59 +97,92 @@
   .navLinks {
     gap: 24px;
   }
+
+  .navLink {
+    font-size: 19px;
+  }
 }
 
 @media (max-width: 768px) {
   .footer {
-    padding: 0 20px;
+    padding: 0 24px;
   }
 
   .topRow {
-    padding: 24px 0;
+    padding: 26px 0;
   }
 
   .logoImg {
-    height: 28px;
+    height: 40px;
+  }
+
+  .socialIcon svg {
+    width: 26px;
+    height: 26px;
   }
 
   .navLinks {
-    gap: 16px 24px;
-    padding: 20px 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    column-gap: 24px;
+    row-gap: 18px;
+    padding: 24px 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .navLink {
-    font-size: 14px;
+    font-size: 17px;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .copyright {
+    font-size: 16px;
   }
 }
 
 @media (max-width: 480px) {
   .footer {
-    padding: 0 16px;
+    padding: 0 18px;
   }
 
   .topRow {
-    padding: 20px 0;
+    padding: 22px 0;
   }
 
   .logoImg {
-    height: 24px;
+    height: 34px;
   }
 
   .socials {
     gap: 12px;
   }
 
+  .socialIcon svg {
+    width: 24px;
+    height: 24px;
+  }
+
   .navLinks {
-    gap: 12px 20px;
-    padding: 16px 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    column-gap: 18px;
+    row-gap: 15px;
+    padding: 20px 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .navLink {
-    font-size: 12px;
+    font-size: clamp(14px, 3.8vw, 15.5px);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    text-align: left;
   }
 
   .copyright {
-    font-size: 11px;
+    font-size: 14.5px;
     padding-bottom: 24px;
   }
 }
