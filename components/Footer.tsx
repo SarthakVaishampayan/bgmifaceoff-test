@@ -11,16 +11,16 @@ export default function Footer() {
           <Image
             src="/images/faceofflogo.png"
             alt="BGFS Faceoff Series"
-            width={392}
-            height={91}
+            width={280}
+            height={65}
             className={styles.logoImg}
             priority
           />
           <Image
             src="/images/bgmilogo.png"
             alt="BGMI Official Logo"
-            width={168}
-            height={70}
+            width={120}
+            height={50}
             className={styles.logoImg}
             priority
           />
@@ -28,7 +28,7 @@ export default function Footer() {
 
         <div className={styles.socials}>
           <a href="#" className={styles.socialIcon} aria-label="Instagram" target="_blank" rel="noopener noreferrer">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
               <circle cx="12" cy="12" r="5" />
               <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />

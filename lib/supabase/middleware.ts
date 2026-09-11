@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // In-memory cache for maintenance mode (persists across requests in same worker)
 let maintenanceCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
-const CACHE_TTL_MS = 30_000 // re-check every 30 seconds
+const CACHE_TTL_MS = 5_000 // re-check every 5 seconds for fast response when toggled
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -45,16 +45,13 @@ export async function updateSession(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     const pathname = request.nextUrl.pathname
 
-    // Skip maintenance check on allowed paths (no DB hit needed)
-    const isAllowedPath =
+    // Check maintenance status for all page routes except /admin, /api, and /_next
+    const isExcludedFromMaintenance =
       pathname.startsWith('/admin') ||
-      pathname.startsWith('/login') ||
-      pathname.startsWith('/reset-password') ||
-      pathname.startsWith('/maintenance') ||
       pathname.startsWith('/api') ||
       pathname.startsWith('/_next')
 
-    if (!isAllowedPath) {
+    if (!isExcludedFromMaintenance) {
       // Use cached value if fresh
       const now = Date.now()
       if (now - maintenanceCache.checkedAt > CACHE_TTL_MS) {
@@ -71,23 +68,37 @@ export async function updateSession(request: NextRequest) {
       }
 
       if (maintenanceCache.value) {
-        let isAdmin = false
-        if (user) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('role')
-            .eq('user_id', user.id)
-            .maybeSingle()
+        // Maintenance is ON: only admins are allowed to browse public routes; all others go to /maintenance
+        if (pathname !== '/maintenance') {
+          let isAdmin = false
+          if (user) {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('role')
+              .eq('user_id', user.id)
+              .maybeSingle()
 
-          if (userData?.role === 'admin' || userData?.role === 'admin_scores') {
-            isAdmin = true
+            if (userData?.role === 'admin' || userData?.role === 'admin_scores') {
+              isAdmin = true
+            }
+          }
+
+          if (!isAdmin) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/maintenance'
+            const res = NextResponse.redirect(url)
+            res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+            return res
           }
         }
-
-        if (!isAdmin) {
+      } else {
+        // Maintenance is OFF: if user is currently on /maintenance, immediately send them to home (/)
+        if (pathname === '/maintenance') {
           const url = request.nextUrl.clone()
-          url.pathname = '/maintenance'
-          return NextResponse.redirect(url)
+          url.pathname = '/'
+          const res = NextResponse.redirect(url)
+          res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+          return res
         }
       }
     }

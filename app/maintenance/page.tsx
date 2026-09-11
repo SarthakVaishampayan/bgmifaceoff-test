@@ -1,46 +1,61 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { RefreshCw, KeyRound, Shield, Zap, Database, Server, CheckCircle } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { RefreshCw, Shield } from 'lucide-react'
 import styles from './page.module.css'
-
-const SYSTEMS = [
-  { icon: Database, label: 'Database Optimization', status: 'in_progress' },
-  { icon: Zap, label: 'Leaderboard Engine', status: 'in_progress' },
-  { icon: Server, label: 'Slot Booking System', status: 'queued' },
-  { icon: Shield, label: 'Security & Auth Layer', status: 'done' },
-]
 
 export default function MaintenancePage() {
   const [checking, setChecking] = useState(false)
-  const [progress, setProgress] = useState(38)
-  const [dots, setDots] = useState('')
+  const supabase = createClient()
 
-  // Animate the loading dots
+  // Auto-check: if maintenance mode was turned off, redirect to home immediately
   useEffect(() => {
-    const iv = setInterval(() => {
-      setDots(d => (d.length >= 3 ? '' : d + '.'))
-    }, 500)
-    return () => clearInterval(iv)
-  }, [])
+    let isMounted = true
 
-  // Slowly animate the progress bar
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setProgress(p => {
-        const next = p + (Math.random() * 0.4)
-        return next >= 72 ? 72 : next
-      })
-    }, 800)
-    return () => clearInterval(iv)
-  }, [])
+    async function checkMaintenanceStatus() {
+      try {
+        const { data } = await supabase
+          .from('config')
+          .select('value')
+          .eq('key', 'maintenance_mode')
+          .maybeSingle()
 
-  function handleCheckStatus() {
+        if (data?.value === 'false' && isMounted) {
+          window.location.replace('/')
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    checkMaintenanceStatus()
+    const interval = setInterval(checkMaintenanceStatus, 3000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [supabase])
+
+  async function handleCheckStatus() {
     setChecking(true)
+    try {
+      const { data } = await supabase
+        .from('config')
+        .select('value')
+        .eq('key', 'maintenance_mode')
+        .maybeSingle()
+
+      if (data?.value === 'false') {
+        window.location.replace('/')
+        return
+      }
+    } catch (err) {}
+
     setTimeout(() => {
-      window.location.href = '/'
-    }, 1200)
+      setChecking(false)
+    }, 1000)
   }
 
   return (
@@ -85,35 +100,6 @@ export default function MaintenancePage() {
           scoring engines, and slot booking performance. We'll be back shortly.
         </p>
 
-        {/* Progress bar */}
-        <div className={styles.progressSection}>
-          <div className={styles.progressHeader}>
-            <span className={styles.progressLabel}>UPGRADE PROGRESS</span>
-            <span className={styles.progressPct}>{Math.floor(progress)}%</span>
-          </div>
-          <div className={styles.progressTrack}>
-            <div className={styles.progressFill} style={{ width: `${progress}%` }} />
-          </div>
-          <p className={styles.progressNote}>Estimated completion: 15–30 minutes{dots}</p>
-        </div>
-
-        {/* System status list */}
-        <div className={styles.systemList}>
-          {SYSTEMS.map(({ icon: Icon, label, status }) => (
-            <div key={label} className={styles.systemRow}>
-              <div className={styles.systemIcon}>
-                <Icon size={14} color={status === 'done' ? '#4ade80' : status === 'in_progress' ? '#fbbf24' : '#555'} />
-              </div>
-              <span className={styles.systemLabel}>{label}</span>
-              <span className={`${styles.systemStatus} ${styles['status_' + status]}`}>
-                {status === 'done' && <CheckCircle size={12} />}
-                {status === 'in_progress' && <span className={styles.miniSpinner} />}
-                {status === 'in_progress' ? 'IN PROGRESS' : status === 'done' ? 'COMPLETE' : 'QUEUED'}
-              </span>
-            </div>
-          ))}
-        </div>
-
         {/* Data safety notice */}
         <div className={styles.safetyNote}>
           <Shield size={14} color="#4ade80" />
@@ -131,11 +117,6 @@ export default function MaintenancePage() {
             <RefreshCw size={15} className={checking ? styles.spin : ''} />
             <span>{checking ? 'Checking...' : 'Check Status'}</span>
           </button>
-
-          <Link href="/login?redirectTo=/admin" className={styles.adminBtn}>
-            <KeyRound size={14} />
-            <span>Admin Portal</span>
-          </Link>
         </div>
 
         <p className={styles.footerNote}>

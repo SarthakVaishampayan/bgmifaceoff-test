@@ -14,15 +14,15 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const supabase = createClient()
 
-  // Hide navbar on admin routes
-  if (pathname.startsWith('/admin')) return null
-
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // Hide navbar on admin routes and maintenance page on all screen sizes
+  if (pathname.startsWith('/admin') || pathname.startsWith('/maintenance')) return null
 
   const handleSignOut = async () => {
     window.dispatchEvent(new Event('app:showLoader'))

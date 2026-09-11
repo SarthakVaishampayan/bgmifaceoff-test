@@ -120,8 +120,9 @@ export default async function DashboardPage() {
     // Matches
     admin
       .from('matches')
-      .select('match_id, slot_id, match_number, map_name, position, kills, position_points, elimination_points, total_points, played_at')
-      .eq('team_id', safeTeam.team_id),
+      .select('match_id, slot_id, match_number, placement, kills, placement_points, kill_points, total_points, created_at, slots(slot_id, date, time_label, status)')
+      .eq('team_id', safeTeam.team_id)
+      .order('match_number', { ascending: true }),
 
     // Config (whatsapp link)
     admin

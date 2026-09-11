@@ -174,6 +174,12 @@
   align-items: start;
 }
 
+.leftCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
 /* ── Slots Card (Left) ── */
 .slotsCard {
   background: #141414;
@@ -400,6 +406,244 @@
   color: #fbbf24;
 }
 
+/* ── Performance Card ── */
+.performanceCard {
+  background: #141414;
+  border: 1px solid #222;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.perfHeaderTag {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.perfSlotList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.perfSlotCard {
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  transition: all 0.2s ease;
+}
+
+/* Top 5 Qualifying Slots: Gradient Yellow Background */
+.perfTop5Card {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.16) 0%, rgba(202, 138, 4, 0.08) 50%, rgba(20, 20, 20, 0.95) 100%);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  box-shadow: 0 4px 20px rgba(250, 204, 21, 0.05);
+}
+
+.perfTop5Card:hover {
+  border-color: rgba(250, 204, 21, 0.65);
+  box-shadow: 0 6px 24px rgba(250, 204, 21, 0.1);
+}
+
+/* Slots beyond Top 5: Dark muted styling */
+.perfOtherCard {
+  background: #121212;
+  border: 1px solid #242424;
+  opacity: 0.85;
+}
+
+.perfOtherCard:hover {
+  opacity: 1;
+  border-color: #333;
+}
+
+.perfSlotHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.perfSlotLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.perfRankBadge {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.perfTop5Card .perfRankBadge {
+  background: #fbbf24;
+  color: #111;
+  font-weight: 900;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.35);
+}
+
+.perfOtherCard .perfRankBadge {
+  background: #242424;
+  color: #777;
+  font-weight: 700;
+}
+
+.perfSlotDate {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f1f1f1;
+}
+
+.perfSlotRoom {
+  font-size: 0.7rem;
+  color: #888;
+  margin-top: 2px;
+}
+
+.perfSlotRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.badgeTop5Counting {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #111;
+  background: #fbbf24;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.badgeDropped {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #777;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.perfPointsVal {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.perfTop5Card .perfPointsVal {
+  color: #fbbf24;
+}
+
+.perfOtherCard .perfPointsVal {
+  color: #aaa;
+}
+
+.perfPointsLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #777;
+  letter-spacing: 0.05em;
+}
+
+.perfMatchesGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.perfMatchChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-family: 'Inter', sans-serif;
+}
+
+.perfTop5Card .perfMatchChip {
+  border-color: rgba(250, 204, 21, 0.2);
+}
+
+.perfMatchNum {
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.perfMatchPlace {
+  color: #fff;
+  font-weight: 700;
+}
+
+.perfMatchKills {
+  color: #888;
+  font-size: 0.68rem;
+}
+
+.perfMatchPts {
+  font-weight: 800;
+  color: #e5e5e5;
+  margin-left: 2px;
+}
+
+.perfSlotFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  font-size: 0.72rem;
+  color: #888;
+}
+
+.perfTotalKills strong {
+  color: #ddd;
+}
+
+.perfViewSlotBtn {
+  color: #fbbf24;
+  text-decoration: none;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  transition: all 0.15s ease;
+}
+
+.perfViewSlotBtn:hover {
+  color: #fde047;
+  text-decoration: underline;
+}
+
 /* ── Rank Card (Right) ── */
 .rankCard {
   background: #141414;
@@ -421,6 +665,11 @@
 .rankBody {
   padding: 1.5rem 1.25rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .rankBig {
@@ -443,7 +692,7 @@
 .rankStats {
   display: flex;
   justify-content: center;
-  gap: 1.25rem;
+  gap: 2.5rem;
   margin-bottom: 1.25rem;
 }
 
@@ -502,6 +751,8 @@
   border: 1px solid rgba(251, 191, 36, 0.3);
   border-radius: 6px;
   transition: all 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .leaderboardLink:hover {
@@ -694,11 +945,58 @@
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .twoCol {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
   }
 
   .rankCard {
     position: static;
+    order: -1;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 auto;
+  }
+
+  .rankHeader {
+    justify-content: center;
+  }
+
+  .rankBody {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 1.25rem 1rem;
+  }
+
+  .rankStats {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .leftCol {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    width: 100%;
+  }
+
+  .perfSlotHeader {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .perfSlotRight {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    padding-top: 0.5rem;
+    margin-top: 0.25rem;
   }
 
   .statsBar {
