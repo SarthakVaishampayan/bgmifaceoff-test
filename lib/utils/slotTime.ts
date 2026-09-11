@@ -1,12 +1,104 @@
 /**
  * Helper utility to determine if a tournament match slot has already passed/ended or closed for booking.
- * Takes slot.date ("YYYY-MM-DD") and slot.time_label (e.g. "1:00 PM – 3:00 PM", "Match 1: 1:12 PM").
- * Booking CLOSES automatically 15 minutes BEFORE Match 1 start time.
+ * Takes slot.date ("YYYY-MM-DD") and slot.time_label (e.g. "1:00 PM – 3:00 PM", "9:00 PM – 11:00 PM").
+ * 
+ * CORE BUSINESS LOGIC:
+ * The slot automatically closes 10 minutes before the starting time of the slot
+ * if the admin has not manually closed it.
+ */
+
+/**
+ * Extract time parts in Indian Standard Time (Asia/Kolkata, UTC+5:30)
+ * Works consistently across browser, local machine, and cloud servers (Vercel/Node).
+ */
+export function getISTParts(d: Date = new Date()): {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  second: number
+  dateStr: string
+} {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+    const parts = Object.fromEntries(formatter.formatToParts(d).map(p => [p.type, p.value]))
+    const rawHour = parseInt(parts.hour, 10)
+    const hour = rawHour === 24 ? 0 : rawHour
+    return {
+      year: parseInt(parts.year, 10),
+      month: parseInt(parts.month, 10),
+      day: parseInt(parts.day, 10),
+      hour,
+      minute: parseInt(parts.minute, 10),
+      second: parseInt(parts.second, 10),
+      dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+    }
+  } catch (e) {
+    const utcEpoch = d.getTime() + (d.getTimezoneOffset() * 60000)
+    const ist = new Date(utcEpoch + 5.5 * 60 * 60 * 1000)
+    const year = ist.getFullYear()
+    const month = String(ist.getMonth() + 1).padStart(2, '0')
+    const day = String(ist.getDate()).padStart(2, '0')
+    return {
+      year,
+      month: ist.getMonth() + 1,
+      day: ist.getDate(),
+      hour: ist.getHours(),
+      minute: ist.getMinutes(),
+      second: ist.getSeconds(),
+      dateStr: `${year}-${month}-${day}`,
+    }
+  }
+}
+
+/**
+ * Extracts the starting time of the slot window in minutes from midnight (0 to 1439).
+ * E.g.:
+ * - "1:00 PM – 3:00 PM" -> 13 * 60 + 0 = 780 (1:00 PM)
+ * - "9:00 PM – 11:00 PM" -> 21 * 60 + 0 = 1260 (9:00 PM)
+ * - "11:00 AM – 1:00 PM" -> 11 * 60 + 0 = 660 (11:00 AM)
+ * - "4:00 PM – 6:00 PM (M1: 4:12 PM...)" -> 16 * 60 + 0 = 960 (4:00 PM)
+ */
+export function getSlotStartMinutes(timeLabelStr: string): number {
+  if (!timeLabelStr) return 21 * 60 // Default 9:00 PM
+
+  // Take the starting portion before the dash/range separator
+  const windowStartPart = timeLabelStr.split(/[-–—]/)[0]?.trim() || timeLabelStr
+  const match =
+    windowStartPart.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)/i) ||
+    timeLabelStr.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)/i)
+
+  if (!match) return 21 * 60
+
+  let hours = parseInt(match[1], 10)
+  const minutes = match[2] ? parseInt(match[2], 10) : 0
+  const meridian = match[3].toUpperCase()
+
+  if (meridian === 'PM' && hours < 12) {
+    hours += 12
+  } else if (meridian === 'AM' && hours === 12) {
+    hours = 0
+  }
+
+  return hours * 60 + minutes
+}
+
+/**
+ * Backward compatibility helper for match list time cards.
  */
 export function getFirstMatchStartMinutes(timeLabelStr: string): number {
-  if (!timeLabelStr) return 21 * 60 + 12 // Default 9:12 PM
+  if (!timeLabelStr) return 21 * 60 + 12
 
-  // 1. Check if explicit Match 1 / M1 start time is specified in time_label
   const match1Regex = /(?:match\s*1|m1)\D*(\d{1,2}):?(\d{2})?\s*(AM|PM)/i
   const match1Hit = timeLabelStr.match(match1Regex)
 
@@ -23,62 +115,49 @@ export function getFirstMatchStartMinutes(timeLabelStr: string): number {
     return hours * 60 + minutes
   }
 
-  // 2. Otherwise parse slot window start time and add 12 minutes offset for Match 1
-  const timeMatch = timeLabelStr.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)/i)
-  if (!timeMatch) return 21 * 60 + 12
-
-  let hours = parseInt(timeMatch[1], 10)
-  const minutes = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0
-  const meridian = timeMatch[3].toUpperCase()
-
-  if (meridian === 'PM' && hours < 12) {
-    hours += 12
-  } else if (meridian === 'AM' && hours === 12) {
-    hours = 0
-  }
-
-  // Default Match 1 starts 12 minutes into the 2-hour slot window (e.g. 1:12 PM for 1-3 PM slot)
-  return hours * 60 + minutes + 12
+  // Otherwise, default Match 1 is 12 minutes after slot start time
+  return getSlotStartMinutes(timeLabelStr) + 12
 }
 
+/**
+ * Checks if a slot is closed or past.
+ * Logic:
+ * 1. If admin marked as 'completed' or 'closed' -> closed.
+ * 2. If slot date is earlier than today in IST -> closed.
+ * 3. If slot date is later than today in IST -> not closed.
+ * 4. If slot date is today:
+ *    The slot AUTOMATICALLY CLOSES 10 minutes before the starting time of the slot.
+ *    (e.g., for a 1:00 PM slot, cutoff is 12:50 PM; at 12:50 PM or later, it is closed).
+ */
 export function isSlotPastOrEnded(
   dateStr: string,
   timeLabelStr: string,
   status?: string
 ): boolean {
-  // If explicitly marked completed or closed in DB
+  // If explicitly marked completed or closed by admin in DB
   if (status === 'completed' || status === 'closed') return true
 
   if (!dateStr) return false
 
-  const now = new Date()
-
-  // Format today's date in local YYYY-MM-DD
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const todayStr = `${year}-${month}-${day}`
-
-  // Clean slot date (handle YYYY-MM-DD or YYYY-MM-DDT00:00:00)
+  const ist = getISTParts()
   const cleanSlotDate = String(dateStr).split('T')[0].trim()
 
-  if (cleanSlotDate < todayStr) {
-    return true // Slot date is in the past
+  if (cleanSlotDate < ist.dateStr) {
+    return true // Prior date is already ended
   }
 
-  if (cleanSlotDate > todayStr) {
-    return false // Slot date is in the future
+  if (cleanSlotDate > ist.dateStr) {
+    return false // Future date
   }
 
-  // Same day: Calculate 15 minutes cutoff BEFORE Match 1 start time
-  const match1StartMinutes = getFirstMatchStartMinutes(timeLabelStr)
-  const hours = Math.floor(match1StartMinutes / 60)
-  const minutes = match1StartMinutes % 60
+  // Same day: slot starts at slotStartMinutes
+  const slotStartMinutes = getSlotStartMinutes(timeLabelStr)
+  const currentMinutes = ist.hour * 60 + ist.minute
 
-  const match1DateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes)
+  // Cutoff is strictly 10 minutes BEFORE the slot starting time
+  const cutoffMinutes = slotStartMinutes - 10
 
-  // Booking closes exactly 15 minutes BEFORE Match 1 start time
-  const bookingCutoffTime = new Date(match1DateTime.getTime() - 15 * 60 * 1000)
-
-  return now > bookingCutoffTime
+  return currentMinutes >= cutoffMinutes
 }
+
+export const isSlotRegistrationClosed = isSlotPastOrEnded

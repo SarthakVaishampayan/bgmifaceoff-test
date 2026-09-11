@@ -131,12 +131,11 @@ export default async function DashboardPage() {
       .eq('key', 'whatsapp_invite_link')
       .maybeSingle(),
 
-    // Leaderboard
+    // All completed matches for accurate leaderboard ranking (only published completed slots)
     admin
-      .from('leaderboard')
-      .select('team_id, best_16_total, matches_played, total_kills')
-      .order('best_16_total', { ascending: false })
-      .order('total_kills', { ascending: false }),
+      .from('matches')
+      .select('team_id, slot_id, total_points, kills, slots!inner(status)')
+      .eq('slots.status', 'completed'),
 
     // Payouts
     admin
@@ -199,10 +198,48 @@ export default async function DashboardPage() {
     }
   }
 
-  const rankedList = leaderboardResult.data || []
-  const teamIndex = rankedList.findIndex(r => r.team_id === safeTeam.team_id)
+  const completedMatches = leaderboardResult.data || []
+  const teamSlotTotals: Record<string, Record<string, { total_points: number; kills: number; matches_count: number }>> = {}
+  
+  completedMatches.forEach((m: any) => {
+    if (!teamSlotTotals[m.team_id]) teamSlotTotals[m.team_id] = {}
+    if (!teamSlotTotals[m.team_id][m.slot_id]) {
+      teamSlotTotals[m.team_id][m.slot_id] = { total_points: 0, kills: 0, matches_count: 0 }
+    }
+    teamSlotTotals[m.team_id][m.slot_id].total_points += Number(m.total_points) || 0
+    teamSlotTotals[m.team_id][m.slot_id].kills += Number(m.kills) || 0
+    teamSlotTotals[m.team_id][m.slot_id].matches_count += 1
+  })
+
+  // Ensure current safeTeam is in the map
+  if (!teamSlotTotals[safeTeam.team_id]) {
+    teamSlotTotals[safeTeam.team_id] = {}
+  }
+
+  const computedRankedList = Object.entries(teamSlotTotals).map(([tId, slotMap]) => {
+    const slotsPlayed = Object.values(slotMap)
+    slotsPlayed.sort((a, b) => b.total_points - a.total_points)
+    const top5 = slotsPlayed.slice(0, 5)
+    const best_16_total = top5.reduce((sum, s) => sum + s.total_points, 0)
+    const total_kills = slotsPlayed.reduce((sum, s) => sum + s.kills, 0)
+    const matches_played = slotsPlayed.reduce((sum, s) => sum + s.matches_count, 0)
+    return {
+      team_id: tId,
+      best_16_total,
+      total_kills,
+      matches_played,
+    }
+  })
+
+  computedRankedList.sort((a, b) => {
+    if (b.best_16_total !== a.best_16_total) return b.best_16_total - a.best_16_total
+    return b.total_kills - a.total_kills
+  })
+
+  const teamIndex = computedRankedList.findIndex(r => r.team_id === safeTeam.team_id)
   const rank = teamIndex >= 0 ? teamIndex + 1 : 0
-  const leaderboardEntry = teamIndex >= 0 ? rankedList[teamIndex] : null
+  const leaderboardEntry = teamIndex >= 0 ? computedRankedList[teamIndex] : null
+  const completedTeamMatches = (matchesResult.data || []).filter((m: any) => m.slots?.status === 'completed')
   const isTestAccount = Boolean(userProfile?.is_test_account || (team as any)?.is_test_account)
 
   return (
@@ -211,7 +248,7 @@ export default async function DashboardPage() {
       userEmail={user.email || ''}
       bookings={bookings}
       slotBookingsMap={slotBookingsMap}
-      teamMatches={matchesResult.data || []}
+      teamMatches={completedTeamMatches}
       globalWhatsappLink={configResult.data?.value || 'https://chat.whatsapp.com/BGFS'}
       leaderboardEntry={leaderboardEntry}
       rank={rank}

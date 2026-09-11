@@ -83,6 +83,12 @@ export default function Navbar() {
               >
                 Dashboard
               </Link>
+              <Link
+                href="/profile"
+                className={`${styles.secondaryBtn} ${pathname === '/profile' ? styles.activeBtn : ''}`}
+              >
+                Profile
+              </Link>
               <button onClick={handleSignOut} className={styles.secondaryBtn}>
                 Sign Out
               </button>
@@ -134,6 +140,9 @@ export default function Navbar() {
             <>
               <Link href="/dashboard" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
                 Dashboard
+              </Link>
+              <Link href="/profile" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>
+                Profile
               </Link>
               <button onClick={handleSignOut} className={styles.mobileLink}>
                 Sign Out

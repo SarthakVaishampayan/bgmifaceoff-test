@@ -57,9 +57,6 @@ export default async function LeaderboardPage() {
 
   const testTeamIds = new Set(testTeamsResult.data?.map(t => t.team_id) || [])
 
-  const filteredRows = (leaderboardResult.data || []).filter(r => !testTeamIds.has(r.team_id))
-  const filteredMatches = ((matchesResult.data || []) as any[]).filter(m => !testTeamIds.has(m.team_id))
-
   // Handle room_slot_number column missing gracefully
   let filteredBookings: any[] = bookingsResult.data || []
   if (bookingsResult.error?.message?.includes('room_slot_number')) {
@@ -71,7 +68,64 @@ export default async function LeaderboardPage() {
     filteredBookings = fallback.data || []
   }
 
-  const ranked = filteredRows.map((row, idx) => ({ ...row, rank: idx + 1 }))
+  // CRITICAL: Only matches from slots with status = 'completed' are published and counted
+  const allMatchesData = ((matchesResult.data || []) as any[])
+  const completedMatches = allMatchesData.filter(m => !testTeamIds.has(m.team_id) && m.slots?.status === 'completed')
+
+  // Compute team performance from completed matches only
+  const teamSlotMap: Record<string, Record<string, { total_points: number; kills: number; matches_count: number }>> = {}
+  const teamMetaMap: Record<string, { team_id: string; team_name: string }> = {}
+
+  // Include confirmed booking teams
+  filteredBookings.forEach((b: any) => {
+    if (b.team_id && !testTeamIds.has(b.team_id)) {
+      teamMetaMap[b.team_id] = {
+        team_id: b.team_id,
+        team_name: b.teams?.team_name || 'Team #' + b.team_id.slice(0, 5),
+      }
+    }
+  })
+
+  // Include teams with completed matches
+  completedMatches.forEach((m: any) => {
+    if (!teamMetaMap[m.team_id]) {
+      teamMetaMap[m.team_id] = {
+        team_id: m.team_id,
+        team_name: m.teams?.team_name || 'Team #' + m.team_id.slice(0, 5),
+      }
+    }
+    if (!teamSlotMap[m.team_id]) teamSlotMap[m.team_id] = {}
+    if (!teamSlotMap[m.team_id][m.slot_id]) {
+      teamSlotMap[m.team_id][m.slot_id] = { total_points: 0, kills: 0, matches_count: 0 }
+    }
+    teamSlotMap[m.team_id][m.slot_id].total_points += Number(m.total_points) || 0
+    teamSlotMap[m.team_id][m.slot_id].kills += Number(m.kills) || 0
+    teamSlotMap[m.team_id][m.slot_id].matches_count += 1
+  })
+
+  const computedStandings = Object.values(teamMetaMap).map(team => {
+    const slotsPlayed = Object.values(teamSlotMap[team.team_id] || {})
+    slotsPlayed.sort((a, b) => b.total_points - a.total_points)
+    const top5Slots = slotsPlayed.slice(0, 5)
+    const best_5_total = top5Slots.reduce((sum, s) => sum + s.total_points, 0)
+    const total_kills = slotsPlayed.reduce((sum, s) => sum + s.kills, 0)
+    const matches_played = slotsPlayed.reduce((sum, s) => sum + s.matches_count, 0)
+
+    return {
+      team_id: team.team_id,
+      team_name: team.team_name,
+      matches_played,
+      best_16_total: best_5_total,
+      total_kills,
+    }
+  })
+
+  computedStandings.sort((a, b) => {
+    if (b.best_16_total !== a.best_16_total) return b.best_16_total - a.best_16_total
+    return b.total_kills - a.total_kills
+  })
+
+  const ranked = computedStandings.map((row, idx) => ({ ...row, rank: idx + 1 }))
 
   // Get current user's team_id for "My Slots" filter
   let userTeamId: string | null = null
@@ -92,7 +146,7 @@ export default async function LeaderboardPage() {
     <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>Loading Leaderboard...</div>}>
       <LeaderboardClient
         rows={ranked}
-        allMatches={filteredMatches}
+        allMatches={completedMatches}
         slots={slotsResult.data || []}
         bookings={filteredBookings as any[]}
         userTeamId={userTeamId}

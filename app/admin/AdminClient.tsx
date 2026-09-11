@@ -5,9 +5,29 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate } from '@/lib/utils/formatDate'
+import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
+import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle } from 'lucide-react'
 import styles from './page.module.css'
 
-type AdminTab = 'scores' | 'slots' | 'payouts' | 'bookings' | 'coupons' | 'config' | 'users'
+type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'coupons' | 'config' | 'users'
+
+/**
+ * Sorts slots in descending order:
+ * 1. Latest date first (e.g. 2026-09-12 before 2026-09-11)
+ * 2. Latest start time first within the same date (e.g. 9:00 PM before 6:00 PM before 1:00 PM)
+ */
+export function sortSlotsDescending(slotsList: any[]): any[] {
+  return [...slotsList].sort((a, b) => {
+    const aDate = String(a.date || '').split('T')[0]
+    const bDate = String(b.date || '').split('T')[0]
+    const dateComp = bDate.localeCompare(aDate)
+    if (dateComp !== 0) return dateComp
+
+    const aMins = getSlotStartMinutes(a.time_label)
+    const bMins = getSlotStartMinutes(b.time_label)
+    return bMins - aMins
+  })
+}
 
 interface Props {
   userRole?: string
@@ -18,16 +38,24 @@ interface Props {
   coupons: any[]
   config: Record<string, string>
   usersList?: any[]
+  initialTab?: AdminTab
 }
 
-export default function AdminClient({ userRole = 'admin', slots, teams, payouts: initialPayouts, bookings, coupons, config, usersList = [] }: Props) {
+export default function AdminClient({ userRole = 'admin', slots: initialSlots, teams, payouts: initialPayouts, bookings, coupons, config, usersList = [], initialTab }: Props) {
   const supabase = createClient()
   const router = useRouter()
-  const [tab, setTab] = useState<AdminTab>('scores')
+  const [tab, setTab] = useState<AdminTab>(initialTab || 'scores')
+  const [slots, setSlots] = useState(initialSlots)
   const [payouts, setPayouts] = useState(initialPayouts)
   const [users, setUsers] = useState(usersList)
   const [adminEmail, setAdminEmail] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  function switchTab(newTab: AdminTab) {
+    setTab(newTab)
+    setMobileMenuOpen(false)
+    window.history.replaceState(null, '', `/admin?tab=${newTab}`)
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -63,11 +91,14 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
   }
 
   const isSuperAdmin = userRole === 'admin'
+  const uniquePendingKeys = new Set(payouts.filter(p => p.status === 'pending').map(p => `${p.slot_id}_${p.team_id}`))
+  const pendingPayoutsCount = uniquePendingKeys.size
 
   const allTabs: { id: AdminTab; label: string; superOnly?: boolean }[] = [
     { id: 'scores', label: 'Score Entry' },
     { id: 'slots', label: 'Slots', superOnly: true },
-    { id: 'payouts', label: `Payouts (${payouts.filter(p => p.status === 'pending').length})`, superOnly: true },
+    { id: 'upi_info', label: 'UPI Info', superOnly: false },
+    { id: 'payouts', label: pendingPayoutsCount > 0 ? `Payouts (${pendingPayoutsCount})` : 'Payouts', superOnly: true },
     { id: 'bookings', label: 'Bookings', superOnly: true },
     { id: 'coupons', label: 'Coupons', superOnly: true },
     { id: 'config', label: 'Config', superOnly: true },
@@ -75,6 +106,14 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
   ]
 
   const visibleTabs = isSuperAdmin ? allTabs : allTabs.filter(t => !t.superOnly)
+
+  async function refreshPayouts() {
+    try {
+      const res = await fetch('/api/admin/payout/sync-pending', { method: 'POST' })
+      const data = await res.json()
+      if (data.payouts) setPayouts(data.payouts)
+    } catch (e) {}
+  }
 
   async function markPayoutPaid(payoutId: string) {
     await supabase
@@ -191,10 +230,7 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
             <button
               key={t.id}
               className={`${styles.sidebarBtn} ${tab === t.id ? styles.sidebarActive : ''}`}
-              onClick={() => {
-                setTab(t.id)
-                setMobileMenuOpen(false)
-              }}
+              onClick={() => switchTab(t.id)}
             >
               {t.label}
             </button>
@@ -231,9 +267,21 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
       {/* Main content */}
       <main className={styles.adminMain}>
         <div className={styles.adminContent}>
-          {tab === 'scores' && <ScoreEntryTab slots={slots} teams={teams} supabase={supabase} />}
-          {isSuperAdmin && tab === 'slots' && <SlotsTab slots={slots} supabase={supabase} teams={teams} />}
-          {isSuperAdmin && tab === 'payouts' && <PayoutsTab payouts={payouts} onMarkPaid={markPayoutPaid} />}
+          {tab === 'scores' && <ScoreEntryTab slots={slots} teams={teams} supabase={supabase} onSyncPayouts={refreshPayouts} />}
+          {isSuperAdmin && tab === 'slots' && <SlotsTab slots={slots} setSlots={setSlots} supabase={supabase} teams={teams} onSyncPayouts={refreshPayouts} />}
+          {tab === 'upi_info' && (
+            <UpiInfoTab
+              slots={slots}
+              payouts={payouts}
+              onPayoutCreated={(newPayout) => setPayouts(prev => [newPayout, ...prev.filter(p => p.payout_id !== newPayout.payout_id)])}
+            />
+          )}
+          {isSuperAdmin && tab === 'payouts' && (
+            <PayoutsTab
+              payouts={payouts}
+              onPayoutSettled={(newPayout) => setPayouts(prev => [newPayout, ...prev.filter(p => p.payout_id !== newPayout.payout_id)])}
+            />
+          )}
           {isSuperAdmin && tab === 'bookings' && <BookingsTab bookings={bookings} />}
           {isSuperAdmin && tab === 'coupons' && <CouponsTab coupons={coupons} teams={teams} supabase={supabase} />}
           {isSuperAdmin && tab === 'config' && <ConfigTab config={config} supabase={supabase} />}
@@ -252,8 +300,15 @@ export default function AdminClient({ userRole = 'admin', slots, teams, payouts:
 }
 
 // ── SCORE ENTRY TAB ──────────────────────────────────────────────
-function ScoreEntryTab({ slots, teams, supabase }: any) {
-  const [selectedSlot, setSelectedSlot] = useState('')
+function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
+  const sortedSlots = useMemo(() => {
+    return sortSlotsDescending(slots)
+  }, [slots])
+
+  const [selectedSlot, setSelectedSlot] = useState(() => {
+    const list = sortSlotsDescending(slots)
+    return list.length > 0 ? list[0].slot_id : ''
+  })
   const [selectedTeam, setSelectedTeam] = useState('')
   const [matchNum, setMatchNum] = useState(1)
   const [position, setPosition] = useState('')
@@ -264,6 +319,13 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
   const [recordedMatches, setRecordedMatches] = useState<any[]>([])
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
+
+  // Automatically load data for the latest slot on initial render
+  useEffect(() => {
+    if (selectedSlot) {
+      loadSlotData(selectedSlot)
+    }
+  }, [])
 
   // Live Mathematical Auto-Calculations
   const posNum = parseInt(position)
@@ -482,6 +544,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
       setKills('')
       setSelectedTeam('')
       loadSlotData(selectedSlot)
+      if (onSyncPayouts) onSyncPayouts()
     }
   }
 
@@ -635,7 +698,7 @@ function ScoreEntryTab({ slots, teams, supabase }: any) {
                   required
                 >
                   <option value="">Select slot...</option>
-                  {slots.map((s: any) => (
+                  {sortedSlots.map((s: any) => (
                     <option key={s.slot_id} value={s.slot_id}>
                       {formatShortDate(s.date)} • {s.time_label}
                     </option>
@@ -1001,18 +1064,57 @@ function buildTimeLabel(baseWindow: string, m1?: string, m2?: string, m3?: strin
   return windowStr
 }
 
+function normalizeStartTime(timeStr: string): string {
+  if (!timeStr) return ''
+  const cleaned = timeStr.trim().toLowerCase().replace(/\s+/g, '')
+  const m = cleaned.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/)
+  if (m) {
+    const hour = parseInt(m[1], 10)
+    const min = m[2] || '00'
+    const ampm = m[3]
+    return `${hour}:${min}${ampm}`
+  }
+  return cleaned
+}
+
 // ── SLOTS MANAGEMENT TAB ──────────────────────────────────────────
-function SlotsTab({ slots, supabase }: any) {
+function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
   const todayStr = getTodayStr()
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
 
   const [selectedDate, setSelectedDate] = useState(tomorrowStr)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'not_open' | 'completed'>('all')
   const [msg, setMsg] = useState('')
   const [loadingPresetId, setLoadingPresetId] = useState<number | null>(null)
 
-  // Local state for editable fields per preset ID for selected date
-  const [presetForms, setPresetForms] = useState<Record<number, {
+  // Compute standard 4-state slot status
+  function computeSlotStatus(
+    existingSlot: any,
+    dateStr: string,
+    timeLabelStr: string
+  ): 'open' | 'closed' | 'not_open' | 'completed' {
+    if (existingSlot && existingSlot.status === 'completed') {
+      return 'completed'
+    }
+    if (!existingSlot) {
+      return 'not_open'
+    }
+    const isAutoPast = isSlotPastOrEnded(dateStr, timeLabelStr)
+    const isFullCapacity = (existingSlot.teams_booked_count || 0) >= (existingSlot.capacity || 20)
+    const isExplicitClosed = existingSlot.status === 'closed' || existingSlot.status === 'full'
+
+    if (isExplicitClosed || isAutoPast || isFullCapacity) {
+      return 'closed'
+    }
+    if (existingSlot.status === 'open') {
+      return 'open'
+    }
+    return 'not_open'
+  }
+
+  // Local state for editable fields per preset ID and date
+  const [presetForms, setPresetForms] = useState<Record<string, {
     time_label?: string
     m1_time?: string
     m2_time?: string
@@ -1022,12 +1124,53 @@ function SlotsTab({ slots, supabase }: any) {
     capacity?: number
   }>>({})
 
-  // Helper to find matching DB slot for a preset slot on selectedDate
+  function getForm(presetId: number) {
+    const formKey = `${selectedDate}_${presetId}`
+    return presetForms[formKey] || {}
+  }
+
+  function updatePresetFormField(presetId: number, field: string, value: any) {
+    const formKey = `${selectedDate}_${presetId}`
+    setPresetForms(prev => ({
+      ...prev,
+      [formKey]: {
+        ...(prev[formKey] || {}),
+        [field]: value,
+      },
+    }))
+  }
+
+  // Helper to find matching DB slot for a preset slot on selectedDate (STRICT START TIME MATCHING ONLY)
   function getExistingSlot(preset: typeof FIXED_DAILY_SLOTS[0]) {
+    const presetStartTime = normalizeStartTime(preset.shortTime)
+    const presetLabelNorm = preset.defaultLabel.toLowerCase().replace(/\s+/g, ' ').trim()
+
     return slots.find((s: any) => {
       if (s.date !== selectedDate) return false
-      const label = s.time_label || ''
-      return label.includes(preset.shortTime) || label.includes(preset.defaultLabel) || label.includes(preset.name)
+      const rawLabel = (s.time_label || '').trim()
+
+      // 1. Explicit preset name tag like "Slot 1:" or "Slot 1 •"
+      const nameRegex = new RegExp(`\\b${preset.name}\\b`, 'i')
+      if (nameRegex.test(rawLabel)) return true
+
+      // 2. Base window before any parentheses (e.g. "9:00 PM – 11:00 PM (Match 1:...)")
+      const windowPart = rawLabel.split('(')[0].trim()
+      const windowNorm = windowPart.toLowerCase().replace(/\s+/g, ' ').trim()
+
+      if (windowNorm === presetLabelNorm || windowNorm.startsWith(presetLabelNorm)) {
+        return true
+      }
+
+      // 3. Strict START time match before the dash (e.g. "1:00 PM" from "1:00 PM – 3:00 PM")
+      const splitDash = windowPart.split(/\s*(?:–|-|to)\s*/i)
+      if (splitDash.length > 0) {
+        const rawStart = splitDash[0].replace(/^.*[•·|]\s*/, '').trim()
+        if (normalizeStartTime(rawStart) === presetStartTime) {
+          return true
+        }
+      }
+
+      return false
     })
   }
 
@@ -1036,7 +1179,7 @@ function SlotsTab({ slots, supabase }: any) {
     setLoadingPresetId(preset.id)
     setMsg('')
     const existing = getExistingSlot(preset)
-    const form = presetForms[preset.id] || {}
+    const form = getForm(preset.id)
 
     const baseLabel = form.time_label ?? (existing?.time_label ? existing.time_label.split('(')[0].trim() : preset.defaultLabel)
     const m1 = form.m1_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 1)
@@ -1049,7 +1192,7 @@ function SlotsTab({ slots, supabase }: any) {
     const capacity = form.capacity || existing?.capacity || 20
 
     if (existing) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('slots')
         .update({
           status: 'open',
@@ -1059,29 +1202,36 @@ function SlotsTab({ slots, supabase }: any) {
           capacity: capacity,
         })
         .eq('slot_id', existing.slot_id)
+        .select()
+        .single()
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+      }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
     } else {
-      const { error } = await supabase.from('slots').insert({
+      const { data, error } = await supabase.from('slots').insert({
         date: selectedDate,
         time_label: timeLabel,
         capacity: capacity,
         entry_fee: entryFee,
         status: 'open',
         whatsapp_link: whatsappLink,
-      })
+      }).select().single()
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => [...prev, data])
+      }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
     }
 
     setLoadingPresetId(null)
-    window.location.reload()
   }
 
-  // 1-Click Close / Cancel Slot
-  async function handleCloseSlot(preset: typeof FIXED_DAILY_SLOTS[0]) {
+  // Mark Slot Not Open (turns slot disabled for this date)
+  async function handleMarkNotOpen(preset: typeof FIXED_DAILY_SLOTS[0]) {
     setLoadingPresetId(preset.id)
     setMsg('')
     const existing = getExistingSlot(preset)
@@ -1090,18 +1240,79 @@ function SlotsTab({ slots, supabase }: any) {
       return
     }
 
-    if (existing.teams_booked_count === 0) {
-      const { error } = await supabase.from('slots').delete().eq('slot_id', existing.slot_id)
-      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
-      setMsg(`✅ ${preset.name} (${selectedDate}) CLOSED / CANCELLED`)
-    } else {
-      const { error } = await supabase.from('slots').update({ status: 'closed' }).eq('slot_id', existing.slot_id)
-      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
-      setMsg(`✅ ${preset.name} (${selectedDate}) CLOSED to new bookings`)
+    if (existing.teams_booked_count > 0) {
+      const confirmDelete = window.confirm(
+        `This slot currently has ${existing.teams_booked_count} registered teams. Marking it NOT OPEN will disable and remove the slot for ${formatMonthDay(selectedDate)}. Are you sure?`
+      )
+      if (!confirmDelete) {
+        setLoadingPresetId(null)
+        return
+      }
     }
 
+    const { error } = await supabase.from('slots').delete().eq('slot_id', existing.slot_id)
+    if (error) {
+      setMsg('❌ ' + error.message)
+      setLoadingPresetId(null)
+      return
+    }
+
+    if (setSlots) {
+      setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== existing.slot_id))
+    }
+    setMsg(`✅ ${preset.name} (${selectedDate}) turned disabled / NOT OPEN`)
     setLoadingPresetId(null)
-    window.location.reload()
+  }
+
+  // Close Slot to new registrations (sets status to 'full' so no bookings accepted)
+  async function handleCloseSlot(preset: typeof FIXED_DAILY_SLOTS[0]) {
+    setLoadingPresetId(preset.id)
+    setMsg('')
+    const existing = getExistingSlot(preset)
+
+    if (!existing) {
+      // If slot not yet saved in DB, create it directly as closed (status: 'full')
+      const form = getForm(preset.id)
+      const baseLabel = form.time_label ?? preset.defaultLabel
+      const m1 = form.m1_time ?? parseMatchTimeFromLabel('', 1)
+      const m2 = form.m2_time ?? parseMatchTimeFromLabel('', 2)
+      const m3 = form.m3_time ?? parseMatchTimeFromLabel('', 3)
+      const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
+      const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : null
+      const entryFee = form.entry_fee || 50
+      const capacity = form.capacity || 20
+
+      const { data, error } = await supabase.from('slots').insert({
+        date: selectedDate,
+        time_label: timeLabel,
+        capacity: capacity,
+        entry_fee: entryFee,
+        status: 'full',
+        whatsapp_link: whatsappLink,
+      }).select().single()
+
+      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => [...prev, data])
+      }
+      setMsg(`✅ ${preset.name} (${selectedDate}) marked CLOSED to registrations`)
+      setLoadingPresetId(null)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('slots')
+      .update({ status: 'full' })
+      .eq('slot_id', existing.slot_id)
+      .select()
+      .single()
+
+    if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+    if (data && setSlots) {
+      setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+    }
+    setMsg(`✅ ${preset.name} (${selectedDate}) CLOSED to new registrations`)
+    setLoadingPresetId(null)
   }
 
   // Save changes to time, whatsapp link, entry fee, capacity
@@ -1109,7 +1320,7 @@ function SlotsTab({ slots, supabase }: any) {
     setLoadingPresetId(preset.id)
     setMsg('')
     const existing = getExistingSlot(preset)
-    const form = presetForms[preset.id] || {}
+    const form = getForm(preset.id)
 
     const baseLabel = form.time_label ?? (existing?.time_label ? existing.time_label.split('(')[0].trim() : preset.defaultLabel)
     const m1 = form.m1_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 1)
@@ -1122,7 +1333,7 @@ function SlotsTab({ slots, supabase }: any) {
     const capacity = form.capacity || existing?.capacity || 20
 
     if (existing) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('slots')
         .update({
           time_label: timeLabel,
@@ -1131,37 +1342,90 @@ function SlotsTab({ slots, supabase }: any) {
           capacity: capacity,
         })
         .eq('slot_id', existing.slot_id)
+        .select()
+        .single()
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+      }
       setMsg(`✅ Details saved for ${preset.name}!`)
     } else {
-      const { error } = await supabase.from('slots').insert({
+      const { data, error } = await supabase.from('slots').insert({
         date: selectedDate,
         time_label: timeLabel,
         capacity: capacity,
         entry_fee: entryFee,
         status: 'open',
         whatsapp_link: whatsappLink,
-      })
+      }).select().single()
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => [...prev, data])
+      }
       setMsg(`✅ Created and saved details for ${preset.name}!`)
     }
 
     setLoadingPresetId(null)
-    window.location.reload()
   }
 
-  // Update form field state
-  function updatePresetFormField(presetId: number, field: string, value: any) {
-    setPresetForms(prev => ({
-      ...prev,
-      [presetId]: {
-        ...(prev[presetId] || {}),
-        [field]: value,
-      },
-    }))
+  // Toggle Completed status
+  async function handleToggleCompleted(preset: typeof FIXED_DAILY_SLOTS[0]) {
+    setLoadingPresetId(preset.id)
+    setMsg('')
+    const existing = getExistingSlot(preset)
+
+    if (!existing) {
+      const form = getForm(preset.id)
+      const baseLabel = form.time_label ?? preset.defaultLabel
+      const m1 = form.m1_time
+      const m2 = form.m2_time
+      const m3 = form.m3_time
+      const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
+      const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : null
+      const entryFee = form.entry_fee || 50
+      const capacity = form.capacity || 20
+
+      const { data, error } = await supabase.from('slots').insert({
+        date: selectedDate,
+        time_label: timeLabel,
+        capacity,
+        entry_fee: entryFee,
+        status: 'completed',
+        whatsapp_link: whatsappLink,
+      }).select().single()
+
+      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => [...prev, data])
+      }
+      setMsg(`✅ ${preset.name} (${selectedDate}) marked as COMPLETED! Results published to leaderboards & UPI info.`)
+      if (onSyncPayouts) onSyncPayouts()
+    } else {
+      const nextStatus = existing.status === 'completed' ? 'open' : 'completed'
+      const { data, error } = await supabase
+        .from('slots')
+        .update({ status: nextStatus })
+        .eq('slot_id', existing.slot_id)
+        .select()
+        .single()
+
+      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+      }
+      if (nextStatus === 'completed') {
+        setMsg(`✅ ${preset.name} (${selectedDate}) marked as COMPLETED! Standings officially published on leaderboards & UPI info.`)
+        if (onSyncPayouts) onSyncPayouts()
+      } else {
+        setMsg(`↩️ ${preset.name} (${selectedDate}) reverted to OPEN status.`)
+      }
+    }
+
+    setLoadingPresetId(null)
   }
+
 
   return (
     <div>
@@ -1169,7 +1433,7 @@ function SlotsTab({ slots, supabase }: any) {
         <div>
           <h2 className={styles.tabTitle}>Daily Slots Management (6 Fixed Slots)</h2>
           <p className={styles.tabDesc}>
-            Select a date below to easily open or cancel any of the 6 daily match slots with 1 click. Customize slot timings, individual match schedule (Erangel, Rondo, Miramar), and daily WhatsApp links.
+            Select a date below to configure match schedules, open/close bookings, and finalize completed slots. When a slot is marked completed, its scores are officially published to the live leaderboards and UPI payout queue.
           </p>
         </div>
       </div>
@@ -1245,14 +1509,42 @@ function SlotsTab({ slots, supabase }: any) {
             onChange={e => setSelectedDate(e.target.value)}
           />
         </div>
+
+        {/* ── STATUS FILTER DROPDOWN (Right next to date) ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto' }}>
+          <label style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+            Filter:
+          </label>
+          <select
+            className="form-input"
+            style={{
+              padding: '0.4rem 0.75rem',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              background: '#181818',
+              color: '#ffffff',
+              borderColor: statusFilter !== 'all' ? '#fbbf24' : '#383838',
+              borderRadius: '8px',
+              cursor: 'pointer',
+            }}
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value as any)}
+          >
+            <option value="all">All Statuses (Default)</option>
+            <option value="open">🟢 Open (Accepting Bookings)</option>
+            <option value="closed">🔒 Closed (10m Cutoff / Full)</option>
+            <option value="not_open">⚪ Not Open (Disabled)</option>
+            <option value="completed">🟣 Completed (Scores Finalized)</option>
+          </select>
+        </div>
       </div>
 
       {msg && (
         <div
           style={{
-            padding: '0.65rem 1rem',
+            padding: '0.75rem 1rem',
             borderRadius: '8px',
-            marginBottom: '1rem',
+            marginBottom: '1.25rem',
             fontSize: '0.85rem',
             fontWeight: 700,
             background: msg.includes('❌') ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
@@ -1265,132 +1557,271 @@ function SlotsTab({ slots, supabase }: any) {
       )}
 
       {/* ── 6 FIXED SLOTS GRID ───────────────────────────────────── */}
-      <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fbbf24', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        ⚡ 6 Fixed Slots for {formatFullLongDate(selectedDate)}
-      </h3>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
-        {FIXED_DAILY_SLOTS.map(preset => {
+      {(() => {
+        const filteredFixedSlots = FIXED_DAILY_SLOTS.filter(preset => {
+          if (statusFilter === 'all') return true
           const existingSlot = getExistingSlot(preset)
-          const form = presetForms[preset.id] || {}
-          const isOpen = existingSlot && (existingSlot.status === 'open' || existingSlot.status === 'full')
-          const isCompleted = existingSlot && existingSlot.status === 'completed'
-          const isLoading = loadingPresetId === preset.id
-
+          const form = getForm(preset.id)
           const currentLabel = form.time_label ?? (existingSlot?.time_label ? existingSlot.time_label.split('(')[0].trim() : preset.defaultLabel)
-          const currentM1 = form.m1_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 1)
-          const currentM2 = form.m2_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 2)
-          const currentM3 = form.m3_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 3)
-          const currentWhatsapp = form.whatsapp_link ?? existingSlot?.whatsapp_link ?? ''
-          const currentFee = form.entry_fee ?? existingSlot?.entry_fee ?? 50
-          const currentCap = form.capacity ?? existingSlot?.capacity ?? 20
+          const st = computeSlotStatus(existingSlot, selectedDate, currentLabel)
+          return st === statusFilter
+        })
 
-          return (
-            <div
-              key={preset.id}
-              style={{
-                background: '#121212',
-                border: isOpen ? '1px solid #22c55e' : isCompleted ? '1px solid #555555' : '1px solid #262626',
-                borderRadius: '14px',
-                padding: '1.15rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.85rem',
-                boxShadow: isOpen ? '0 4px 20px rgba(34, 197, 94, 0.1)' : 'none',
-                position: 'relative',
-              }}
-            >
-              {/* Slot Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    {preset.name}
+        return (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#fbbf24', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                ⚡ 6 Fixed Slots for {formatFullLongDate(selectedDate)}
+                {statusFilter !== 'all' && (
+                  <span style={{ fontSize: '0.78rem', color: '#60a5fa', marginLeft: '0.5rem', fontWeight: 700 }}>
+                    (Showing {filteredFixedSlots.length} of 6 matching {statusFilter.toUpperCase().replace('_', ' ')})
                   </span>
-                  <h4 style={{ margin: '2px 0 0 0', fontSize: '1.05rem', fontWeight: 900, color: '#ffffff' }}>
-                    {currentLabel}
-                  </h4>
-                </div>
-
-                <span
-                  style={{
-                    fontSize: '0.7rem',
-                    fontWeight: 900,
-                    padding: '3px 9px',
-                    borderRadius: '6px',
-                    textTransform: 'uppercase',
-                    background: isOpen
-                      ? existingSlot?.status === 'full'
-                        ? 'rgba(234, 179, 8, 0.2)'
-                        : 'rgba(34, 197, 94, 0.2)'
-                      : isCompleted
-                      ? 'rgba(255, 255, 255, 0.1)'
-                      : 'rgba(239, 68, 68, 0.15)',
-                    color: isOpen
-                      ? existingSlot?.status === 'full'
-                        ? '#eab308'
-                        : '#4ade80'
-                      : isCompleted
-                      ? '#aaaaaa'
-                      : '#ef4444',
-                    border: isOpen
-                      ? existingSlot?.status === 'full'
-                        ? '1px solid #eab308'
-                        : '1px solid #22c55e'
-                      : isCompleted
-                      ? '1px solid #555'
-                      : '1px solid #ef4444',
-                  }}
-                >
-                  {isOpen
-                    ? existingSlot?.status === 'full'
-                      ? 'FULL'
-                      : `OPEN (${existingSlot?.teams_booked_count || 0}/${existingSlot?.capacity || 20})`
-                    : isCompleted
-                    ? 'FINISHED'
-                    : 'CLOSED / NOT OPEN'}
-                </span>
-              </div>
-
-              {/* 1-Click Toggle Button */}
-              <div>
-                {isOpen ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(239, 68, 68, 0.12)',
-                      color: '#f87171',
-                      borderColor: '#ef4444',
-                      fontWeight: 900,
-                      fontSize: '0.82rem',
-                      padding: '0.5rem',
-                    }}
-                    disabled={isLoading}
-                    onClick={() => handleCloseSlot(preset)}
-                  >
-                    {isLoading ? 'Updating...' : '🔒 CLOSE / CANCEL SLOT'}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    style={{
-                      width: '100%',
-                      background: '#22c55e',
-                      color: '#000000',
-                      fontWeight: 900,
-                      fontSize: '0.85rem',
-                      padding: '0.55rem',
-                      border: 'none',
-                    }}
-                    disabled={isLoading}
-                    onClick={() => handleOpenSlot(preset)}
-                  >
-                    {isLoading ? 'Opening...' : '🔓 OPEN SLOT FOR BOOKINGS'}
-                  </button>
                 )}
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: '#888888' }}>
+                Config changes apply immediately in-place
+              </span>
+            </div>
+
+            {filteredFixedSlots.length === 0 ? (
+              <div
+                style={{
+                  background: '#141414',
+                  border: '1px dashed #333333',
+                  borderRadius: '12px',
+                  padding: '2.5rem 1.5rem',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                <span style={{ fontSize: '1.8rem' }}>🔍</span>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff' }}>
+                  No fixed slots found matching status "{statusFilter.toUpperCase().replace('_', ' ')}"
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#888888' }}>
+                  None of the 6 fixed slots for {formatMonthDay(selectedDate)} are currently in this state.
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: '0.5rem', fontWeight: 700, fontSize: '0.8rem' }}
+                  onClick={() => setStatusFilter('all')}
+                >
+                  Reset Filter to All
+                </button>
               </div>
+            ) : (
+              <div className={styles.slotsGrid}>
+                {filteredFixedSlots.map(preset => {
+                  const existingSlot = getExistingSlot(preset)
+                  const form = getForm(preset.id)
+                  const isLoading = loadingPresetId === preset.id
+
+                  const currentLabel = form.time_label ?? (existingSlot?.time_label ? existingSlot.time_label.split('(')[0].trim() : preset.defaultLabel)
+                  const slotStatus = computeSlotStatus(existingSlot, selectedDate, currentLabel)
+                  const isAutoClosed = isSlotPastOrEnded(selectedDate, currentLabel)
+                  const isFullCapacity = (existingSlot?.teams_booked_count || 0) >= (existingSlot?.capacity || 20)
+                  const isCompleted = slotStatus === 'completed'
+                  const isOpen = slotStatus === 'open'
+                  const isClosed = slotStatus === 'closed'
+                  const isNotOpen = slotStatus === 'not_open'
+
+                  const currentM1 = form.m1_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 1)
+                  const currentM2 = form.m2_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 2)
+                  const currentM3 = form.m3_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 3)
+                  const currentWhatsapp = form.whatsapp_link ?? existingSlot?.whatsapp_link ?? ''
+                  const currentFee = form.entry_fee ?? existingSlot?.entry_fee ?? 50
+                  const currentCap = form.capacity ?? existingSlot?.capacity ?? 20
+
+                  return (
+                    <div
+                      key={preset.id}
+                      style={{
+                        background: '#121212',
+                        border: isCompleted
+                          ? '1px solid #8b5cf6'
+                          : isClosed
+                          ? '1px solid #ef4444'
+                          : isOpen
+                          ? '1px solid #22c55e'
+                          : '1px solid #262626',
+                        borderRadius: '14px',
+                        padding: '1.25rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.9rem',
+                        boxShadow: isCompleted
+                          ? '0 4px 20px rgba(139, 92, 246, 0.12)'
+                          : isClosed
+                          ? '0 4px 20px rgba(239, 68, 68, 0.12)'
+                          : isOpen
+                          ? '0 4px 20px rgba(34, 197, 94, 0.1)'
+                          : 'none',
+                        position: 'relative',
+                      }}
+                    >
+                      {/* Slot Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            {preset.name}
+                          </span>
+                          <h4 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
+                            {currentLabel}
+                          </h4>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 900,
+                            padding: '3px 9px',
+                            borderRadius: '6px',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                            background: isCompleted
+                              ? 'rgba(139, 92, 246, 0.2)'
+                              : isClosed
+                              ? 'rgba(239, 68, 68, 0.18)'
+                              : isOpen
+                              ? 'rgba(34, 197, 94, 0.2)'
+                              : 'rgba(107, 114, 128, 0.18)',
+                            color: isCompleted
+                              ? '#c084fc'
+                              : isClosed
+                              ? '#f87171'
+                              : isOpen
+                              ? '#4ade80'
+                              : '#9ca3af',
+                            border: isCompleted
+                              ? '1px solid #8b5cf6'
+                              : isClosed
+                              ? '1px solid #ef4444'
+                              : isOpen
+                              ? '1px solid #22c55e'
+                              : '1px solid #4b5563',
+                          }}
+                        >
+                          {isCompleted
+                            ? 'COMPLETED'
+                            : isClosed
+                            ? isAutoClosed
+                              ? 'CLOSED (AUTO 10M)'
+                              : isFullCapacity
+                              ? 'CLOSED (FULL)'
+                              : 'CLOSED'
+                            : isOpen
+                            ? `OPEN (${existingSlot?.teams_booked_count || 0}/${existingSlot?.capacity || 20})`
+                            : 'NOT OPEN'}
+                        </span>
+                      </div>
+
+                      {isClosed && isAutoClosed && (
+                        <div
+                          style={{
+                            fontSize: '0.73rem',
+                            color: '#fbbf24',
+                            background: 'rgba(245, 158, 11, 0.1)',
+                            border: '1px solid rgba(245, 158, 11, 0.25)',
+                            borderRadius: '6px',
+                            padding: '0.35rem 0.6rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <span>⏱️</span>
+                          <span>Auto-closed: bookings locked 10 mins before slot start</span>
+                        </div>
+                      )}
+
+                      {isClosed && isFullCapacity && !isAutoClosed && (
+                        <div
+                          style={{
+                            fontSize: '0.73rem',
+                            color: '#f87171',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.25)',
+                            borderRadius: '6px',
+                            padding: '0.35rem 0.6rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <span>🔒</span>
+                          <span>Closed: slot is at full capacity ({existingSlot?.teams_booked_count}/{existingSlot?.capacity})</span>
+                        </div>
+                      )}
+
+                      {/* ── TWO ACTION BUTTONS SIDE-BY-SIDE ── */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                        {/* Button 1: Toggle Open vs Mark Not Open */}
+                        {isOpen ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{
+                              width: '100%',
+                              background: '#1a1a1a',
+                              color: '#d1d5db',
+                              borderColor: '#404040',
+                              fontWeight: 800,
+                              fontSize: '0.8rem',
+                              padding: '0.55rem 0.35rem',
+                            }}
+                            disabled={isLoading}
+                            onClick={() => handleMarkNotOpen(preset)}
+                          >
+                            {isLoading ? 'Updating...' : '🚫 Mark Slot Not Open'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            style={{
+                              width: '100%',
+                              background: '#22c55e',
+                              color: '#000000',
+                              fontWeight: 900,
+                              fontSize: '0.82rem',
+                              padding: '0.55rem 0.35rem',
+                              border: 'none',
+                            }}
+                            disabled={isLoading}
+                            onClick={() => handleOpenSlot(preset)}
+                          >
+                            {isLoading ? 'Opening...' : isClosed ? '🔓 Re-Open Slot' : '🔓 Open Slot for Booking'}
+                          </button>
+                        )}
+
+                        {/* Button 2: Close This Slot */}
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            width: '100%',
+                            background: isClosed ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.1)',
+                            color: isClosed ? '#fca5a5' : '#f87171',
+                            borderColor: isClosed ? '#ef4444' : 'rgba(239, 68, 68, 0.45)',
+                            fontWeight: 800,
+                            fontSize: '0.8rem',
+                            padding: '0.55rem 0.35rem',
+                            opacity: isNotOpen ? 0.4 : 1,
+                            cursor: isNotOpen ? 'not-allowed' : 'pointer',
+                          }}
+                          disabled={isLoading || isNotOpen || isClosed}
+                          onClick={() => handleCloseSlot(preset)}
+                        >
+                          {isLoading ? 'Updating...' : isClosed ? '🔒 Slot Closed' : '🔒 Close This Slot'}
+                        </button>
+                      </div>
 
               {/* Editable Fields */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid #222222', paddingTop: '0.85rem' }}>
@@ -1420,7 +1851,7 @@ function SlotsTab({ slots, supabase }: any) {
                     />
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '0.4rem' }}>
                     <div>
                       <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
                         Match 1 (Erangel):
@@ -1506,162 +1937,681 @@ function SlotsTab({ slots, supabase }: any) {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ marginTop: '0.25rem', padding: '0.4rem', fontSize: '0.78rem', fontWeight: 800 }}
-                  disabled={isLoading}
-                  onClick={() => handleSaveSlotDetails(preset)}
-                >
-                  💾 Save Slot Details
-                </button>
+                {/* ── Side-by-Side Action Buttons ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', marginTop: '0.35rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      padding: '0.55rem 0.4rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                    }}
+                    disabled={isLoading}
+                    onClick={() => handleSaveSlotDetails(preset)}
+                  >
+                    💾 Save Slot Details
+                  </button>
+
+                  {isCompleted ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{
+                        padding: '0.55rem 0.4rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        background: 'rgba(251, 191, 36, 0.15)',
+                        color: '#fbbf24',
+                        borderColor: '#fbbf24',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.3rem',
+                      }}
+                      disabled={isLoading}
+                      onClick={() => handleToggleCompleted(preset)}
+                    >
+                      ↩️ Revert to Open
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      style={{
+                        padding: '0.55rem 0.4rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        background: '#8b5cf6',
+                        color: '#ffffff',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.3rem',
+                      }}
+                      disabled={isLoading}
+                      onClick={() => handleToggleCompleted(preset)}
+                    >
+                      🏆 Mark Slot Completed
+                    </button>
+                  )}
+                </div>
+
+                {/* Optional subtle delete button if slot exists and has 0 bookings */}
+                {existingSlot && existingSlot.teams_booked_count === 0 && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm(`Permanently delete ${preset.name} (${selectedDate})?`)) return
+                      await supabase.from('slots').delete().eq('slot_id', existingSlot.slot_id)
+                      if (setSlots) {
+                        setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== existingSlot.slot_id))
+                      }
+                      setMsg(`🗑️ ${preset.name} deleted`)
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ef4444',
+                      fontSize: '0.7rem',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      textDecoration: 'underline',
+                      marginTop: '0.15rem',
+                      opacity: 0.8,
+                    }}
+                  >
+                    Delete Slot
+                  </button>
+                )}
               </div>
             </div>
           )
         })}
       </div>
+    )}
+  </>
+)
+})()}
 
-      {/* ── ALL SLOTS OVERVIEW TABLE ─────────────────────────────── */}
-      <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#aaaaaa', marginTop: '2rem', marginBottom: '0.75rem', textTransform: 'uppercase' }}>
-        📁 All Active & Historical Slots Records ({slots.length})
-      </h3>
+      {/* Additional / Custom Slots on this date if any exist */}
+      {(() => {
+        const matchedSlotIds = new Set(
+          FIXED_DAILY_SLOTS.map(p => getExistingSlot(p)?.slot_id).filter(Boolean)
+        )
+        const additionalSlots = slots.filter((s: any) => s.date === selectedDate && !matchedSlotIds.has(s.slot_id))
+        const filteredAdditionalSlots = additionalSlots.filter((extraSlot: any) => {
+          if (statusFilter === 'all') return true
+          const st = computeSlotStatus(extraSlot, selectedDate, extraSlot.time_label)
+          return st === statusFilter
+        })
 
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Date / Time</th>
-              <th>Teams Booked</th>
-              <th>Status</th>
-              <th>WhatsApp Link</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {slots.map((slot: any) => (
-              <tr key={slot.slot_id}>
-                <td>
-                  <div>
-                    <strong>
-                      {formatShortDate(slot.date)}
-                    </strong>
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{slot.time_label}</div>
-                </td>
-                <td>{slot.teams_booked_count}/{slot.capacity}</td>
-                <td>
-                  <span className={`badge ${slot.status === 'open' ? 'badge-success' : slot.status === 'full' ? 'badge-warning' : 'badge-neutral'}`}>
-                    {slot.status}
-                  </span>
-                </td>
-                <td>
-                  {slot.whatsapp_link ? (
-                    <a href={slot.whatsapp_link} target="_blank" rel="noreferrer" style={{ fontSize: '0.75rem', color: '#22c55e', textDecoration: 'underline' }}>
-                      Group Link ↗
-                    </a>
-                  ) : (
-                    <em style={{ fontSize: '0.75rem', color: '#666' }}>Default link used</em>
-                  )}
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    {slot.status === 'completed' ? (
-                      <button
-                        className="btn btn-primary btn-sm"
-                        style={{ background: '#fbbf24', color: '#111', fontWeight: 'bold', fontSize: '0.72rem' }}
-                        onClick={async () => {
-                          await supabase.from('slots').update({ status: 'open' }).eq('slot_id', slot.slot_id)
-                          window.location.reload()
+        if (additionalSlots.length === 0) return null
+        if (filteredAdditionalSlots.length === 0 && statusFilter !== 'all') return null
+
+        return (
+          <div style={{ marginTop: '1.5rem', marginBottom: '2rem' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#60a5fa', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              ⚡ Additional Custom Slots for {formatFullLongDate(selectedDate)} ({filteredAdditionalSlots.length})
+            </h3>
+            <div className={styles.slotsGrid}>
+              {filteredAdditionalSlots.map((extraSlot: any) => {
+                const extraStatus = computeSlotStatus(extraSlot, selectedDate, extraSlot.time_label)
+                const isExtraAutoClosed = isSlotPastOrEnded(selectedDate, extraSlot.time_label)
+                const isExtraFullCapacity = (extraSlot.teams_booked_count || 0) >= (extraSlot.capacity || 20)
+                const isExtraCompleted = extraStatus === 'completed'
+                const isExtraOpen = extraStatus === 'open'
+                const isExtraClosed = extraStatus === 'closed'
+                const isExtraNotOpen = extraStatus === 'not_open'
+
+                return (
+                  <div
+                    key={extraSlot.slot_id}
+                    style={{
+                      background: '#121212',
+                      border: isExtraCompleted
+                        ? '1px solid #8b5cf6'
+                        : isExtraClosed
+                        ? '1px solid #ef4444'
+                        : isExtraOpen
+                        ? '1px solid #22c55e'
+                        : '1px solid #262626',
+                      borderRadius: '14px',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.9rem',
+                      boxShadow: isExtraCompleted
+                        ? '0 4px 20px rgba(139, 92, 246, 0.12)'
+                        : isExtraClosed
+                        ? '0 4px 20px rgba(239, 68, 68, 0.12)'
+                        : isExtraOpen
+                        ? '0 4px 20px rgba(34, 197, 94, 0.1)'
+                        : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', color: '#60a5fa', fontWeight: 900, textTransform: 'uppercase' }}>
+                          Custom Slot
+                        </span>
+                        <h4 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
+                          {extraSlot.time_label}
+                        </h4>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 900,
+                          padding: '3px 9px',
+                          borderRadius: '6px',
+                          textTransform: 'uppercase',
+                          background: isExtraCompleted
+                            ? 'rgba(139, 92, 246, 0.2)'
+                            : isExtraClosed
+                            ? 'rgba(239, 68, 68, 0.18)'
+                            : isExtraOpen
+                            ? 'rgba(34, 197, 94, 0.2)'
+                            : 'rgba(107, 114, 128, 0.18)',
+                          color: isExtraCompleted
+                            ? '#c084fc'
+                            : isExtraClosed
+                            ? '#f87171'
+                            : isExtraOpen
+                            ? '#4ade80'
+                            : '#9ca3af',
+                          border: isExtraCompleted
+                            ? '1px solid #8b5cf6'
+                            : isExtraClosed
+                            ? '1px solid #ef4444'
+                            : isExtraOpen
+                            ? '1px solid #22c55e'
+                            : '1px solid #4b5563',
                         }}
                       >
-                        REVERT TO OPEN
-                      </button>
-                    ) : (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: '0.72rem' }}
-                        onClick={async () => {
-                          await supabase.from('slots').update({ status: 'completed' }).eq('slot_id', slot.slot_id)
-                          window.location.reload()
+                        {isExtraCompleted
+                          ? 'COMPLETED'
+                          : isExtraClosed
+                          ? isExtraAutoClosed
+                            ? 'CLOSED (AUTO 10M)'
+                            : isExtraFullCapacity
+                            ? 'CLOSED (FULL)'
+                            : 'CLOSED'
+                          : isExtraOpen
+                          ? `OPEN (${extraSlot.teams_booked_count || 0}/${extraSlot.capacity || 20})`
+                          : 'NOT OPEN'}
+                      </span>
+                    </div>
+
+                    {isExtraClosed && isExtraAutoClosed && (
+                      <div
+                        style={{
+                          fontSize: '0.73rem',
+                          color: '#fbbf24',
+                          background: 'rgba(245, 158, 11, 0.1)',
+                          border: '1px solid rgba(245, 158, 11, 0.25)',
+                          borderRadius: '6px',
+                          padding: '0.35rem 0.6rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          fontWeight: 600,
                         }}
                       >
-                        Mark Done
-                      </button>
+                        <span>⏱️</span>
+                        <span>Auto-closed: bookings locked 10 mins before slot start</span>
+                      </div>
                     )}
 
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: '#ef4444', borderColor: '#ef4444', fontSize: '0.72rem' }}
-                      onClick={async () => {
-                        if (!confirm('Delete this slot?')) return
-                        await supabase.from('slots').delete().eq('slot_id', slot.slot_id)
-                        window.location.reload()
-                      }}
-                    >
-                      Delete
-                    </button>
+                    {/* ── TWO ACTION BUTTONS SIDE-BY-SIDE ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                      {isExtraOpen ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            padding: '0.55rem 0.35rem',
+                            fontSize: '0.8rem',
+                            fontWeight: 800,
+                            background: '#1a1a1a',
+                            color: '#d1d5db',
+                            borderColor: '#404040',
+                          }}
+                          onClick={async () => {
+                            if (extraSlot.teams_booked_count > 0) {
+                              const ok = confirm(`This custom slot has ${extraSlot.teams_booked_count} bookings. Mark Not Open and delete?`)
+                              if (!ok) return
+                            }
+                            const { error } = await supabase.from('slots').delete().eq('slot_id', extraSlot.slot_id)
+                            if (error) { setMsg('❌ ' + error.message); return }
+                            if (setSlots) {
+                              setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== extraSlot.slot_id))
+                            }
+                            setMsg(`✅ Custom Slot (${extraSlot.time_label}) turned disabled / NOT OPEN`)
+                          }}
+                        >
+                          🚫 Mark Slot Not Open
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          style={{
+                            padding: '0.55rem 0.35rem',
+                            fontSize: '0.82rem',
+                            fontWeight: 900,
+                            background: '#22c55e',
+                            color: '#000000',
+                            border: 'none',
+                          }}
+                          onClick={async () => {
+                            const { data, error } = await supabase.from('slots').update({ status: 'open' }).eq('slot_id', extraSlot.slot_id).select().single()
+                            if (error) { setMsg('❌ ' + error.message); return }
+                            if (data && setSlots) {
+                              setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                            }
+                            setMsg(`✅ Custom Slot (${extraSlot.time_label}) OPENED for booking`)
+                          }}
+                        >
+                          {isExtraClosed ? '🔓 Re-Open Slot' : '🔓 Open Slot for Booking'}
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{
+                          padding: '0.55rem 0.35rem',
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          background: isExtraClosed ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.1)',
+                          color: isExtraClosed ? '#fca5a5' : '#f87171',
+                          borderColor: isExtraClosed ? '#ef4444' : 'rgba(239, 68, 68, 0.45)',
+                          opacity: isExtraNotOpen ? 0.4 : 1,
+                          cursor: isExtraNotOpen ? 'not-allowed' : 'pointer',
+                        }}
+                        disabled={isExtraNotOpen || isExtraClosed}
+                        onClick={async () => {
+                          const { data, error } = await supabase.from('slots').update({ status: 'full' }).eq('slot_id', extraSlot.slot_id).select().single()
+                          if (error) { setMsg('❌ ' + error.message); return }
+                          if (data && setSlots) {
+                            setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                          }
+                          setMsg(`✅ Custom Slot (${extraSlot.time_label}) CLOSED to new registrations`)
+                        }}
+                      >
+                        {isExtraClosed ? '🔒 Slot Closed' : '🔒 Close This Slot'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', marginTop: '0.2rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{
+                          padding: '0.55rem 0.4rem',
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          background: isExtraCompleted ? 'rgba(251, 191, 36, 0.15)' : '#8b5cf6',
+                          color: isExtraCompleted ? '#fbbf24' : '#ffffff',
+                          border: isExtraCompleted ? '1px solid #fbbf24' : 'none',
+                        }}
+                        onClick={async () => {
+                          const nextStatus = isExtraCompleted ? 'open' : 'completed'
+                          const { data } = await supabase.from('slots').update({ status: nextStatus }).eq('slot_id', extraSlot.slot_id).select().single()
+                          if (data && setSlots) {
+                            setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                          }
+                          setMsg(`✅ Custom Slot status set to ${nextStatus.toUpperCase()}`)
+                          if (nextStatus === 'completed' && onSyncPayouts) onSyncPayouts()
+                        }}
+                      >
+                        {isExtraCompleted ? '↩️ Revert to Open' : '🏆 Mark Slot Completed'}
+                      </button>
+                    </div>
+
+                    {extraSlot.teams_booked_count === 0 && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!confirm(`Delete custom slot (${extraSlot.time_label})?`)) return
+                          await supabase.from('slots').delete().eq('slot_id', extraSlot.slot_id)
+                          if (setSlots) {
+                            setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== extraSlot.slot_id))
+                          }
+                        }}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.7rem', cursor: 'pointer', textAlign: 'center', textDecoration: 'underline' }}
+                      >
+                        Delete Slot
+                      </button>
+                    )}
                   </div>
-                </td>
-              </tr>
-            ))}
-            {slots.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: '#666' }}>
-                  No slots currently registered in the database. Select a date above and click "OPEN SLOT FOR BOOKINGS".
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+// ── OFFICIAL PAYOUT SLIP MODAL ───────────────────────────────────────
+function PayoutSlipModal({ slip, onClose }: { slip: any; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  if (!slip) return null
+
+  const slipCode = `BGFS-PAY-${(slip.payout_id || '').slice(0, 8).toUpperCase()}`
+  const dateFormatted = slip.paid_at ? formatNumericDate(slip.paid_at) : '—'
+  const slotFormatted = slip.slots ? `${formatShortDate(slip.slots.date)} • ${slip.slots.time_label}` : '—'
+
+  function copySlipText() {
+    const text = `=== BGFS OFFICIAL PAYOUT SLIP ===\nSlip Reference: ${slipCode}\nTeam: ${slip.teams?.team_name || 'N/A'}\nSlot: ${slotFormatted}\nStanding: ${slip.place || 'Participant'}\nAmount: ₹${slip.amount}\nUPI ID: ${slip.upi_id || 'N/A'}\nStatus: PAID OUT\nPaid On: ${dateFormatted}\n=================================`
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.8)',
+        zIndex: 100000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#121212',
+          border: '1px solid #333',
+          borderRadius: '14px',
+          padding: '1.75rem',
+          maxWidth: '480px',
+          width: '100%',
+          boxShadow: '0 25px 50px rgba(0,0,0,0.9)',
+          position: 'relative',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px dashed #333', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: '#facc15', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Battlegrounds Faceoff Series
+            </div>
+            <h3 style={{ margin: '4px 0 0 0', fontSize: '1.2rem', fontWeight: 800, color: '#fff' }}>
+              Official Payout Slip
+            </h3>
+            <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#888', marginTop: '2px' }}>
+              {slipCode}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Amount Hero */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(34,197,94,0.15), rgba(21,128,61,0.25))',
+          border: '1px solid rgba(34,197,94,0.3)',
+          borderRadius: '10px',
+          padding: '1.2rem',
+          textAlign: 'center',
+          marginBottom: '1.25rem',
+        }}>
+          <div style={{ fontSize: '0.75rem', color: '#86efac', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            TOTAL AMOUNT DISBURSED
+          </div>
+          <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#4ade80', margin: '4px 0' }}>
+            ₹{slip.amount}
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(34,197,94,0.25)', color: '#22c55e', padding: '3px 10px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 800 }}>
+            ✓ STATUS: PAID OUT
+          </div>
+        </div>
+
+        {/* Details Grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#18181b', border: '1px solid #27272a', borderRadius: '10px', padding: '1rem', fontSize: '0.85rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #222', paddingBottom: '6px' }}>
+            <span style={{ color: '#888' }}>Recipient Team:</span>
+            <strong style={{ color: '#fff' }}>{slip.teams?.team_name || '—'}</strong>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #222', paddingBottom: '6px' }}>
+            <span style={{ color: '#888' }}>Tournament Slot:</span>
+            <span style={{ color: '#ddd' }}>{slotFormatted}</span>
+          </div>
+
+          {slip.place && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #222', paddingBottom: '6px' }}>
+              <span style={{ color: '#888' }}>Final Standing:</span>
+              <span className={`badge ${slip.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>
+                {slip.place} Place
+              </span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #222', paddingBottom: '6px' }}>
+            <span style={{ color: '#888' }}>UPI ID (VPA):</span>
+            <code style={{ color: slip.upi_id ? '#4ade80' : '#888', fontFamily: 'monospace' }}>
+              {slip.upi_id || 'Not Recorded'}
+            </code>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#888' }}>Paid On:</span>
+            <span style={{ color: '#aaa' }}>{dateFormatted}</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={copySlipText}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            {copied ? <Check size={14} color="#22c55e" /> : <Copy size={14} />}
+            {copied ? 'Copied Details!' : 'Copy Slip Details'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
 // ── PAYOUTS TAB ──────────────────────────────────────────────────
-function PayoutsTab({ payouts, onMarkPaid }: { payouts: any[]; onMarkPaid: (id: string) => void }) {
-  const pending = payouts.filter(p => p.status === 'pending')
-  const paid = payouts.filter(p => p.status === 'paid')
+function PayoutsTab({
+  payouts,
+  onPayoutSettled
+}: {
+  payouts: any[];
+  onPayoutSettled: (payout: any) => void
+}) {
+  const [selectedSlip, setSelectedSlip] = useState<any | null>(null)
+  const [payoutTarget, setPayoutTarget] = useState<any | null>(null)
+  const [payoutAmount, setPayoutAmount] = useState<string>('')
+  const [isSubmittingPayout, setIsSubmittingPayout] = useState(false)
+  const [payoutError, setPayoutError] = useState('')
+
+  // Deduplicate by slot_id and team_id so duplicate records can never appear in UI
+  const pendingMap = new Map<string, any>()
+  payouts.filter(p => p.status === 'pending').forEach(p => {
+    const key = `${p.slot_id}_${p.team_id}`
+    if (!pendingMap.has(key)) {
+      pendingMap.set(key, p)
+    }
+  })
+  const pending = Array.from(pendingMap.values())
+
+  const paidMap = new Map<string, any>()
+  payouts.filter(p => p.status === 'paid').forEach(p => {
+    const key = `${p.slot_id}_${p.team_id}`
+    if (!paidMap.has(key)) {
+      paidMap.set(key, p)
+    }
+  })
+  const paid = Array.from(paidMap.values())
+
+  function openPayoutPrompt(p: any) {
+    setPayoutTarget({
+      payout_id: p.payout_id,
+      team_id: p.team_id,
+      team_name: p.teams?.team_name || 'Team',
+      rank: p.place === '1st' ? 1 : p.place === '2nd' ? 2 : 1,
+      place: p.place,
+      total_points: p.total_points,
+      upi_id: p.upi_id,
+      slot_id: p.slot_id,
+      slots: p.slots,
+    })
+    setPayoutAmount('')
+    setPayoutError('')
+  }
+
+  async function handleConfirmPayout() {
+    if (!payoutTarget) return
+    const amt = Number(payoutAmount)
+    if (isNaN(amt) || amt <= 0) {
+      setPayoutError('Please enter a valid payout amount greater than ₹0')
+      return
+    }
+
+    setIsSubmittingPayout(true)
+    setPayoutError('')
+
+    try {
+      const res = await fetch('/api/admin/payout/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot_id: payoutTarget.slot_id,
+          team_id: payoutTarget.team_id,
+          amount: amt,
+          place: payoutTarget.place || (payoutTarget.rank === 1 ? '1st' : '2nd'),
+          upi_id: payoutTarget.upi_id || null,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to record payout')
+      }
+
+      onPayoutSettled(data.payout)
+      setPayoutTarget(null)
+      setPayoutAmount('')
+      setSelectedSlip(data.payout)
+    } catch (err: any) {
+      setPayoutError(err.message || 'Error creating payout')
+    } finally {
+      setIsSubmittingPayout(false)
+    }
+  }
 
   return (
     <div>
       <h2 className={styles.tabTitle}>Payouts</h2>
-      <p className={styles.tabDesc}>Manual UPI payouts. Mark as paid after sending.</p>
+      <p className={styles.tabDesc}>
+        Track tournament prize disbursements, review settled payout slips, and disburse prizes to top 2 winners.
+      </p>
+
+      {/* Summary Cards */}
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        <div style={{
+          background: 'var(--surface-elevated, #18181b)',
+          border: '1px solid var(--border-color, #27272a)',
+          borderRadius: '8px',
+          padding: '0.85rem 1.25rem',
+          flex: '1',
+          minWidth: '160px',
+        }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>TOTAL DISBURSED</div>
+          <div style={{ color: '#22c55e', fontSize: '1.3rem', fontWeight: 800 }}>
+            ₹{paid.reduce((sum, p) => sum + (p.amount || 0), 0)}
+          </div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{paid.length} payout slips settled</div>
+        </div>
+
+        <div style={{
+          background: 'var(--surface-elevated, #18181b)',
+          border: '1px solid var(--border-color, #27272a)',
+          borderRadius: '8px',
+          padding: '0.85rem 1.25rem',
+          flex: '1',
+          minWidth: '160px',
+        }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>PENDING PAYOUTS</div>
+          <div style={{ color: '#facc15', fontSize: '1.3rem', fontWeight: 800 }}>
+            {pending.length}
+          </div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Top 2 slot winners awaiting disbursement</div>
+        </div>
+      </div>
 
       {pending.length > 0 && (
         <div className={styles.payoutSection}>
-          <h3 className={styles.payoutSubhead}>⏳ Pending ({pending.length})</h3>
+          <h3 className={styles.payoutSubhead}>⏳ Pending Payouts ({pending.length})</h3>
           <div className="table-wrapper">
             <table>
               <thead>
                 <tr>
                   <th>Team</th>
+                  <th>Slot</th>
                   <th>Place</th>
-                  <th>Amount</th>
                   <th>UPI ID</th>
-                  <th>Action</th>
+                  <th style={{ textAlign: 'center' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {pending.map(p => (
                   <tr key={p.payout_id}>
                     <td><strong>{p.teams?.team_name}</strong></td>
-                    <td>
-                      <span className={`badge ${p.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>
-                        {p.place}
-                      </span>
-                    </td>
-                    <td><strong style={{ color: 'var(--brand-primary)' }}>₹{p.amount}</strong></td>
-                    <td>
-                      <code style={{ fontSize: '0.85rem' }}>{p.upi_id || 'No UPI on file'}</code>
+                    <td style={{ fontSize: '0.85rem', color: '#bbb' }}>
+                      {p.slots ? `${formatShortDate(p.slots.date)} • ${p.slots.time_label}` : '—'}
                     </td>
                     <td>
+                      {p.place ? (
+                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>
+                          {p.place}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      <code style={{ fontSize: '0.85rem', color: p.upi_id ? '#4ade80' : '#888' }}>
+                        {p.upi_id || 'No UPI on file'}
+                      </code>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
                       <button
                         id={`mark-paid-${p.payout_id}`}
                         className="btn btn-success btn-sm"
-                        onClick={() => onMarkPaid(p.payout_id)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', background: '#16a34a' }}
+                        onClick={() => openPayoutPrompt(p)}
                       >
-                        ✓ Mark Paid
+                        <CheckCircle size={12} /> Mark as Paid Out
                       </button>
                     </td>
                   </tr>
@@ -1674,25 +2624,59 @@ function PayoutsTab({ payouts, onMarkPaid }: { payouts: any[]; onMarkPaid: (id: 
 
       {paid.length > 0 && (
         <div className={styles.payoutSection} style={{ marginTop: '1.5rem' }}>
-          <h3 className={styles.payoutSubhead}>✅ Paid ({paid.length})</h3>
+          <h3 className={styles.payoutSubhead}>✅ Settled Payout Slips ({paid.length})</h3>
           <div className="table-wrapper">
             <table>
               <thead>
                 <tr>
+                  <th>Slip ID</th>
                   <th>Team</th>
+                  <th>Slot</th>
                   <th>Place</th>
                   <th>Amount</th>
-                  <th>Paid At</th>
+                  <th>UPI ID</th>
+                  <th>Paid On</th>
+                  <th style={{ textAlign: 'center' }}>Receipt</th>
                 </tr>
               </thead>
               <tbody>
                 {paid.map(p => (
                   <tr key={p.payout_id}>
-                    <td>{p.teams?.team_name}</td>
-                    <td><span className={`badge ${p.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>{p.place}</span></td>
-                    <td>₹{p.amount}</td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    <td>
+                      <code style={{ fontSize: '0.78rem', color: '#facc15', fontWeight: 700 }}>
+                        #{(p.payout_id || '').slice(0, 8).toUpperCase()}
+                      </code>
+                    </td>
+                    <td><strong>{p.teams?.team_name}</strong></td>
+                    <td style={{ fontSize: '0.85rem', color: '#bbb' }}>
+                      {p.slots ? `${formatShortDate(p.slots.date)} • ${p.slots.time_label}` : '—'}
+                    </td>
+                    <td>
+                      {p.place ? (
+                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>
+                          {p.place}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td><strong style={{ color: '#22c55e', fontSize: '0.95rem' }}>₹{p.amount}</strong></td>
+                    <td>
+                      {p.upi_id ? (
+                        <code style={{ fontSize: '0.8rem', color: '#ddd' }}>{p.upi_id}</code>
+                      ) : (
+                        <span style={{ color: '#777', fontSize: '0.8rem' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                       {p.paid_at ? formatNumericDate(p.paid_at) : '—'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                        onClick={() => setSelectedSlip(p)}
+                      >
+                        🧾 View Slip
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1704,8 +2688,838 @@ function PayoutsTab({ payouts, onMarkPaid }: { payouts: any[]; onMarkPaid: (id: 
 
       {payouts.length === 0 && (
         <p style={{ color: 'var(--text-muted)', padding: '2rem', textAlign: 'center' }}>
-          No payouts yet. Enter slot scores to generate payout records.
+          No payouts yet. Complete a slot and mark teams as paid out from the UPI Info & Payouts tab.
         </p>
+      )}
+
+      {selectedSlip && (
+        <PayoutSlipModal slip={selectedSlip} onClose={() => setSelectedSlip(null)} />
+      )}
+
+      {/* Payout Prompt Modal (Prompt for Amount) */}
+      {payoutTarget && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.8)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => !isSubmittingPayout && setPayoutTarget(null)}
+        >
+          <div
+            style={{
+              background: '#141414',
+              border: '1px solid #333',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              maxWidth: '460px',
+              width: '100%',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.85)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #252525', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={18} color="#22c55e" />
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
+                  Confirm & Settle Payout
+                </h3>
+              </div>
+              <button
+                onClick={() => !isSubmittingPayout && setPayoutTarget(null)}
+                style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Summary of recipient */}
+              <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#888' }}>Team Name:</span>
+                  <span style={{ fontWeight: 800, color: '#fff', fontSize: '0.9rem' }}>{payoutTarget.team_name}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#888' }}>Placement:</span>
+                  <span style={{ fontWeight: 700, color: '#fbbf24', fontSize: '0.85rem' }}>
+                    {payoutTarget.place || `#${payoutTarget.rank}`} Place
+                  </span>
+                </div>
+                {payoutTarget.slots && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#888' }}>Slot:</span>
+                    <span style={{ color: '#ccc', fontSize: '0.82rem' }}>
+                      {formatShortDate(payoutTarget.slots.date)} • {payoutTarget.slots.time_label}
+                    </span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#888' }}>UPI ID:</span>
+                  <span style={{ fontFamily: 'monospace', color: payoutTarget.upi_id ? '#4ade80' : '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
+                    {payoutTarget.upi_id || 'Not Provided'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Amount Input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#facc15', marginBottom: '6px' }}>
+                  Payout Amount (₹) *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#888', fontWeight: 700, fontSize: '1rem' }}>₹</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Enter payout amount (e.g. 500)"
+                    value={payoutAmount}
+                    onChange={e => setPayoutAmount(e.target.value)}
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      background: '#18181b',
+                      border: '1px solid #3f3f46',
+                      color: '#fff',
+                      padding: '10px 12px 10px 30px',
+                      borderRadius: '6px',
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {payoutError && (
+                <div style={{ padding: '0.75rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '6px', fontSize: '0.8rem' }}>
+                  {payoutError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={isSubmittingPayout}
+                  onClick={() => setPayoutTarget(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={isSubmittingPayout || !payoutAmount || Number(payoutAmount) <= 0}
+                  onClick={handleConfirmPayout}
+                  style={{
+                    background: '#16a34a',
+                    color: '#fff',
+                    fontWeight: 700,
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: isSubmittingPayout || !payoutAmount || Number(payoutAmount) <= 0 ? 'not-allowed' : 'pointer',
+                    opacity: isSubmittingPayout || !payoutAmount || Number(payoutAmount) <= 0 ? 0.6 : 1,
+                  }}
+                >
+                  {isSubmittingPayout ? 'Creating Slip...' : 'Confirm & Mark Paid'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── UPI INFO TAB ──────────────────────────────────────────────────
+function UpiInfoTab({
+  slots,
+  payouts,
+  onPayoutCreated
+}: {
+  slots: any[];
+  payouts: any[];
+  onPayoutCreated: (payout: any) => void
+}) {
+  const completedSlots = useMemo(() => {
+    return sortSlotsDescending(slots.filter((s: any) => s.status === 'completed'))
+  }, [slots])
+
+  const [selectedSlotId, setSelectedSlotId] = useState<string>(() => {
+    const list = sortSlotsDescending(slots.filter((s: any) => s.status === 'completed'))
+    return list.length > 0 ? list[0].slot_id : ''
+  })
+
+  // Automatically select the latest completed slot by default
+  useEffect(() => {
+    if (completedSlots.length > 0) {
+      if (!selectedSlotId || !completedSlots.some((s: any) => s.slot_id === selectedSlotId)) {
+        setSelectedSlotId(completedSlots[0].slot_id)
+      }
+    }
+  }, [completedSlots, selectedSlotId])
+
+  const [slotData, setSlotData] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [activeUpiModal, setActiveUpiModal] = useState<any>(null)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  // Payout prompt and slip states
+  const [payoutTarget, setPayoutTarget] = useState<any | null>(null)
+  const [payoutAmount, setPayoutAmount] = useState<string>('')
+  const [isSubmittingPayout, setIsSubmittingPayout] = useState(false)
+  const [payoutError, setPayoutError] = useState('')
+  const [selectedSlip, setSelectedSlip] = useState<any | null>(null)
+
+  const currentSlot = useMemo(() => {
+    return completedSlots.find((s: any) => s.slot_id === selectedSlotId) || null
+  }, [completedSlots, selectedSlotId])
+
+  useEffect(() => {
+    if (!selectedSlotId) return
+    setLoading(true)
+    setError('')
+    fetch(`/api/admin/upi-info?slot_id=${selectedSlotId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          setError(data.error)
+        } else {
+          setSlotData(data)
+        }
+      })
+      .catch(err => setError(err.message || 'Failed to load slot rankings'))
+      .finally(() => setLoading(false))
+  }, [selectedSlotId])
+
+  function copyText(text: string, fieldKey: string) {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    setCopiedField(fieldKey)
+    setTimeout(() => setCopiedField(null), 2000)
+  }
+
+  function openPayoutPrompt(team: any) {
+    setPayoutTarget(team)
+    setPayoutAmount('')
+    setPayoutError('')
+  }
+
+  async function handleConfirmPayout() {
+    if (!payoutTarget || !selectedSlotId) return
+    const amt = Number(payoutAmount)
+    if (isNaN(amt) || amt <= 0) {
+      setPayoutError('Please enter a valid payout amount greater than ₹0')
+      return
+    }
+
+    setIsSubmittingPayout(true)
+    setPayoutError('')
+
+    try {
+      const res = await fetch('/api/admin/payout/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot_id: selectedSlotId,
+          team_id: payoutTarget.team_id,
+          amount: amt,
+          place: payoutTarget.rank === 1 ? '1st' : payoutTarget.rank === 2 ? '2nd' : null,
+          upi_id: payoutTarget.upi_id || null,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to record payout')
+      }
+
+      const enrichedPayout = {
+        ...data.payout,
+        slots: data.payout.slots || (currentSlot ? { date: currentSlot.date, time_label: currentSlot.time_label } : null),
+        teams: data.payout.teams || { team_name: payoutTarget.team_name },
+      }
+
+      onPayoutCreated(enrichedPayout)
+      setPayoutTarget(null)
+      setPayoutAmount('')
+      if (activeUpiModal?.team_id === payoutTarget.team_id) {
+        setActiveUpiModal(null)
+      }
+      // Reveal the newly generated official payout slip
+      setSelectedSlip(enrichedPayout)
+    } catch (err: any) {
+      setPayoutError(err.message || 'Error creating payout')
+    } finally {
+      setIsSubmittingPayout(false)
+    }
+  }
+
+  const teams = slotData?.teams || []
+
+  return (
+    <div>
+      <h2 className={styles.tabTitle}>UPI Info & Payouts</h2>
+      <p className={styles.tabDesc}>
+        Select a completed slot to inspect team standings, verify UPI holder details, and issue official payout slips.
+      </p>
+
+      {/* Completed Slot Selector */}
+      <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '1.25rem', marginTop: '1.25rem' }}>
+        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#facc15', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          Select Completed Slot
+        </label>
+        <select
+          value={selectedSlotId}
+          onChange={e => setSelectedSlotId(e.target.value)}
+          className="form-control"
+          style={{
+            maxWidth: '520px',
+            background: '#1c1c1c',
+            borderColor: '#383838',
+            color: '#fff',
+            padding: '10px 14px',
+            borderRadius: '6px',
+            fontSize: '0.9rem',
+          }}
+        >
+          {completedSlots.length === 0 ? (
+            <option value="">No completed slots available</option>
+          ) : (
+            completedSlots.map((s: any) => (
+              <option key={s.slot_id} value={s.slot_id}>
+                📅 {formatShortDate(s.date)} • {s.time_label} {s.is_grand_finals ? '★ GRAND FINALS' : ''}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#888' }}>
+          <div className="spinner" style={{ margin: '0 auto 1rem' }} />
+          Loading slot match info & team UPI details...
+        </div>
+      )}
+
+      {error && (
+        <div style={{ padding: '1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '8px', marginTop: '1.25rem' }}>
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && selectedSlotId && teams.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#888', background: '#141414', borderRadius: '12px', border: '1px solid #222', marginTop: '1.5rem' }}>
+          <p>No team match performances recorded for this slot yet.</p>
+        </div>
+      )}
+
+      {!loading && !error && teams.length > 0 && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: '60px', textAlign: 'center' }}>Rank</th>
+                  <th>Team</th>
+                  <th>Match Scores</th>
+                  <th style={{ textAlign: 'center' }}>Total Points</th>
+                  <th>UPI Status</th>
+                  <th style={{ textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.map((t: any) => {
+                  const hasUpi = Boolean(t.upi_id)
+                  const isFirst = t.rank === 1
+                  const isSecond = t.rank === 2
+                  const isThird = t.rank === 3
+                  const isTopTwo = isFirst || isSecond
+                  const paidRecord = payouts.find((p: any) => p.slot_id === selectedSlotId && p.team_id === t.team_id && p.status === 'paid')
+
+                  return (
+                    <tr key={t.team_id} style={{ background: isFirst ? 'rgba(250, 204, 21, 0.05)' : undefined }}>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontWeight: 800,
+                          fontSize: '0.8rem',
+                          background: isFirst ? '#fbbf24' : isSecond ? '#94a3b8' : isThird ? '#b45309' : '#222',
+                          color: isFirst ? '#111' : isSecond ? '#111' : '#fff'
+                        }}>
+                          #{t.rank}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{t.team_name}</strong>
+                        {t.room_slot_number && (
+                          <div style={{ fontSize: '0.72rem', color: '#777' }}>Room Slot #{t.room_slot_number}</div>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {t.matches.map((m: any) => (
+                            <span
+                              key={m.match_number}
+                              style={{
+                                fontSize: '0.72rem',
+                                background: '#1c1c1c',
+                                border: '1px solid #333',
+                                borderRadius: '4px',
+                                padding: '2px 6px',
+                                color: '#ddd'
+                              }}
+                            >
+                              M{m.match_number}: #{m.placement || '-'} ({m.total_points} pts)
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <strong style={{ fontSize: '1rem', color: isFirst ? '#fbbf24' : '#fff' }}>
+                          {t.total_points}
+                        </strong>
+                      </td>
+                      <td>
+                        {hasUpi ? (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.75rem',
+                            color: '#4ade80',
+                            background: 'rgba(74,222,128,0.1)',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(74,222,128,0.25)',
+                            fontWeight: 700
+                          }}>
+                            ✓ Available
+                          </span>
+                        ) : (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.75rem',
+                            color: '#f87171',
+                            background: 'rgba(239,68,68,0.1)',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(239,68,68,0.25)',
+                            fontWeight: 700
+                          }}>
+                            ⚠️ Not Provided
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {isTopTwo ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', padding: '4px 10px' }}
+                              onClick={() => setActiveUpiModal(t)}
+                              title="Reveal UPI ID & account details"
+                            >
+                              <Eye size={12} /> UPI Details
+                            </button>
+
+                            {paidRecord ? (
+                              <button
+                                className="btn btn-sm"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontSize: '0.75rem',
+                                  padding: '4px 10px',
+                                  background: 'rgba(34,197,94,0.15)',
+                                  color: '#4ade80',
+                                  border: '1px solid rgba(74,222,128,0.35)',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() => setSelectedSlip(paidRecord)}
+                                title="Click to view official payout slip"
+                              >
+                                <CheckCircle size={12} /> Paid (₹{paidRecord.amount})
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-sm"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  fontSize: '0.75rem',
+                                  padding: '4px 10px',
+                                  background: '#16a34a',
+                                  color: '#fff',
+                                  border: 'none',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() => openPayoutPrompt(t)}
+                                title="Mark this team as paid out"
+                              >
+                                <CheckCircle size={12} /> Mark as Paid Out
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#555', fontSize: '0.85rem' }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* UPI Details Modal (Reveals UPI ID only on click) */}
+      {activeUpiModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.75)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setActiveUpiModal(null)}
+        >
+          <div
+            style={{
+              background: '#141414',
+              border: '1px solid #333',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              maxWidth: '480px',
+              width: '100%',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #252525', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CreditCard size={18} color="#facc15" />
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
+                  UPI Details · {activeUpiModal.team_name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setActiveUpiModal(null)}
+                style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', background: '#1c1c1c', padding: '0.75rem 1rem', borderRadius: '8px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#888' }}>Slot Placement:</span>
+                <span style={{ fontWeight: 800, color: '#fbbf24' }}>#{activeUpiModal.rank} ({activeUpiModal.total_points} pts)</span>
+              </div>
+
+              {/* UPI ID */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>
+                  UPI ID (VPA)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={activeUpiModal.upi_id || 'Not provided by team yet'}
+                    style={{
+                      flex: 1,
+                      background: '#1c1c1c',
+                      border: '1px solid #333',
+                      color: activeUpiModal.upi_id ? '#fff' : '#888',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      fontFamily: 'monospace',
+                    }}
+                  />
+                  {activeUpiModal.upi_id && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                      onClick={() => copyText(activeUpiModal.upi_id, 'modal_upi')}
+                    >
+                      {copiedField === 'modal_upi' ? <Check size={14} /> : <Copy size={14} />}
+                      {copiedField === 'modal_upi' ? 'Copied!' : 'Copy UPI'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Holder Name */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>
+                  Account Holder Name
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={activeUpiModal.upi_holder_name || 'Not provided by team yet'}
+                    style={{
+                      flex: 1,
+                      background: '#1c1c1c',
+                      border: '1px solid #333',
+                      color: activeUpiModal.upi_holder_name ? '#fff' : '#888',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                  {activeUpiModal.upi_holder_name && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                      onClick={() => copyText(activeUpiModal.upi_holder_name, 'modal_holder')}
+                    >
+                      {copiedField === 'modal_holder' ? <Check size={14} /> : <Copy size={14} />}
+                      {copiedField === 'modal_holder' ? 'Copied!' : 'Copy Name'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!activeUpiModal.upi_id && (
+                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', padding: '0.75rem', borderRadius: '8px', fontSize: '0.78rem' }}>
+                  ⚠️ This team has not entered their UPI details in their Profile page yet.
+                </div>
+              )}
+
+              {/* Modal Footer Actions */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', borderTop: '1px solid #222', paddingTop: '1rem' }}>
+                {(() => {
+                  const modalPaid = payouts.find((p: any) => p.slot_id === selectedSlotId && p.team_id === activeUpiModal.team_id && p.status === 'paid')
+                  if (modalPaid) {
+                    return (
+                      <button
+                        className="btn btn-sm"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '0.8rem',
+                          background: 'rgba(34,197,94,0.15)',
+                          color: '#4ade80',
+                          border: '1px solid rgba(74,222,128,0.3)',
+                          fontWeight: 700,
+                        }}
+                        onClick={() => {
+                          setActiveUpiModal(null)
+                          setSelectedSlip(modalPaid)
+                        }}
+                      >
+                        <CheckCircle size={14} /> View Payout Slip (₹{modalPaid.amount})
+                      </button>
+                    )
+                  }
+                  return (
+                    <button
+                      className="btn btn-sm"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        fontSize: '0.8rem',
+                        background: '#16a34a',
+                        color: '#fff',
+                        fontWeight: 700,
+                        border: 'none',
+                      }}
+                      onClick={() => {
+                        const target = activeUpiModal
+                        setActiveUpiModal(null)
+                        openPayoutPrompt(target)
+                      }}
+                    >
+                      <CheckCircle size={14} /> Mark as Paid Out
+                    </button>
+                  )
+                })()}
+
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setActiveUpiModal(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payout Prompt Modal (Prompt for Amount) */}
+      {payoutTarget && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.8)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => !isSubmittingPayout && setPayoutTarget(null)}
+        >
+          <div
+            style={{
+              background: '#141414',
+              border: '1px solid #333',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              maxWidth: '460px',
+              width: '100%',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.85)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #252525', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={18} color="#22c55e" />
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#fff' }}>
+                  Mark as Paid Out
+                </h3>
+              </div>
+              <button
+                onClick={() => !isSubmittingPayout && setPayoutTarget(null)}
+                style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Summary of recipient */}
+              <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#888' }}>Team Name:</span>
+                  <span style={{ fontWeight: 800, color: '#fff', fontSize: '0.9rem' }}>{payoutTarget.team_name}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#888' }}>Placement:</span>
+                  <span style={{ fontWeight: 700, color: '#fbbf24', fontSize: '0.85rem' }}>
+                    #{payoutTarget.rank} Place ({payoutTarget.total_points} pts)
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#888' }}>UPI ID:</span>
+                  <span style={{ fontFamily: 'monospace', color: payoutTarget.upi_id ? '#4ade80' : '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
+                    {payoutTarget.upi_id || 'Not Provided'}
+                  </span>
+                </div>
+                {payoutTarget.upi_holder_name && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#888' }}>Holder Name:</span>
+                    <span style={{ color: '#ddd', fontSize: '0.85rem' }}>{payoutTarget.upi_holder_name}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Amount Input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#facc15', marginBottom: '6px' }}>
+                  Payout Amount (₹) *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#888', fontWeight: 700, fontSize: '1rem' }}>₹</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Enter payout amount (e.g. 500)"
+                    value={payoutAmount}
+                    onChange={e => setPayoutAmount(e.target.value)}
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      background: '#18181b',
+                      border: '1px solid #3f3f46',
+                      color: '#fff',
+                      padding: '10px 12px 10px 30px',
+                      borderRadius: '6px',
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {payoutError && (
+                <div style={{ padding: '0.75rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '6px', fontSize: '0.8rem' }}>
+                  {payoutError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={isSubmittingPayout}
+                  onClick={() => setPayoutTarget(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={isSubmittingPayout || !payoutAmount || Number(payoutAmount) <= 0}
+                  onClick={handleConfirmPayout}
+                  style={{
+                    background: '#16a34a',
+                    color: '#fff',
+                    fontWeight: 700,
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: isSubmittingPayout || !payoutAmount || Number(payoutAmount) <= 0 ? 'not-allowed' : 'pointer',
+                    opacity: isSubmittingPayout || !payoutAmount || Number(payoutAmount) <= 0 ? 0.6 : 1,
+                  }}
+                >
+                  {isSubmittingPayout ? 'Creating Slip...' : 'Confirm & Mark Paid'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official Payout Slip Modal */}
+      {selectedSlip && (
+        <PayoutSlipModal slip={selectedSlip} onClose={() => setSelectedSlip(null)} />
       )}
     </div>
   )

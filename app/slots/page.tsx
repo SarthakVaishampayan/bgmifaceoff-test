@@ -4,6 +4,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import SlotsClient from './SlotsClient'
 import type { Metadata } from 'next'
 
+import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
+
 export const metadata: Metadata = {
   title: 'Slot Booking | BGFS',
   description: 'Book your match slots for Battlegrounds Faceoff Series.',
@@ -32,19 +34,17 @@ export default async function SlotsPage() {
 
   let slots = slotsResult.data || []
 
-  // Auto-mark past slots as completed in background (fire-and-forget, don't block page)
-  const now = new Date()
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  const pastOpenSlotIds = slots
-    .filter(s => String(s.date).split('T')[0] < todayStr && s.status === 'open')
+  // Auto-close slots whose registration cutoff (10 mins before start) has passed
+  const autoCloseSlotIds = slots
+    .filter(s => s.status === 'open' && isSlotPastOrEnded(s.date, s.time_label, s.status))
     .map(s => s.slot_id)
 
-  if (pastOpenSlotIds.length > 0) {
+  if (autoCloseSlotIds.length > 0) {
     // Update local state immediately so UI shows correct status
-    slots = slots.map(s => pastOpenSlotIds.includes(s.slot_id) ? { ...s, status: 'completed' as const } : s)
-    // Fire-and-forget DB update (don't await)
+    slots = slots.map(s => autoCloseSlotIds.includes(s.slot_id) ? { ...s, status: 'closed' as const } : s)
+    // Fire-and-forget DB update to sync DB status
     createAdminClient().then(admin =>
-      admin.from('slots').update({ status: 'completed' }).in('slot_id', pastOpenSlotIds)
+      admin.from('slots').update({ status: 'closed' }).in('slot_id', autoCloseSlotIds)
     ).catch(() => {})
   }
 

@@ -1,0 +1,533 @@
+.page {
+  min-height: 100vh;
+  background: #0d0d0d;
+  padding: 2.5rem 0 5rem;
+}
+
+.topNav {
+  margin-bottom: 1.5rem;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #888;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.backBtn:hover {
+  color: #fbbf24;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #1f1f1f;
+  padding-bottom: 1.5rem;
+}
+
+.title {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: 4px;
+}
+
+.headerBadges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.captainBadge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.08em;
+}
+
+.testBadge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #bbb;
+  background: #1f1f1f;
+  border: 1px solid #333;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Grid Layout ── */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.mainCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── Card Styling ── */
+.card {
+  background: #141414;
+  border: 1px solid #222;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.15rem 1.4rem;
+  border-bottom: 1px solid #222;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.cardTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #facc15;
+}
+
+.cardBody {
+  padding: 1.5rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sectionRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.labelCol {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.labelTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.labelSub {
+  font-size: 0.78rem;
+  color: #777;
+}
+
+.valueRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.displayTeamName {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.editBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.editBtn:hover {
+  background: #fbbf24;
+  color: #111;
+}
+
+.lockedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #292929;
+  color: #888;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.passwordBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #1d1d1d;
+  border: 1px solid #333;
+  color: #ddd;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: 'Inter', sans-serif;
+  width: fit-content;
+}
+
+.passwordBtn:hover {
+  border-color: #fbbf24;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.05);
+}
+
+/* ── UPI Details Styling ── */
+.upiDisclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.upiDisclaimerIcon {
+  color: #fbbf24;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.upiDisclaimerText {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #e2e2e2;
+}
+
+.upiDisclaimerText strong {
+  color: #fbbf24;
+}
+
+.upiDisplayBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background: #0f0f0f;
+  border: 1px solid #242424;
+  border-radius: 8px;
+  padding: 1.15rem;
+}
+
+.upiDisplayRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-bottom: 1px solid #1c1c1c;
+  padding-bottom: 0.65rem;
+}
+
+.upiDisplayRow:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.upiDisplayLabel {
+  font-size: 0.72rem;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.upiDisplayVal {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Forms ── */
+.formBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #0f0f0f;
+  border: 1px solid #252525;
+  border-radius: 8px;
+  padding: 1.15rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fieldLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.inputField {
+  background: #181818;
+  border: 1px solid #333;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.15s ease;
+}
+
+.inputField:focus {
+  border-color: #fbbf24;
+}
+
+.formActions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 4px;
+}
+
+.saveBtn {
+  background: #fbbf24;
+  color: #111;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s ease;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: #f59e0b;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  background: transparent;
+  border: 1px solid #333;
+  color: #999;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s ease;
+}
+
+.cancelBtn:hover {
+  color: #fff;
+  border-color: #555;
+}
+
+.formNote {
+  font-size: 0.72rem;
+  color: #777;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.alertError {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  font-size: 0.8rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.alertSuccess {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+  font-size: 0.8rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+/* ── Side Column ── */
+.sideCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sideCard {
+  background: #141414;
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.sideCardTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #facc15;
+  margin-bottom: 1rem;
+}
+
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.infoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid #1c1c1c;
+  padding-bottom: 0.65rem;
+}
+
+.infoItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.infoLabel {
+  font-size: 0.72rem;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.infoVal {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #e5e5e5;
+}
+
+.infoValMono {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: #aaa;
+}
+
+.actionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.actionLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  background: #191919;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #ddd;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.actionLink:hover {
+  background: #222;
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+
+.signOutBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.75rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s ease;
+  margin-top: 0.5rem;
+}
+
+.signOutBtn:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* ── Mobile View ── */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mainCol {
+    width: 100%;
+  }
+
+  .sideCol {
+    width: 100%;
+  }
+}

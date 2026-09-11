@@ -86,7 +86,9 @@ export async function POST(request: Request) {
     }
 
     if (isSlotPastOrEnded(slot.date, slot.time_label, slot.status)) {
-      return NextResponse.json({ error: 'This match slot has already ended and is closed for registration.' }, { status: 400 })
+      return NextResponse.json({
+        error: 'Registration for this slot is closed. Slots automatically close 10 minutes before the match start time.'
+      }, { status: 400 })
     }
     if (slot.status === 'full' || slot.teams_booked_count >= slot.capacity) {
       return NextResponse.json({ error: 'This slot is full. Please choose another slot.' }, { status: 409 })

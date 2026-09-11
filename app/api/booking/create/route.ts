@@ -117,9 +117,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Slot not found' }, { status: 404 })
     }
 
-    // Guard: Prevent booking expired / past date-time slots
+    // Guard: Prevent booking expired / past date-time slots (auto-closes 10 mins before start)
     if (isSlotPastOrEnded(slot.date, slot.time_label, slot.status)) {
-      return NextResponse.json({ error: 'This match slot has already ended and is closed for registration.' }, { status: 400 })
+      return NextResponse.json({
+        error: 'Registration for this slot is closed. Slots automatically close 10 minutes before the match start time.'
+      }, { status: 400 })
     }
 
     if (slot.status === 'full' || slot.teams_booked_count >= slot.capacity) {

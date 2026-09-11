@@ -2,9 +2,18 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { syncPendingPayouts } from '@/lib/payouts/sync'
 import AdminClient from './AdminClient'
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }> | { tab?: string }
+}) {
+  const resolvedParams = searchParams ? await searchParams : {}
+  const validTabs = ['scores', 'upi_info', 'slots', 'users', 'payouts', 'bookings', 'coupons', 'config', 'test_data']
+  const initialTab = validTabs.includes(resolvedParams?.tab || '') ? (resolvedParams?.tab as any) : undefined
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -25,6 +34,9 @@ export default async function AdminPage() {
     redirect('/')
   }
 
+  // Automatically ensure top 2 pending payouts exist for completed slots
+  await syncPendingPayouts(admin)
+
   // Fetch data for admin
   const [
     { data: slots },
@@ -34,9 +46,9 @@ export default async function AdminPage() {
     { data: coupons },
     { data: configRows },
   ] = await Promise.all([
-    admin.from('slots').select('*').order('date', { ascending: true }),
+    admin.from('slots').select('*').order('date', { ascending: false }),
     admin.from('teams').select('team_id, team_name, invite_code').order('team_name'),
-    admin.from('payouts').select('*, teams(team_name)').order('created_at', { ascending: false }),
+    admin.from('payouts').select('*, teams(team_name), slots(date, time_label)').order('created_at', { ascending: false }),
     admin.from('bookings').select('*, teams(team_name), slots(date, time_label)').eq('payment_status', 'paid').order('created_at', { ascending: false }),
     admin.from('coupons').select('*, teams(team_name)').order('issued_at', { ascending: false }),
     admin.from('config').select('key, value'),
@@ -88,6 +100,7 @@ export default async function AdminPage() {
       coupons={coupons || []}
       config={config}
       usersList={finalUserList}
+      initialTab={initialTab}
     />
   )
 }

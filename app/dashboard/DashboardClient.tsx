@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Calendar, TrendingUp, Edit3, Lock, Check, X, FlaskConical, AlertCircle, KeyRound, Trophy, MessageCircle, Settings, ChevronRight, Award } from 'lucide-react'
+import { Calendar, TrendingUp, FlaskConical, Trophy, MessageCircle, ChevronRight, Award } from 'lucide-react'
 import { formatShortDate } from '@/lib/utils/formatDate'
 import { createClient } from '@/lib/supabase/client'
 import styles from './page.module.css'
@@ -76,51 +76,7 @@ export default function DashboardClient({
 }: Props) {
   const supabase = createClient()
   const unusedCoupons = coupons.filter(c => c.status === 'unused')
-  const [showSettings, setShowSettings] = useState(false)
-  const [currentTeamName, setCurrentTeamName] = useState(team.team_name)
-  const [hasChangedName, setHasChangedName] = useState(!!team.name_changed)
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [newTeamNameInput, setNewTeamNameInput] = useState(team.team_name)
-  const [renameLoading, setRenameLoading] = useState(false)
-  const [renameError, setRenameError] = useState('')
-  const [renameSuccessMsg, setRenameSuccessMsg] = useState('')
-  const [isChangingPassword, setIsChangingPassword] = useState(false)
-  const [newPass, setNewPass] = useState('')
-  const [confirmPass, setConfirmPass] = useState('')
-  const [passLoading, setPassLoading] = useState(false)
-  const [passErr, setPassErr] = useState('')
-  const [passMsg, setPassMsg] = useState('')
   const [slotTab, setSlotTab] = useState<'active' | 'past'>('active')
-
-  async function handleChangePasswordSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setPassErr(''); setPassMsg('')
-    if (newPass.length < 6) { setPassErr('Password must be at least 6 characters.'); return }
-    if (newPass !== confirmPass) { setPassErr('Passwords do not match.'); return }
-    setPassLoading(true)
-    const { error } = await supabase.auth.updateUser({ password: newPass })
-    setPassLoading(false)
-    if (error) { setPassErr(error.message); return }
-    setPassMsg('Password updated successfully!')
-    setNewPass(''); setConfirmPass('')
-    setTimeout(() => { setIsChangingPassword(false); setPassMsg('') }, 2000)
-  }
-
-  async function handleRenameSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newTeamNameInput.trim()) return
-    setRenameError(''); setRenameSuccessMsg(''); setRenameLoading(true)
-    try {
-      const res = await fetch('/api/team/rename', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ new_team_name: newTeamNameInput.trim() }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setRenameError(data.error || 'Failed to update.'); setRenameLoading(false); return }
-      setCurrentTeamName(data.new_team_name); setHasChangedName(true); setIsEditingName(false)
-      setRenameSuccessMsg('Team name updated! (Locked)'); setRenameLoading(false)
-    } catch (err: any) { setRenameError(err.message || 'Network error'); setRenameLoading(false) }
-  }
 
   const normalizedBookings = bookings.map(b => ({ ...b, slotData: getSlotInfo(b.slots) }))
   const upcomingBookings = normalizedBookings.filter(b => b.slotData?.status !== 'completed')
@@ -256,16 +212,13 @@ export default function DashboardClient({
         {/* ── HEADER ── */}
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <h1 className={styles.title}>{currentTeamName}</h1>
+            <h1 className={styles.title}>{team.team_name}</h1>
             <div className={styles.headerBadges}>
               {userEmail && <span className={styles.emailBadge}>{userEmail}</span>}
               {isCaptain && <span className={styles.captainBadge}>CAPTAIN</span>}
               {isTestAccount && <span className={styles.testBadge}><FlaskConical size={11} /> TEST</span>}
             </div>
           </div>
-          <button className={styles.settingsBtn} onClick={() => setShowSettings(!showSettings)}>
-            <Settings size={18} />
-          </button>
         </div>
 
         {/* ── FREE SLOT REWARD BANNER ── */}
@@ -343,8 +296,6 @@ export default function DashboardClient({
                   <div className={styles.slotList}>
                     {pastBookings.map(b => {
                       const targetSlotId = b.slot_id || b.slotData?.slot_id
-                      const matchesForSlot = teamMatches.filter(m => m.slot_id === targetSlotId)
-                      const totalSlotPts = matchesForSlot.reduce((sum, m) => sum + (m.total_points || 0), 0)
                       return (
                         <div key={b.booking_id} className={styles.slotItem}>
                           <div className={styles.slotTop}>
@@ -354,19 +305,6 @@ export default function DashboardClient({
                             </div>
                             <span className={styles.badgeCompleted}>COMPLETED</span>
                           </div>
-                          {matchesForSlot.length > 0 && (
-                            <div className={styles.scoreSummary}>
-                              {matchesForSlot.map((m, idx) => (
-                                <div key={m.match_id || idx} className={styles.scoreRow}>
-                                  <span>M{m.match_number || idx + 1}</span>
-                                  <span>#{m.position || '-'} · {m.kills || 0} kills · {m.total_points || 0} pts</span>
-                                </div>
-                              ))}
-                              <div className={styles.scoreTotal}>
-                                <span>Total</span><span>{totalSlotPts} pts</span>
-                              </div>
-                            </div>
-                          )}
                           <Link href={`/leaderboard?slot_id=${targetSlotId}&tab=slot`} className={styles.slotActionBtn}>
                             <Trophy size={13} /> View Points
                           </Link>
@@ -507,67 +445,6 @@ export default function DashboardClient({
           </div>
         </div>
       </div>
-
-      {/* ── SETTINGS PANEL ── */}
-      {showSettings && (
-        <div className={styles.settingsOverlay} onClick={() => setShowSettings(false)}>
-          <div className={styles.settingsPanel} onClick={e => e.stopPropagation()}>
-            <div className={styles.settingsHeader}>
-              <h3>Settings</h3>
-              <button onClick={() => setShowSettings(false)}><X size={18} /></button>
-            </div>
-
-            {/* Team Name */}
-            <div className={styles.settingsSection}>
-              <label>Team Name</label>
-              {!isEditingName ? (
-                <div className={styles.settingsRow}>
-                  <span>{currentTeamName}</span>
-                  {!hasChangedName ? (
-                    <button onClick={() => { setIsEditingName(true); setRenameError(''); setRenameSuccessMsg('') }}>
-                      <Edit3 size={13} /> Edit
-                    </button>
-                  ) : (
-                    <span className={styles.lockedBadge}><Lock size={11} /> Locked</span>
-                  )}
-                </div>
-              ) : (
-                <form onSubmit={handleRenameSubmit} className={styles.settingsForm}>
-                  <input type="text" value={newTeamNameInput} onChange={e => setNewTeamNameInput(e.target.value)} placeholder="New team name" autoFocus required />
-                  <div className={styles.formActions}>
-                    <button type="submit" disabled={renameLoading}>{renameLoading ? 'Saving...' : 'Save'}</button>
-                    <button type="button" onClick={() => setIsEditingName(false)} className={styles.cancelBtn}>Cancel</button>
-                  </div>
-                  {renameError && <span className={styles.errorText}>{renameError}</span>}
-                  {renameSuccessMsg && <span className={styles.successText}>{renameSuccessMsg}</span>}
-                  <span className={styles.formNote}><AlertCircle size={11} /> 1-time change only</span>
-                </form>
-              )}
-            </div>
-
-            {/* Password */}
-            <div className={styles.settingsSection}>
-              <label>Password</label>
-              {!isChangingPassword ? (
-                <button className={styles.settingsActionBtn} onClick={() => { setIsChangingPassword(true); setPassErr(''); setPassMsg('') }}>
-                  <KeyRound size={13} /> Change Password
-                </button>
-              ) : (
-                <form onSubmit={handleChangePasswordSubmit} className={styles.settingsForm}>
-                  <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="New password (min 6 chars)" minLength={6} required />
-                  <input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} placeholder="Confirm password" minLength={6} required />
-                  <div className={styles.formActions}>
-                    <button type="submit" disabled={passLoading}>{passLoading ? 'Updating...' : 'Update'}</button>
-                    <button type="button" onClick={() => setIsChangingPassword(false)} className={styles.cancelBtn}>Cancel</button>
-                  </div>
-                  {passErr && <span className={styles.errorText}>{passErr}</span>}
-                  {passMsg && <span className={styles.successText}>{passMsg}</span>}
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   )
 }

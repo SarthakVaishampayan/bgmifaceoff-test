@@ -103,8 +103,13 @@ export default function SlotsClient({
   const [filterTab, setFilterTab] = useState<FilterTab>('upcoming')
 
   const [mounted, setMounted] = useState<boolean>(false)
+  const [tick, setTick] = useState<number>(0)
   useEffect(() => {
     setMounted(true)
+    const timer = setInterval(() => {
+      setTick(t => t + 1)
+    }, 30000)
+    return () => clearInterval(timer)
   }, [])
 
   const [testModeEnabled, setTestModeEnabled] = useState<boolean>(true)
@@ -121,7 +126,7 @@ export default function SlotsClient({
     } catch (e) {}
   }
 
-  // Filter slots based on date/time expiration
+  // Filter slots based on date/time expiration (auto-closes 10 mins before start)
   const filteredSlots = useMemo(() => {
     return slotsList.filter(slot => {
       if (!mounted) return true
@@ -130,7 +135,7 @@ export default function SlotsClient({
       if (filterTab === 'past') return isPast
       return true
     })
-  }, [slotsList, filterTab, mounted])
+  }, [slotsList, filterTab, mounted, tick])
 
   // Group filtered slots by date
   const slotsByDate = useMemo(() => {
