@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate } from '@/lib/utils/formatDate'
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
-import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle } from 'lucide-react'
+import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown } from 'lucide-react'
 import styles from './page.module.css'
 
 type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'coupons' | 'config' | 'users'
@@ -445,62 +445,6 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
     setMsg('')
   }
 
-  async function checkAndIssue3rdPlaceReward(slotId: string) {
-    if (!slotId) return null
-
-    const { data: mData } = await supabase
-      .from('matches')
-      .select('team_id, total_points, kills, teams(team_name)')
-      .eq('slot_id', slotId)
-
-    if (!mData || mData.length === 0) return null
-
-    const teamTotals: Record<string, { team_id: string; team_name: string; total_points: number; total_kills: number }> = {}
-    mData.forEach((m: any) => {
-      if (!teamTotals[m.team_id]) {
-        teamTotals[m.team_id] = {
-          team_id: m.team_id,
-          team_name: m.teams?.team_name || 'Team',
-          total_points: 0,
-          total_kills: 0,
-        }
-      }
-      teamTotals[m.team_id].total_points += (m.total_points || 0)
-      teamTotals[m.team_id].total_kills += (m.kills || 0)
-    })
-
-    const sorted = Object.values(teamTotals).sort((a, b) => {
-      if (b.total_points !== a.total_points) return b.total_points - a.total_points
-      return b.total_kills - a.total_kills
-    })
-
-    const thirdTeam = sorted[2]
-    if (!thirdTeam) return null
-
-    const { data: existingCoupon } = await supabase
-      .from('coupons')
-      .select('coupon_id')
-      .eq('team_id', thirdTeam.team_id)
-      .eq('issued_from_slot', slotId)
-      .maybeSingle()
-
-    if (existingCoupon) return null
-
-    const code = `FREE3RD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
-    const { error: couponErr } = await supabase.from('coupons').insert({
-      team_id: thirdTeam.team_id,
-      type: 'free_slot',
-      status: 'unused',
-      issued_from_slot: slotId,
-      code,
-    })
-
-    if (!couponErr) {
-      return thirdTeam.team_name
-    }
-    return null
-  }
-
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setMsg('')
@@ -531,12 +475,7 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
     } else {
       const teamObj = bookedTeams.find(t => String(t.team_id) === String(selectedTeam))
       const name = teamObj?.team_name || 'Team'
-      let message = editingMatchId ? `✅ Score updated for ${name} (Match ${matchNum})!` : `✅ Saved! Match ${matchNum}: #${pos} (${posPts} Pos Pts) + ${k} Elims (${elimPts} Elim Pts) = ${total} Total`
-      
-      const thirdPlaceWinner = await checkAndIssue3rdPlaceReward(selectedSlot)
-      if (thirdPlaceWinner) {
-        message += ` | 🎁 Free Slot Pass automatically issued to 3rd Place (${thirdPlaceWinner})!`
-      }
+      const message = editingMatchId ? `✅ Score updated for ${name} (Match ${matchNum})!` : `✅ Saved! Match ${matchNum}: #${pos} (${posPts} Pos Pts) + ${k} Elims (${elimPts} Elim Pts) = ${total} Total`
 
       setMsg(message)
       setEditingMatchId(null)
@@ -1124,6 +1063,24 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
     capacity?: number
   }>>({})
 
+  // Local state to track which slot tiles are expanded (default: all collapsed)
+  const [expandedSlots, setExpandedSlots] = useState<Record<number, boolean>>({})
+  const [expandedCustomSlots, setExpandedCustomSlots] = useState<Record<string, boolean>>({})
+
+  const toggleSlotExpand = (presetId: number) => {
+    setExpandedSlots(prev => ({
+      ...prev,
+      [presetId]: !prev[presetId],
+    }))
+  }
+
+  const toggleCustomSlotExpand = (slotId: string) => {
+    setExpandedCustomSlots(prev => ({
+      ...prev,
+      [slotId]: !prev[slotId],
+    }))
+  }
+
   function getForm(presetId: number) {
     const formKey = `${selectedDate}_${presetId}`
     return presetForms[formKey] || {}
@@ -1578,9 +1535,28 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                   </span>
                 )}
               </h3>
-              <span style={{ fontSize: '0.78rem', color: '#888888' }}>
-                Config changes apply immediately in-place
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', fontWeight: 800, background: '#1c1c1c', borderColor: '#3a3a3a' }}
+                  onClick={() => {
+                    const all: Record<number, boolean> = {}
+                    FIXED_DAILY_SLOTS.forEach(p => { all[p.id] = true })
+                    setExpandedSlots(all)
+                  }}
+                >
+                  Expand All ▼
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', fontWeight: 800, background: '#1c1c1c', borderColor: '#3a3a3a' }}
+                  onClick={() => setExpandedSlots({})}
+                >
+                  Collapse All ▲
+                </button>
+              </div>
             </div>
 
             {filteredFixedSlots.length === 0 ? (
@@ -1620,6 +1596,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                   const existingSlot = getExistingSlot(preset)
                   const form = getForm(preset.id)
                   const isLoading = loadingPresetId === preset.id
+                  const isExpanded = !!expandedSlots[preset.id]
 
                   const currentLabel = form.time_label ?? (existingSlot?.time_label ? existingSlot.time_label.split('(')[0].trim() : preset.defaultLabel)
                   const slotStatus = computeSlotStatus(existingSlot, selectedDate, currentLabel)
@@ -1648,12 +1625,12 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                           ? '1px solid #ef4444'
                           : isOpen
                           ? '1px solid #22c55e'
-                          : '1px solid #262626',
+                          : '1px solid #2b2b2b',
                         borderRadius: '14px',
-                        padding: '1.25rem',
+                        padding: '1.15rem',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '0.9rem',
+                        gap: '0.75rem',
                         boxShadow: isCompleted
                           ? '0 4px 20px rgba(139, 92, 246, 0.12)'
                           : isClosed
@@ -1662,62 +1639,110 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                           ? '0 4px 20px rgba(34, 197, 94, 0.1)'
                           : 'none',
                         position: 'relative',
+                        transition: 'all 0.2s ease',
                       }}
                     >
-                      {/* Slot Header */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      {/* Slot Header: Clickable row with Name, Time Label, Status Badge & Prominent Down Arrow Expand Button */}
+                      <div
+                        onClick={() => toggleSlotExpand(preset.id)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          flexWrap: 'wrap',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                        }}
+                      >
                         <div>
                           <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                             {preset.name}
                           </span>
-                          <h4 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
+                          <h4 style={{ margin: '2px 0 0 0', fontSize: '1.08rem', fontWeight: 900, color: '#ffffff' }}>
                             {currentLabel}
                           </h4>
                         </div>
 
-                        <span
-                          style={{
-                            fontSize: '0.7rem',
-                            fontWeight: 900,
-                            padding: '3px 9px',
-                            borderRadius: '6px',
-                            textTransform: 'uppercase',
-                            whiteSpace: 'nowrap',
-                            background: isCompleted
-                              ? 'rgba(139, 92, 246, 0.2)'
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              fontWeight: 900,
+                              padding: '4px 9px',
+                              borderRadius: '6px',
+                              textTransform: 'uppercase',
+                              whiteSpace: 'nowrap',
+                              background: isCompleted
+                                ? 'rgba(139, 92, 246, 0.2)'
+                                : isClosed
+                                ? 'rgba(239, 68, 68, 0.18)'
+                                : isOpen
+                                ? 'rgba(34, 197, 94, 0.2)'
+                                : 'rgba(107, 114, 128, 0.18)',
+                              color: isCompleted
+                                ? '#c084fc'
+                                : isClosed
+                                ? '#f87171'
+                                : isOpen
+                                ? '#4ade80'
+                                : '#9ca3af',
+                              border: isCompleted
+                                ? '1px solid #8b5cf6'
+                                : isClosed
+                                ? '1px solid #ef4444'
+                                : isOpen
+                                ? '1px solid #22c55e'
+                                : '1px solid #4b5563',
+                            }}
+                          >
+                            {isCompleted
+                              ? 'COMPLETED'
                               : isClosed
-                              ? 'rgba(239, 68, 68, 0.18)'
+                              ? isAutoClosed
+                                ? 'CLOSED (AUTO 10M)'
+                                : isFullCapacity
+                                ? 'CLOSED (FULL)'
+                                : 'CLOSED'
                               : isOpen
-                              ? 'rgba(34, 197, 94, 0.2)'
-                              : 'rgba(107, 114, 128, 0.18)',
-                            color: isCompleted
-                              ? '#c084fc'
-                              : isClosed
-                              ? '#f87171'
-                              : isOpen
-                              ? '#4ade80'
-                              : '#9ca3af',
-                            border: isCompleted
-                              ? '1px solid #8b5cf6'
-                              : isClosed
-                              ? '1px solid #ef4444'
-                              : isOpen
-                              ? '1px solid #22c55e'
-                              : '1px solid #4b5563',
-                          }}
-                        >
-                          {isCompleted
-                            ? 'COMPLETED'
-                            : isClosed
-                            ? isAutoClosed
-                              ? 'CLOSED (AUTO 10M)'
-                              : isFullCapacity
-                              ? 'CLOSED (FULL)'
-                              : 'CLOSED'
-                            : isOpen
-                            ? `OPEN (${existingSlot?.teams_booked_count || 0}/${existingSlot?.capacity || 20})`
-                            : 'NOT OPEN'}
-                        </span>
+                              ? `OPEN (${existingSlot?.teams_booked_count || 0}/${existingSlot?.capacity || 20})`
+                              : 'NOT OPEN'}
+                          </span>
+
+                          {/* Prominent Down Arrow Expand Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleSlotExpand(preset.id)
+                            }}
+                            title={isExpanded ? 'Collapse slot details' : 'Expand to edit timings, WhatsApp & capacity'}
+                            style={{
+                              background: isExpanded ? '#fbbf24' : '#1e1e1e',
+                              color: isExpanded ? '#111111' : '#fbbf24',
+                              border: isExpanded ? '1px solid #fbbf24' : '1px solid #444444',
+                              borderRadius: '8px',
+                              padding: '5px 10px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              cursor: 'pointer',
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                              transition: 'all 0.2s ease',
+                              boxShadow: isExpanded ? '0 0 10px rgba(251, 191, 36, 0.35)' : 'none',
+                            }}
+                          >
+                            <span>{isExpanded ? 'Less' : 'Edit'}</span>
+                            <ChevronDown
+                              size={17}
+                              style={{
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                              }}
+                            />
+                          </button>
+                        </div>
                       </div>
 
                       {isClosed && isAutoClosed && (
@@ -1760,284 +1785,307 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                         </div>
                       )}
 
-                      {/* ── TWO ACTION BUTTONS SIDE-BY-SIDE ── */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
-                        {/* Button 1: Toggle Open vs Mark Not Open */}
-                        {isOpen ? (
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            style={{
-                              width: '100%',
-                              background: '#1a1a1a',
-                              color: '#d1d5db',
-                              borderColor: '#404040',
-                              fontWeight: 800,
-                              fontSize: '0.8rem',
-                              padding: '0.55rem 0.35rem',
-                            }}
-                            disabled={isLoading}
-                            onClick={() => handleMarkNotOpen(preset)}
-                          >
-                            {isLoading ? 'Updating...' : '🚫 Mark Slot Not Open'}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            style={{
-                              width: '100%',
-                              background: '#22c55e',
-                              color: '#000000',
-                              fontWeight: 900,
-                              fontSize: '0.82rem',
-                              padding: '0.55rem 0.35rem',
-                              border: 'none',
-                            }}
-                            disabled={isLoading}
-                            onClick={() => handleOpenSlot(preset)}
-                          >
-                            {isLoading ? 'Opening...' : isClosed ? '🔓 Re-Open Slot' : '🔓 Open Slot for Booking'}
-                          </button>
-                        )}
-
-                        {/* Button 2: Close This Slot */}
+                      {/* ── ALL 4 STATUS CHANGING BUTTONS (2x2 GRID, FULLY RESPONSIVE FOR MOBILE & DESKTOP) ── */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.55rem' }}>
+                        {/* 1. Open / Re-Open Slot */}
                         <button
                           type="button"
-                          className="btn btn-secondary btn-sm"
+                          className="btn btn-sm"
                           style={{
                             width: '100%',
+                            minHeight: '40px',
+                            background: isOpen ? 'rgba(34, 197, 94, 0.16)' : '#22c55e',
+                            color: isOpen ? '#4ade80' : '#000000',
+                            border: isOpen ? '1px solid #22c55e' : 'none',
+                            fontWeight: 900,
+                            fontSize: '0.78rem',
+                            padding: '0.5rem 0.35rem',
+                            borderRadius: '8px',
+                            cursor: isOpen ? 'default' : 'pointer',
+                            opacity: isOpen ? 0.9 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                          }}
+                          disabled={isLoading || isOpen}
+                          onClick={() => handleOpenSlot(preset)}
+                        >
+                          {isLoading ? '...' : isOpen ? '🟢 Open' : isClosed ? '🔓 Re-Open' : '🔓 Open Slot'}
+                        </button>
+
+                        {/* 2. Close Slot */}
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{
+                            width: '100%',
+                            minHeight: '40px',
                             background: isClosed ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.1)',
                             color: isClosed ? '#fca5a5' : '#f87171',
-                            borderColor: isClosed ? '#ef4444' : 'rgba(239, 68, 68, 0.45)',
+                            border: isClosed ? '1px solid #ef4444' : '1px solid rgba(239, 68, 68, 0.45)',
                             fontWeight: 800,
-                            fontSize: '0.8rem',
-                            padding: '0.55rem 0.35rem',
-                            opacity: isNotOpen ? 0.4 : 1,
-                            cursor: isNotOpen ? 'not-allowed' : 'pointer',
+                            fontSize: '0.78rem',
+                            padding: '0.5rem 0.35rem',
+                            borderRadius: '8px',
+                            cursor: (isClosed || isNotOpen) ? 'not-allowed' : 'pointer',
+                            opacity: (isClosed || isNotOpen) ? 0.45 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
                           }}
                           disabled={isLoading || isNotOpen || isClosed}
                           onClick={() => handleCloseSlot(preset)}
                         >
-                          {isLoading ? 'Updating...' : isClosed ? '🔒 Slot Closed' : '🔒 Close This Slot'}
+                          {isLoading ? '...' : isClosed ? '🔒 Closed' : '🔒 Close Slot'}
+                        </button>
+
+                        {/* 3. Mark Not Open */}
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{
+                            width: '100%',
+                            minHeight: '40px',
+                            background: isNotOpen ? 'rgba(107, 114, 128, 0.12)' : '#1a1a1a',
+                            color: isNotOpen ? '#6b7280' : '#e5e7eb',
+                            border: isNotOpen ? '1px solid #374151' : '1px solid #404040',
+                            fontWeight: 800,
+                            fontSize: '0.78rem',
+                            padding: '0.5rem 0.35rem',
+                            borderRadius: '8px',
+                            cursor: isNotOpen ? 'default' : 'pointer',
+                            opacity: isNotOpen ? 0.55 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                          }}
+                          disabled={isLoading || isNotOpen}
+                          onClick={() => handleMarkNotOpen(preset)}
+                        >
+                          {isLoading ? '...' : isNotOpen ? '⚪ Not Open' : '🚫 Not Open'}
+                        </button>
+
+                        {/* 4. Mark Completed / Revert to Open */}
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{
+                            width: '100%',
+                            minHeight: '40px',
+                            background: isCompleted ? 'rgba(251, 191, 36, 0.18)' : '#8b5cf6',
+                            color: isCompleted ? '#fbbf24' : '#ffffff',
+                            border: isCompleted ? '1px solid #fbbf24' : 'none',
+                            fontWeight: 800,
+                            fontSize: '0.78rem',
+                            padding: '0.5rem 0.35rem',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                          }}
+                          disabled={isLoading}
+                          onClick={() => handleToggleCompleted(preset)}
+                        >
+                          {isLoading ? '...' : isCompleted ? '↩️ Revert Open' : '🏆 Complete'}
                         </button>
                       </div>
 
-              {/* Editable Fields */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid #222222', paddingTop: '0.85rem' }}>
-                
-                {/* Custom Match Timings Box */}
-                <div style={{ background: '#181818', border: '1px solid #282828', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      ⏱️ MATCH TIMINGS & SCHEDULE
-                    </span>
-                    <span style={{ fontSize: '0.68rem', color: '#888888' }}>
-                      Leave blank for defaults
-                    </span>
-                  </div>
+                      {/* ── EXPANDABLE SECTION (OPERATE ON TIMINGS, SCHEDULE, WHATSAPP, FEE & CAPACITY) ── */}
+                      {isExpanded && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid #222222', paddingTop: '0.85rem' }}>
+                          {/* Custom Match Timings Box */}
+                          <div style={{ background: '#181818', border: '1px solid #282828', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                ⏱️ MATCH TIMINGS & SCHEDULE
+                              </span>
+                              <span style={{ fontSize: '0.68rem', color: '#888888' }}>
+                                Leave blank for defaults
+                              </span>
+                            </div>
 
-                  <div>
-                    <label style={{ fontSize: '0.7rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
-                      Slot Window Label:
-                    </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                      value={currentLabel}
-                      onChange={e => updatePresetFormField(preset.id, 'time_label', e.target.value)}
-                      placeholder="e.g. 1:00 PM – 3:00 PM"
-                    />
-                  </div>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                Slot Window Label:
+                              </label>
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                                value={currentLabel}
+                                onChange={e => updatePresetFormField(preset.id, 'time_label', e.target.value)}
+                                placeholder="e.g. 1:00 PM – 3:00 PM"
+                              />
+                            </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '0.4rem' }}>
-                    <div>
-                      <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
-                        Match 1 (Erangel):
-                      </label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
-                        value={currentM1}
-                        onChange={e => updatePresetFormField(preset.id, 'm1_time', e.target.value)}
-                        placeholder="1:12 PM"
-                      />
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '0.4rem' }}>
+                              <div>
+                                <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                  Match 1 (Erangel):
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
+                                  value={currentM1}
+                                  onChange={e => updatePresetFormField(preset.id, 'm1_time', e.target.value)}
+                                  placeholder="1:12 PM"
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                  Match 2 (Rondo):
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
+                                  value={currentM2}
+                                  onChange={e => updatePresetFormField(preset.id, 'm2_time', e.target.value)}
+                                  placeholder="1:54 PM"
+                                />
+                              </div>
+
+                              <div>
+                                <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                  Match 3 (Miramar):
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
+                                  value={currentM3}
+                                  onChange={e => updatePresetFormField(preset.id, 'm3_time', e.target.value)}
+                                  placeholder="2:30 PM"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: '0.72rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '3px', display: 'block' }}>
+                              WhatsApp Group Link (changes daily):
+                            </label>
+                            <input
+                              type="url"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                              value={currentWhatsapp}
+                              onChange={e => updatePresetFormField(preset.id, 'whatsapp_link', e.target.value)}
+                              placeholder="https://chat.whatsapp.com/..."
+                            />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                            <div>
+                              <label style={{ fontSize: '0.72rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '3px', display: 'block' }}>
+                                Entry Fee (₹):
+                              </label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                                value={currentFee}
+                                onChange={e => updatePresetFormField(preset.id, 'entry_fee', parseInt(e.target.value) || 0)}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '0.72rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '3px', display: 'block' }}>
+                                Capacity:
+                              </label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                                value={currentCap}
+                                onChange={e => updatePresetFormField(preset.id, 'capacity', parseInt(e.target.value) || 20)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* ── Save Details & Collapse Action ── */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.55rem', marginTop: '0.35rem' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                padding: '0.55rem 0.75rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.35rem',
+                                background: '#fbbf24',
+                                color: '#111111',
+                                border: '1px solid #fbbf24',
+                              }}
+                              disabled={isLoading}
+                              onClick={() => handleSaveSlotDetails(preset)}
+                            >
+                              💾 Save Slot Details
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                padding: '0.55rem 0.75rem',
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                background: '#1a1a1a',
+                                color: '#9ca3af',
+                                borderColor: '#333333',
+                              }}
+                              onClick={() => toggleSlotExpand(preset.id)}
+                            >
+                              ▲ Collapse
+                            </button>
+                          </div>
+
+                          {/* Optional subtle delete button if slot exists and has 0 bookings */}
+                          {existingSlot && existingSlot.teams_booked_count === 0 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm(`Permanently delete ${preset.name} (${selectedDate})?`)) return
+                                await supabase.from('slots').delete().eq('slot_id', existingSlot.slot_id)
+                                if (setSlots) {
+                                  setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== existingSlot.slot_id))
+                                }
+                                setMsg(`🗑️ ${preset.name} deleted`)
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#ef4444',
+                                fontSize: '0.7rem',
+                                cursor: 'pointer',
+                                textAlign: 'center',
+                                textDecoration: 'underline',
+                                marginTop: '0.15rem',
+                                opacity: 0.8,
+                              }}
+                            >
+                              Delete Slot
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
-                        Match 2 (Rondo):
-                      </label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
-                        value={currentM2}
-                        onChange={e => updatePresetFormField(preset.id, 'm2_time', e.target.value)}
-                        placeholder="1:54 PM"
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
-                        Match 3 (Miramar):
-                      </label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
-                        value={currentM3}
-                        onChange={e => updatePresetFormField(preset.id, 'm3_time', e.target.value)}
-                        placeholder="2:30 PM"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.72rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '3px', display: 'block' }}>
-                    WhatsApp Group Link (changes daily):
-                  </label>
-                  <input
-                    type="url"
-                    className="form-input"
-                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                    value={currentWhatsapp}
-                    onChange={e => updatePresetFormField(preset.id, 'whatsapp_link', e.target.value)}
-                    placeholder="https://chat.whatsapp.com/..."
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                  <div>
-                    <label style={{ fontSize: '0.72rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '3px', display: 'block' }}>
-                      Entry Fee (₹):
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                      value={currentFee}
-                      onChange={e => updatePresetFormField(preset.id, 'entry_fee', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.72rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '3px', display: 'block' }}>
-                      Capacity:
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                      value={currentCap}
-                      onChange={e => updatePresetFormField(preset.id, 'capacity', parseInt(e.target.value) || 20)}
-                    />
-                  </div>
-                </div>
-
-                {/* ── Side-by-Side Action Buttons ── */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', marginTop: '0.35rem' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    style={{
-                      padding: '0.55rem 0.4rem',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.3rem',
-                    }}
-                    disabled={isLoading}
-                    onClick={() => handleSaveSlotDetails(preset)}
-                  >
-                    💾 Save Slot Details
-                  </button>
-
-                  {isCompleted ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{
-                        padding: '0.55rem 0.4rem',
-                        fontSize: '0.78rem',
-                        fontWeight: 800,
-                        background: 'rgba(251, 191, 36, 0.15)',
-                        color: '#fbbf24',
-                        borderColor: '#fbbf24',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.3rem',
-                      }}
-                      disabled={isLoading}
-                      onClick={() => handleToggleCompleted(preset)}
-                    >
-                      ↩️ Revert to Open
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      style={{
-                        padding: '0.55rem 0.4rem',
-                        fontSize: '0.78rem',
-                        fontWeight: 800,
-                        background: '#8b5cf6',
-                        color: '#ffffff',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.3rem',
-                      }}
-                      disabled={isLoading}
-                      onClick={() => handleToggleCompleted(preset)}
-                    >
-                      🏆 Mark Slot Completed
-                    </button>
-                  )}
-                </div>
-
-                {/* Optional subtle delete button if slot exists and has 0 bookings */}
-                {existingSlot && existingSlot.teams_booked_count === 0 && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!confirm(`Permanently delete ${preset.name} (${selectedDate})?`)) return
-                      await supabase.from('slots').delete().eq('slot_id', existingSlot.slot_id)
-                      if (setSlots) {
-                        setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== existingSlot.slot_id))
-                      }
-                      setMsg(`🗑️ ${preset.name} deleted`)
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#ef4444',
-                      fontSize: '0.7rem',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      textDecoration: 'underline',
-                      marginTop: '0.15rem',
-                      opacity: 0.8,
-                    }}
-                  >
-                    Delete Slot
-                  </button>
-                )}
+                  )
+                })}
               </div>
-            </div>
-          )
-        })}
-      </div>
-    )}
-  </>
-)
-})()}
+            )}
+          </>
+        )
+      })()}
 
       {/* Additional / Custom Slots on this date if any exist */}
       {(() => {
@@ -2056,9 +2104,34 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
 
         return (
           <div style={{ marginTop: '1.5rem', marginBottom: '2rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#60a5fa', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              ⚡ Additional Custom Slots for {formatFullLongDate(selectedDate)} ({filteredAdditionalSlots.length})
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#60a5fa', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                ⚡ Additional Custom Slots for {formatFullLongDate(selectedDate)} ({filteredAdditionalSlots.length})
+              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.72rem', padding: '0.3rem 0.6rem', fontWeight: 800, background: '#1c1c1c', borderColor: '#3a3a3a' }}
+                  onClick={() => {
+                    const allCustom: Record<string, boolean> = {}
+                    filteredAdditionalSlots.forEach((s: any) => { allCustom[s.slot_id] = true })
+                    setExpandedCustomSlots(allCustom)
+                  }}
+                >
+                  Expand All ▼
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.72rem', padding: '0.3rem 0.6rem', fontWeight: 800, background: '#1c1c1c', borderColor: '#3a3a3a' }}
+                  onClick={() => setExpandedCustomSlots({})}
+                >
+                  Collapse All ▲
+                </button>
+              </div>
+            </div>
+
             <div className={styles.slotsGrid}>
               {filteredAdditionalSlots.map((extraSlot: any) => {
                 const extraStatus = computeSlotStatus(extraSlot, selectedDate, extraSlot.time_label)
@@ -2068,6 +2141,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                 const isExtraOpen = extraStatus === 'open'
                 const isExtraClosed = extraStatus === 'closed'
                 const isExtraNotOpen = extraStatus === 'not_open'
+                const isCustomExpanded = !!expandedCustomSlots[extraSlot.slot_id]
 
                 return (
                   <div
@@ -2080,12 +2154,12 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                         ? '1px solid #ef4444'
                         : isExtraOpen
                         ? '1px solid #22c55e'
-                        : '1px solid #262626',
+                        : '1px solid #2b2b2b',
                       borderRadius: '14px',
-                      padding: '1.25rem',
+                      padding: '1.15rem',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.9rem',
+                      gap: '0.75rem',
                       boxShadow: isExtraCompleted
                         ? '0 4px 20px rgba(139, 92, 246, 0.12)'
                         : isExtraClosed
@@ -2093,60 +2167,108 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                         : isExtraOpen
                         ? '0 4px 20px rgba(34, 197, 94, 0.1)'
                         : 'none',
+                      transition: 'all 0.2s ease',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                    {/* Header: Clickable row with time, status and Down Arrow Expand button */}
+                    <div
+                      onClick={() => toggleCustomSlotExpand(extraSlot.slot_id)}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '0.6rem',
+                        flexWrap: 'wrap',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
                       <div>
                         <span style={{ fontSize: '0.72rem', color: '#60a5fa', fontWeight: 900, textTransform: 'uppercase' }}>
                           Custom Slot
                         </span>
-                        <h4 style={{ margin: '2px 0 0 0', fontSize: '1.1rem', fontWeight: 900, color: '#ffffff' }}>
+                        <h4 style={{ margin: '2px 0 0 0', fontSize: '1.08rem', fontWeight: 900, color: '#ffffff' }}>
                           {extraSlot.time_label}
                         </h4>
                       </div>
 
-                      <span
-                        style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 900,
-                          padding: '3px 9px',
-                          borderRadius: '6px',
-                          textTransform: 'uppercase',
-                          background: isExtraCompleted
-                            ? 'rgba(139, 92, 246, 0.2)'
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 900,
+                            padding: '4px 9px',
+                            borderRadius: '6px',
+                            textTransform: 'uppercase',
+                            background: isExtraCompleted
+                              ? 'rgba(139, 92, 246, 0.2)'
+                              : isExtraClosed
+                              ? 'rgba(239, 68, 68, 0.18)'
+                              : isExtraOpen
+                              ? 'rgba(34, 197, 94, 0.2)'
+                              : 'rgba(107, 114, 128, 0.18)',
+                            color: isExtraCompleted
+                              ? '#c084fc'
+                              : isExtraClosed
+                              ? '#f87171'
+                              : isExtraOpen
+                              ? '#4ade80'
+                              : '#9ca3af',
+                            border: isExtraCompleted
+                              ? '1px solid #8b5cf6'
+                              : isExtraClosed
+                              ? '1px solid #ef4444'
+                              : isExtraOpen
+                              ? '1px solid #22c55e'
+                              : '1px solid #4b5563',
+                          }}
+                        >
+                          {isExtraCompleted
+                            ? 'COMPLETED'
                             : isExtraClosed
-                            ? 'rgba(239, 68, 68, 0.18)'
+                            ? isExtraAutoClosed
+                              ? 'CLOSED (AUTO 10M)'
+                              : isExtraFullCapacity
+                              ? 'CLOSED (FULL)'
+                              : 'CLOSED'
                             : isExtraOpen
-                            ? 'rgba(34, 197, 94, 0.2)'
-                            : 'rgba(107, 114, 128, 0.18)',
-                          color: isExtraCompleted
-                            ? '#c084fc'
-                            : isExtraClosed
-                            ? '#f87171'
-                            : isExtraOpen
-                            ? '#4ade80'
-                            : '#9ca3af',
-                          border: isExtraCompleted
-                            ? '1px solid #8b5cf6'
-                            : isExtraClosed
-                            ? '1px solid #ef4444'
-                            : isExtraOpen
-                            ? '1px solid #22c55e'
-                            : '1px solid #4b5563',
-                        }}
-                      >
-                        {isExtraCompleted
-                          ? 'COMPLETED'
-                          : isExtraClosed
-                          ? isExtraAutoClosed
-                            ? 'CLOSED (AUTO 10M)'
-                            : isExtraFullCapacity
-                            ? 'CLOSED (FULL)'
-                            : 'CLOSED'
-                          : isExtraOpen
-                          ? `OPEN (${extraSlot.teams_booked_count || 0}/${extraSlot.capacity || 20})`
-                          : 'NOT OPEN'}
-                      </span>
+                            ? `OPEN (${extraSlot.teams_booked_count || 0}/${extraSlot.capacity || 20})`
+                            : 'NOT OPEN'}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleCustomSlotExpand(extraSlot.slot_id)
+                          }}
+                          title={isCustomExpanded ? 'Collapse slot details' : 'Expand slot details'}
+                          style={{
+                            background: isCustomExpanded ? '#fbbf24' : '#1e1e1e',
+                            color: isCustomExpanded ? '#111111' : '#fbbf24',
+                            border: isCustomExpanded ? '1px solid #fbbf24' : '1px solid #444444',
+                            borderRadius: '8px',
+                            padding: '5px 10px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 800,
+                            transition: 'all 0.2s ease',
+                            boxShadow: isCustomExpanded ? '0 0 10px rgba(251, 191, 36, 0.35)' : 'none',
+                          }}
+                        >
+                          <span>{isCustomExpanded ? 'Less' : 'Edit'}</span>
+                          <ChevronDown
+                            size={17}
+                            style={{
+                              transform: isCustomExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                            }}
+                          />
+                        </button>
+                      </div>
                     </div>
 
                     {isExtraClosed && isExtraAutoClosed && (
@@ -2169,72 +2291,57 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                       </div>
                     )}
 
-                    {/* ── TWO ACTION BUTTONS SIDE-BY-SIDE ── */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
-                      {isExtraOpen ? (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          style={{
-                            padding: '0.55rem 0.35rem',
-                            fontSize: '0.8rem',
-                            fontWeight: 800,
-                            background: '#1a1a1a',
-                            color: '#d1d5db',
-                            borderColor: '#404040',
-                          }}
-                          onClick={async () => {
-                            if (extraSlot.teams_booked_count > 0) {
-                              const ok = confirm(`This custom slot has ${extraSlot.teams_booked_count} bookings. Mark Not Open and delete?`)
-                              if (!ok) return
-                            }
-                            const { error } = await supabase.from('slots').delete().eq('slot_id', extraSlot.slot_id)
-                            if (error) { setMsg('❌ ' + error.message); return }
-                            if (setSlots) {
-                              setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== extraSlot.slot_id))
-                            }
-                            setMsg(`✅ Custom Slot (${extraSlot.time_label}) turned disabled / NOT OPEN`)
-                          }}
-                        >
-                          🚫 Mark Slot Not Open
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          style={{
-                            padding: '0.55rem 0.35rem',
-                            fontSize: '0.82rem',
-                            fontWeight: 900,
-                            background: '#22c55e',
-                            color: '#000000',
-                            border: 'none',
-                          }}
-                          onClick={async () => {
-                            const { data, error } = await supabase.from('slots').update({ status: 'open' }).eq('slot_id', extraSlot.slot_id).select().single()
-                            if (error) { setMsg('❌ ' + error.message); return }
-                            if (data && setSlots) {
-                              setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
-                            }
-                            setMsg(`✅ Custom Slot (${extraSlot.time_label}) OPENED for booking`)
-                          }}
-                        >
-                          {isExtraClosed ? '🔓 Re-Open Slot' : '🔓 Open Slot for Booking'}
-                        </button>
-                      )}
+                    {/* ── 4 STATUS BUTTONS FOR CUSTOM SLOT ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.55rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          width: '100%',
+                          minHeight: '40px',
+                          background: isExtraOpen ? 'rgba(34, 197, 94, 0.16)' : '#22c55e',
+                          color: isExtraOpen ? '#4ade80' : '#000000',
+                          border: isExtraOpen ? '1px solid #22c55e' : 'none',
+                          fontWeight: 900,
+                          fontSize: '0.78rem',
+                          padding: '0.5rem 0.35rem',
+                          borderRadius: '8px',
+                          cursor: isExtraOpen ? 'default' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        disabled={isExtraOpen}
+                        onClick={async () => {
+                          const { data, error } = await supabase.from('slots').update({ status: 'open' }).eq('slot_id', extraSlot.slot_id).select().single()
+                          if (error) { setMsg('❌ ' + error.message); return }
+                          if (data && setSlots) {
+                            setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                          }
+                          setMsg(`✅ Custom Slot (${extraSlot.time_label}) OPENED for booking`)
+                        }}
+                      >
+                        {isExtraOpen ? '🟢 Open' : isExtraClosed ? '🔓 Re-Open' : '🔓 Open Slot'}
+                      </button>
 
                       <button
                         type="button"
-                        className="btn btn-secondary btn-sm"
+                        className="btn btn-sm"
                         style={{
-                          padding: '0.55rem 0.35rem',
-                          fontSize: '0.8rem',
-                          fontWeight: 800,
+                          width: '100%',
+                          minHeight: '40px',
                           background: isExtraClosed ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.1)',
                           color: isExtraClosed ? '#fca5a5' : '#f87171',
-                          borderColor: isExtraClosed ? '#ef4444' : 'rgba(239, 68, 68, 0.45)',
-                          opacity: isExtraNotOpen ? 0.4 : 1,
-                          cursor: isExtraNotOpen ? 'not-allowed' : 'pointer',
+                          border: isExtraClosed ? '1px solid #ef4444' : '1px solid rgba(239, 68, 68, 0.45)',
+                          fontWeight: 800,
+                          fontSize: '0.78rem',
+                          padding: '0.5rem 0.35rem',
+                          borderRadius: '8px',
+                          cursor: (isExtraClosed || isExtraNotOpen) ? 'not-allowed' : 'pointer',
+                          opacity: (isExtraClosed || isExtraNotOpen) ? 0.45 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                         disabled={isExtraNotOpen || isExtraClosed}
                         onClick={async () => {
@@ -2246,21 +2353,59 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                           setMsg(`✅ Custom Slot (${extraSlot.time_label}) CLOSED to new registrations`)
                         }}
                       >
-                        {isExtraClosed ? '🔒 Slot Closed' : '🔒 Close This Slot'}
+                        {isExtraClosed ? '🔒 Closed' : '🔒 Close Slot'}
                       </button>
-                    </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.5rem', marginTop: '0.2rem' }}>
                       <button
                         type="button"
-                        className="btn btn-primary btn-sm"
+                        className="btn btn-sm"
                         style={{
-                          padding: '0.55rem 0.4rem',
-                          fontSize: '0.78rem',
+                          width: '100%',
+                          minHeight: '40px',
+                          background: '#1a1a1a',
+                          color: '#d1d5db',
+                          border: '1px solid #404040',
                           fontWeight: 800,
-                          background: isExtraCompleted ? 'rgba(251, 191, 36, 0.15)' : '#8b5cf6',
+                          fontSize: '0.78rem',
+                          padding: '0.5rem 0.35rem',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        onClick={async () => {
+                          if (extraSlot.teams_booked_count > 0) {
+                            const ok = confirm(`This custom slot has ${extraSlot.teams_booked_count} bookings. Mark Not Open and delete?`)
+                            if (!ok) return
+                          }
+                          const { error } = await supabase.from('slots').delete().eq('slot_id', extraSlot.slot_id)
+                          if (error) { setMsg('❌ ' + error.message); return }
+                          if (setSlots) {
+                            setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== extraSlot.slot_id))
+                          }
+                          setMsg(`✅ Custom Slot (${extraSlot.time_label}) turned disabled / NOT OPEN`)
+                        }}
+                      >
+                        🚫 Not Open
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          width: '100%',
+                          minHeight: '40px',
+                          background: isExtraCompleted ? 'rgba(251, 191, 36, 0.18)' : '#8b5cf6',
                           color: isExtraCompleted ? '#fbbf24' : '#ffffff',
                           border: isExtraCompleted ? '1px solid #fbbf24' : 'none',
+                          fontWeight: 800,
+                          fontSize: '0.78rem',
+                          padding: '0.5rem 0.35rem',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                         onClick={async () => {
                           const nextStatus = isExtraCompleted ? 'open' : 'completed'
@@ -2272,24 +2417,113 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                           if (nextStatus === 'completed' && onSyncPayouts) onSyncPayouts()
                         }}
                       >
-                        {isExtraCompleted ? '↩️ Revert to Open' : '🏆 Mark Slot Completed'}
+                        {isExtraCompleted ? '↩️ Revert Open' : '🏆 Complete'}
                       </button>
                     </div>
 
-                    {extraSlot.teams_booked_count === 0 && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!confirm(`Delete custom slot (${extraSlot.time_label})?`)) return
-                          await supabase.from('slots').delete().eq('slot_id', extraSlot.slot_id)
-                          if (setSlots) {
-                            setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== extraSlot.slot_id))
-                          }
-                        }}
-                        style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.7rem', cursor: 'pointer', textAlign: 'center', textDecoration: 'underline' }}
-                      >
-                        Delete Slot
-                      </button>
+                    {/* Expandable Custom Slot drawer */}
+                    {isCustomExpanded && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid #222222', paddingTop: '0.85rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.7rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                            Slot Label:
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                            defaultValue={extraSlot.time_label}
+                            onBlur={async (e) => {
+                              const newLabel = e.target.value.trim()
+                              if (!newLabel || newLabel === extraSlot.time_label) return
+                              const { data, error } = await supabase.from('slots').update({ time_label: newLabel }).eq('slot_id', extraSlot.slot_id).select().single()
+                              if (error) { setMsg('❌ ' + error.message); return }
+                              if (data && setSlots) {
+                                setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                              }
+                              setMsg(`✅ Updated time label to ${newLabel}`)
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '0.7rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                            WhatsApp Group Link:
+                          </label>
+                          <input
+                            type="url"
+                            className="form-input"
+                            style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                            defaultValue={extraSlot.whatsapp_link || ''}
+                            placeholder="https://chat.whatsapp.com/..."
+                            onBlur={async (e) => {
+                              const newLink = e.target.value.trim()
+                              const { data, error } = await supabase.from('slots').update({ whatsapp_link: newLink || null }).eq('slot_id', extraSlot.slot_id).select().single()
+                              if (error) { setMsg('❌ ' + error.message); return }
+                              if (data && setSlots) {
+                                setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                              }
+                              setMsg(`✅ Updated WhatsApp link`)
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              Entry Fee (₹):
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                              defaultValue={extraSlot.entry_fee || 50}
+                              onBlur={async (e) => {
+                                const newFee = parseInt(e.target.value) || 0
+                                const { data } = await supabase.from('slots').update({ entry_fee: newFee }).eq('slot_id', extraSlot.slot_id).select().single()
+                                if (data && setSlots) {
+                                  setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              Capacity:
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
+                              defaultValue={extraSlot.capacity || 20}
+                              onBlur={async (e) => {
+                                const newCap = parseInt(e.target.value) || 20
+                                const { data } = await supabase.from('slots').update({ capacity: newCap }).eq('slot_id', extraSlot.slot_id).select().single()
+                                if (data && setSlots) {
+                                  setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            padding: '0.5rem 0.75rem',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            background: '#1a1a1a',
+                            color: '#9ca3af',
+                            borderColor: '#333333',
+                            marginTop: '0.25rem',
+                          }}
+                          onClick={() => toggleCustomSlotExpand(extraSlot.slot_id)}
+                        >
+                          ▲ Collapse Details
+                        </button>
+                      </div>
                     )}
                   </div>
                 )
@@ -3648,40 +3882,108 @@ function BookingsTab({ bookings }: { bookings: any[] }) {
 }
 
 // ── COUPONS TAB ──────────────────────────────────────────────────
-function CouponsTab({ coupons, teams, supabase }: { coupons: any[]; teams: any[]; supabase: any }) {
-  const [list, setList] = useState(coupons)
+function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams: any[]; supabase: any }) {
+  const [list, setList] = useState(initialCoupons || [])
   const [issueTeam, setIssueTeam] = useState('')
   const [issuing, setIssuing] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+
+  async function fetchCoupons() {
+    setRefreshing(true)
+    try {
+      const res = await fetch('/api/admin/coupons')
+      const data = await res.json()
+      if (data.coupons) {
+        setList(data.coupons)
+      }
+    } catch (e) {
+      console.error('Failed to refresh coupons', e)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchCoupons()
+  }, [])
 
   async function issueCoupon(e: React.FormEvent) {
     e.preventDefault()
     if (!issueTeam) return
     setIssuing(true); setMsg('')
-    // Generate code client-side (server will also auto-generate if blank, but we want to show it)
-    const code = Math.random().toString(36).substring(2, 10).toUpperCase()
-    const { data, error } = await supabase
-      .from('coupons')
-      .insert({ team_id: issueTeam, type: 'free_slot', status: 'unused', code })
-      .select('*, teams(team_name)')
-      .single()
-    setIssuing(false)
-    if (error) { setMsg('❌ ' + error.message); return }
-    setList(prev => [data, ...prev])
-    setMsg(`✅ Coupon issued! Code: ${data.code} — share this with the team via WhatsApp.`)
-    setIssueTeam('')
+    try {
+      const res = await fetch('/api/admin/coupons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_id: issueTeam }),
+      })
+      const data = await res.json()
+      setIssuing(false)
+      if (!res.ok || !data.coupon) {
+        setMsg('❌ ' + (data.error || 'Failed to issue coupon'))
+        return
+      }
+      setList(prev => [data.coupon, ...prev])
+      setMsg(`✅ Free slot coupon issued! Code: ${data.coupon.code} — team can redeem this for ₹0 on any open slot.`)
+      setIssueTeam('')
+    } catch (err: any) {
+      setIssuing(false)
+      setMsg('❌ ' + (err.message || 'Error issuing coupon'))
+    }
   }
+
+  function handleCopy(code: string) {
+    navigator.clipboard.writeText(code)
+    setCopiedCode(code)
+    setTimeout(() => setCopiedCode(null), 2000)
+  }
+
+  const unusedCount = list.filter((c: any) => c.status === 'unused').length
+  const usedCount = list.filter((c: any) => c.status === 'used').length
 
   return (
     <div>
-      <h2 className={styles.tabTitle}>Coupons</h2>
-      <p className={styles.tabDesc}>Issue free slot coupons to 3rd-place teams. Share the code with them via WhatsApp.</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.5rem' }}>
+        <div>
+          <h2 className={styles.tabTitle} style={{ margin: 0 }}>Coupons Management</h2>
+          <p className={styles.tabDesc} style={{ margin: '4px 0 0 0' }}>
+            Free slot coupons are automatically generated for the <strong>3rd place team</strong> when a slot is marked completed. You can also manually issue coupons.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={fetchCoupons}
+          disabled={refreshing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          {refreshing ? '🔄 Refreshing...' : '🔄 Refresh Coupons'}
+        </button>
+      </div>
+
+      {/* ── METRIC STATS SUMMARY ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', margin: '1rem 0 1.25rem 0' }}>
+        <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Total Issued</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', marginTop: '3px' }}>{list.length}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Available (Unused)</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#4ade80', marginTop: '3px' }}>{unusedCount}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Redeemed (Used)</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fbbf24', marginTop: '3px' }}>{usedCount}</div>
+        </div>
+      </div>
 
       {/* Issue Form */}
       <form onSubmit={issueCoupon} className={styles.createSlotForm}>
         <div className={styles.formRow}>
           <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">Issue Coupon To Team</label>
+            <label className="form-label">Issue Manual Free Coupon To Team</label>
             <select className="form-input" value={issueTeam} onChange={e => setIssueTeam(e.target.value)} required>
               <option value="">Select team...</option>
               {teams.map((t: any) => (
@@ -3702,33 +4004,108 @@ function CouponsTab({ coupons, teams, supabase }: { coupons: any[]; teams: any[]
         <table>
           <thead>
             <tr>
-              <th>Team</th>
-              <th>Code</th>
+              <th>Given To (Team)</th>
+              <th>Origin / Generated From</th>
+              <th>Coupon Code</th>
               <th>Status</th>
-              <th>Issued</th>
-              <th>Used</th>
+              <th>Has Team Used It?</th>
+              <th>Issued At</th>
             </tr>
           </thead>
           <tbody>
-            {list.map(c => (
-              <tr key={c.coupon_id}>
-                <td><strong>{c.teams?.team_name}</strong></td>
-                <td><code style={{ background: '#1a1a1a', padding: '0.2rem 0.5rem', borderRadius: '4px', letterSpacing: '0.08em', color: '#fbbf24' }}>{c.code || '—'}</code></td>
-                <td>
-                  <span className={`badge ${c.status === 'unused' ? 'badge-success' : 'badge-neutral'}`}>
-                    {c.status}
-                  </span>
-                </td>
-                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                  {formatNumericDate(c.issued_at)}
-                </td>
-                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                  {c.used_at ? formatNumericDate(c.used_at) : '—'}
+            {list.map((c: any) => {
+              const isUnused = c.status === 'unused'
+              const originSlot = c.slots
+              const usedBooking = c.bookings && c.bookings.length > 0 ? c.bookings[0] : null
+              const usedSlot = usedBooking?.slots
+
+              return (
+                <tr key={c.coupon_id}>
+                  <td>
+                    <strong style={{ fontSize: '0.9rem', color: '#fff' }}>
+                      {c.teams?.team_name || 'Unknown Team'}
+                    </strong>
+                  </td>
+
+                  <td>
+                    {originSlot ? (
+                      <div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#fbbf24', fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', marginBottom: '3px' }}>
+                          🏆 3rd Place Reward
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#ccc' }}>
+                          📅 {originSlot.date ? formatNumericDate(originSlot.date) : ''} {originSlot.time_label ? `• ${originSlot.time_label}` : ''}
+                        </div>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.78rem', color: '#888' }}>
+                        👤 Manual Admin Issue
+                      </span>
+                    )}
+                  </td>
+
+                  <td>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <code style={{ background: '#1a1a1a', border: '1px solid #333', padding: '0.2rem 0.55rem', borderRadius: '5px', letterSpacing: '0.08em', color: '#fbbf24', fontWeight: 700, fontSize: '0.8rem' }}>
+                        {c.code || '—'}
+                      </code>
+                      {c.code && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(c.code)}
+                          title="Copy coupon code"
+                          style={{ background: 'transparent', border: 'none', color: copiedCode === c.code ? '#4ade80' : '#888', cursor: 'pointer', fontSize: '0.75rem', padding: '2px' }}
+                        >
+                          {copiedCode === c.code ? '✓ Copied' : '📋'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+
+                  <td>
+                    {isUnused ? (
+                      <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.16)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)', fontWeight: 800 }}>
+                        🟢 Unused / Available
+                      </span>
+                    ) : (
+                      <span className="badge" style={{ background: 'rgba(156, 163, 175, 0.16)', color: '#9ca3af', border: '1px solid rgba(156, 163, 175, 0.35)', fontWeight: 700 }}>
+                        ⚪ Redeemed / Used
+                      </span>
+                    )}
+                  </td>
+
+                  <td>
+                    {isUnused ? (
+                      <div style={{ fontSize: '0.78rem', color: '#4ade80', fontWeight: 600 }}>
+                        ⏳ Not used yet (Can be used 1 time)
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 700 }}>
+                          ✅ Used on {c.used_at ? formatNumericDate(c.used_at) : '—'}
+                        </div>
+                        {usedSlot && (
+                          <div style={{ fontSize: '0.72rem', color: '#aaa', marginTop: '2px' }}>
+                            Redeemed for: 📅 {formatNumericDate(usedSlot.date)} • {usedSlot.time_label}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </td>
+
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                    {formatNumericDate(c.issued_at)}
+                  </td>
+                </tr>
+              )
+            })}
+
+            {list.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2.5rem' }}>
+                  No coupons issued yet. Once a slot is marked completed, a free coupon will automatically be generated for the 3rd place team.
                 </td>
               </tr>
-            ))}
-            {list.length === 0 && (
-              <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No coupons issued yet</td></tr>
             )}
           </tbody>
         </table>

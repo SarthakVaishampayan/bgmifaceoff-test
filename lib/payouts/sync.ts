@@ -171,9 +171,53 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       await admin.from('payouts').insert(payoutsToInsert)
     }
 
+    // 9. For each completed slot, issue a free slot coupon to the 3rd position team if not already issued
+    const { data: existingSlotCoupons } = await admin
+      .from('coupons')
+      .select('coupon_id, issued_from_slot, team_id')
+      .in('issued_from_slot', slotIds)
+
+    const issuedSlotIds = new Set(
+      (existingSlotCoupons || [])
+        .map(c => c.issued_from_slot)
+        .filter(Boolean)
+    )
+
+    const couponsToInsert: any[] = []
+
+    for (const slot of completedSlots) {
+      const slotId = slot.slot_id
+      if (issuedSlotIds.has(slotId)) continue
+
+      if (slotMatchesMap.has(slotId) && slotMatchesMap.get(slotId)!.size > 0) {
+        const teamsMap = slotMatchesMap.get(slotId)!
+        const sorted = Array.from(teamsMap.values()).sort((a, b) => {
+          if (b.total_points !== a.total_points) return b.total_points - a.total_points
+          return b.total_kills - a.total_kills
+        })
+
+        const thirdTeam = sorted[2]
+        if (thirdTeam && thirdTeam.team_id) {
+          const code = `FREE3RD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
+          couponsToInsert.push({
+            team_id: thirdTeam.team_id,
+            type: 'free_slot',
+            status: 'unused',
+            issued_from_slot: slotId,
+            code,
+          })
+          issuedSlotIds.add(slotId)
+        }
+      }
+    }
+
+    if (couponsToInsert.length > 0) {
+      await admin.from('coupons').insert(couponsToInsert)
+    }
+
     return payoutsToInsert
   } catch (err) {
-    console.error('Error syncing pending payouts:', err)
+    console.error('Error syncing pending payouts & coupons:', err)
     return []
   }
 }

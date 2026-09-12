@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Calendar, TrendingUp, FlaskConical, Trophy, MessageCircle, ChevronRight, Award } from 'lucide-react'
+import { Calendar, TrendingUp, FlaskConical, Trophy, MessageCircle, Award } from 'lucide-react'
 import { formatShortDate } from '@/lib/utils/formatDate'
 import { createClient } from '@/lib/supabase/client'
 import styles from './page.module.css'
@@ -362,15 +362,6 @@ export default function DashboardClient({
                           </div>
 
                           <div className={styles.perfSlotRight}>
-                            {isTop5 ? (
-                              <span className={styles.badgeTop5Counting}>
-                                ⭐ TOP 5 · COUNTING
-                              </span>
-                            ) : (
-                              <span className={styles.badgeDropped}>
-                                NOT COUNTED
-                              </span>
-                            )}
                             <div className={styles.perfPointsVal}>
                               {slot.totalPoints} <span className={styles.perfPointsLabel}>PTS</span>
                             </div>
@@ -400,12 +391,6 @@ export default function DashboardClient({
                           <span className={styles.perfTotalKills}>
                             🎯 Total Eliminations: <strong>{slot.totalKills}</strong>
                           </span>
-                          <Link
-                            href={`/leaderboard?slot_id=${slot.slotId}&tab=slot`}
-                            className={styles.perfViewSlotBtn}
-                          >
-                            View Slot Points <ChevronRight size={12} />
-                          </Link>
                         </div>
                       </div>
                     )

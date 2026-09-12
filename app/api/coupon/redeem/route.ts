@@ -70,6 +70,9 @@ export async function POST(request: Request) {
     if (couponErr || !coupon) {
       return NextResponse.json({ error: 'Coupon not found' }, { status: 404 })
     }
+    if (coupon.team_id !== team_id) {
+      return NextResponse.json({ error: 'This coupon was not issued to your team' }, { status: 403 })
+    }
     if (coupon.status === 'used') {
       return NextResponse.json({ error: 'This coupon has already been used' }, { status: 409 })
     }
@@ -97,7 +100,7 @@ export async function POST(request: Request) {
     // Check no duplicate booking
     const { data: existingBooking } = await admin
       .from('bookings')
-      .select('booking_id, payment_status')
+      .select('booking_id, payment_status, room_slot_number')
       .eq('team_id', team_id)
       .eq('slot_id', slot_id)
       .maybeSingle()
@@ -106,31 +109,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Your team has already booked this slot.' }, { status: 409 })
     }
 
-    // Mark coupon as used
-    const { error: couponUpdateErr } = await admin
+    // Atomically mark coupon as used (guarantees strictly 1 single-use even under concurrent clicks)
+    const { data: updatedCoupon, error: couponUpdateErr } = await admin
       .from('coupons')
       .update({ status: 'used', used_at: new Date().toISOString() })
       .eq('coupon_id', coupon_id)
       .eq('status', 'unused')
+      .select('coupon_id')
+      .maybeSingle()
 
-    if (couponUpdateErr) {
-      return NextResponse.json({ error: 'Coupon could not be redeemed.' }, { status: 409 })
+    if (couponUpdateErr || !updatedCoupon) {
+      return NextResponse.json({ error: 'This coupon has already been redeemed or is no longer valid.' }, { status: 409 })
     }
+
+    // Compute room_slot_number
+    const { count: otherPaidCount } = await admin
+      .from('bookings')
+      .select('booking_id', { count: 'exact', head: true })
+      .eq('slot_id', slot_id)
+      .eq('payment_status', 'paid')
+      .neq('team_id', team_id)
+
+    const room_slot_number = existingBooking?.room_slot_number || (5 + (otherPaidCount || 0))
 
     // Create or update booking as paid
     let bookingId: string
 
     if (existingBooking) {
-      await admin
+      const { data: updatedBooking, error: bookUpdateErr } = await admin
         .from('bookings')
         .update({
           payment_status: 'paid',
           amount_paid: 0,
           coupon_used: true,
           coupon_id,
+          room_slot_number,
         })
         .eq('booking_id', existingBooking.booking_id)
-      bookingId = existingBooking.booking_id
+        .select('booking_id')
+        .single()
+
+      if (bookUpdateErr) {
+        // Rollback coupon if booking fails
+        await admin.from('coupons').update({ status: 'unused', used_at: null }).eq('coupon_id', coupon_id)
+        return NextResponse.json({ error: bookUpdateErr.message }, { status: 500 })
+      }
+      bookingId = updatedBooking.booking_id
     } else {
       const { data: newBooking, error: bookErr } = await admin
         .from('bookings')
@@ -141,16 +165,29 @@ export async function POST(request: Request) {
           amount_paid: 0,
           coupon_used: true,
           coupon_id,
+          room_slot_number,
         })
         .select('booking_id')
         .single()
 
       if (bookErr) {
+        // Rollback coupon if booking fails
         await admin.from('coupons').update({ status: 'unused', used_at: null }).eq('coupon_id', coupon_id)
         return NextResponse.json({ error: bookErr.message }, { status: 500 })
       }
       bookingId = newBooking.booking_id
     }
+
+    // Increment slot teams_booked_count
+    const newCount = (slot.teams_booked_count || 0) + 1
+    const isFull = newCount >= slot.capacity
+    await admin
+      .from('slots')
+      .update({
+        teams_booked_count: newCount,
+        status: isFull ? 'full' : slot.status,
+      })
+      .eq('slot_id', slot_id)
 
     let whatsappLink = slot.whatsapp_link || null
     if (!whatsappLink) {

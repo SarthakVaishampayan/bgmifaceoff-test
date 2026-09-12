@@ -439,7 +439,7 @@
   transition: all 0.2s ease;
 }
 
-/* Top 5 Qualifying Slots: Gradient Yellow Background */
+/* Top 5 Qualifying Slots: Gradient Yellow Highlight */
 .perfTop5Card {
   background: linear-gradient(135deg, rgba(250, 204, 21, 0.16) 0%, rgba(202, 138, 4, 0.08) 50%, rgba(20, 20, 20, 0.95) 100%);
   border: 1px solid rgba(250, 204, 21, 0.45);
@@ -499,6 +499,10 @@
   background: #242424;
   color: #777;
   font-weight: 700;
+}
+
+.perfTop5Card .perfMatchChip {
+  border-color: rgba(250, 204, 21, 0.2);
 }
 
 .perfSlotDate {

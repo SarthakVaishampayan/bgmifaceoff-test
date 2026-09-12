@@ -50,7 +50,7 @@ export default async function AdminPage({
     admin.from('teams').select('team_id, team_name, invite_code').order('team_name'),
     admin.from('payouts').select('*, teams(team_name), slots(date, time_label)').order('created_at', { ascending: false }),
     admin.from('bookings').select('*, teams(team_name), slots(date, time_label)').eq('payment_status', 'paid').order('created_at', { ascending: false }),
-    admin.from('coupons').select('*, teams(team_name)').order('issued_at', { ascending: false }),
+    admin.from('coupons').select('*, teams(team_name), slots!issued_from_slot(date, time_label), bookings(slot_id, created_at, slots(date, time_label))').order('issued_at', { ascending: false }),
     admin.from('config').select('key, value'),
   ])
 
