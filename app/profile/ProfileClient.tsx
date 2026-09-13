@@ -200,6 +200,14 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
                 <h2 className={styles.cardTitle}>TEAM IDENTITY</h2>
               </div>
               <div className={styles.cardBody}>
+                {/* Important Notice Alert Box */}
+                <div className={styles.upiDisclaimer} style={{ marginBottom: '1.25rem' }}>
+                  <AlertCircle size={18} className={styles.upiDisclaimerIcon} />
+                  <div className={styles.upiDisclaimerText}>
+                    <strong>Important Notice:</strong> You can only change your team name <strong>once</strong> after signing up. Once changed, your team name is permanently locked for tournament integrity and official standings.
+                  </div>
+                </div>
+
                 <div className={styles.sectionRow}>
                   <div className={styles.labelCol}>
                     <span className={styles.labelTitle}>Team Name</span>
@@ -210,19 +218,25 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
                     <div className={styles.valueRow}>
                       <span className={styles.displayTeamName}>{currentTeamName}</span>
                       {!hasChangedName ? (
-                        <button
-                          onClick={() => {
-                            setIsEditingName(true)
-                            setRenameError('')
-                            setRenameSuccessMsg('')
-                          }}
-                          className={styles.editBtn}
-                        >
-                          <Edit3 size={13} /> Edit Name
-                        </button>
+                        isCaptain ? (
+                          <button
+                            onClick={() => {
+                              setIsEditingName(true)
+                              setRenameError('')
+                              setRenameSuccessMsg('')
+                            }}
+                            className={styles.editBtn}
+                          >
+                            <Edit3 size={13} /> Edit Name (1-Time Only)
+                          </button>
+                        ) : (
+                          <span className={styles.lockedBadge}>
+                            <Lock size={12} /> Only captain can edit
+                          </span>
+                        )
                       ) : (
-                        <span className={styles.lockedBadge}>
-                          <Lock size={12} /> Locked (1-time change used)
+                        <span className={styles.lockedBadge} style={{ color: '#fbbf24', background: 'rgba(251, 191, 36, 0.08)', border: '1px solid rgba(251, 191, 36, 0.25)' }}>
+                          <Lock size={12} /> Permanently Locked (1-time change used)
                         </span>
                       )}
                     </div>
@@ -242,7 +256,7 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
                       </div>
                       <div className={styles.formActions}>
                         <button type="submit" disabled={renameLoading} className={styles.saveBtn}>
-                          {renameLoading ? 'Saving...' : 'Save Name'}
+                          {renameLoading ? 'Saving...' : 'Save Name (Permanent)'}
                         </button>
                         <button
                           type="button"
@@ -256,7 +270,7 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
                         </button>
                       </div>
                       <div className={styles.formNote}>
-                        <AlertCircle size={12} /> Team names can only be updated once for tournament integrity.
+                        <AlertCircle size={12} /> <strong>Warning:</strong> You can only change your team name once. Once saved, this cannot be undone.
                       </div>
                     </form>
                   )}

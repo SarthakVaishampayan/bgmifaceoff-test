@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // 1. Get user profile
     let { data: userProfile } = await admin
       .from('users')
-      .select('team_id')
+      .select('team_id, role')
       .eq('user_id', user.id)
       .maybeSingle()
 
@@ -100,12 +100,24 @@ export async function POST(request: Request) {
     // 4. User has an existing team record -> Check lock & update name
     const { data: team, error: teamErr } = await admin
       .from('teams')
-      .select('team_id, team_name, name_changed')
+      .select('team_id, team_name, name_changed, captain_user_id')
       .eq('team_id', teamId)
       .maybeSingle()
 
     if (teamErr || !team) {
       return NextResponse.json({ error: 'Team record not found.' }, { status: 404 })
+    }
+
+    // Constraint: Team name can only be changed once after signing up
+    if (team.name_changed) {
+      return NextResponse.json({
+        error: 'Team name can only be changed once after signing up. Your team name is locked for tournament integrity and cannot be modified again.'
+      }, { status: 403 })
+    }
+
+    // Only captain can rename team
+    if (team.captain_user_id && team.captain_user_id !== user.id && userProfile?.role !== 'admin') {
+      return NextResponse.json({ error: 'Only the team captain can change the team name.' }, { status: 403 })
     }
 
     if (trimmedName.toLowerCase() === team.team_name.toLowerCase()) {
