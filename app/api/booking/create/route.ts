@@ -5,7 +5,7 @@ import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
 // POST /api/booking/create
 export async function POST(request: Request) {
   try {
-    const { slot_id, team_name, phone } = await request.json()
+    const { slot_id, team_name, phone, test_mode } = await request.json()
 
     if (!slot_id) {
       return NextResponse.json({ error: 'slot_id is required' }, { status: 400 })
@@ -142,8 +142,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // DIRECT INSTANT BOOKING MODE (Testing Mode requested by user: bypasses Razorpay popup for testing leaderboards & post-booking flows)
-    const isTestMode = true
+    // Check if Razorpay keys are configured on the server
+    const hasRazorpayKeys = Boolean(
+      (process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) &&
+      process.env.RAZORPAY_KEY_SECRET
+    )
+
+    // DIRECT INSTANT BOOKING MODE:
+    // Only enabled for flagged test accounts (with test_mode active) or if Razorpay keys are not yet configured.
+    const isTestMode = (isTestAccount && test_mode !== false) || !hasRazorpayKeys
     if (isTestMode) {
       // Calculate FCFS room slot number starting from Slot 5 for this specific slot
       const { count: otherPaidCount } = await admin

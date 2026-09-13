@@ -45,15 +45,62 @@ export async function POST(request: Request) {
 
   const supabase = await createAdminClient()
 
+  // Fetch booking
+  const { data: booking, error: fetchErr } = await supabase
+    .from('bookings')
+    .select('booking_id, team_id, slot_id, payment_status, slots(slot_id, capacity, teams_booked_count, status, entry_fee)')
+    .eq('booking_id', bookingId)
+    .single()
+
+  if (fetchErr || !booking) {
+    console.error('Booking not found in webhook:', bookingId)
+    return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+  }
+
+  // If already marked as paid (e.g. by verify endpoint), succeed idempotently
+  if (booking.payment_status === 'paid') {
+    return NextResponse.json({ success: true, already_paid: true })
+  }
+
+  const slot = booking.slots as any
+
+  // Calculate FCFS room slot number starting from Slot 5
+  const { count: otherPaidCount } = await supabase
+    .from('bookings')
+    .select('booking_id', { count: 'exact', head: true })
+    .eq('slot_id', booking.slot_id)
+    .eq('payment_status', 'paid')
+    .neq('team_id', booking.team_id)
+
+  const room_slot_number = 5 + (otherPaidCount || 0)
+
   // Update booking to paid
   const { error } = await supabase
     .from('bookings')
-    .update({ payment_status: 'paid', payment_id: paymentId })
+    .update({
+      payment_status: 'paid',
+      payment_id: paymentId,
+      amount_paid: slot?.entry_fee ?? 50,
+      room_slot_number,
+    })
     .eq('booking_id', bookingId)
 
   if (error) {
     console.error('Failed to update booking from webhook:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Increment slot count
+  if (slot) {
+    const newCount = (slot.teams_booked_count || 0) + 1
+    const isFull = newCount >= (slot.capacity || 20)
+    await supabase
+      .from('slots')
+      .update({
+        teams_booked_count: newCount,
+        status: isFull ? 'full' : slot.status,
+      })
+      .eq('slot_id', booking.slot_id)
   }
 
   return NextResponse.json({ success: true })

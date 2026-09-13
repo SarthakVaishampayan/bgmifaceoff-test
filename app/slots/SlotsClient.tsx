@@ -210,6 +210,7 @@ function loadRazorpayScript(): Promise<boolean> {
           body: JSON.stringify({
             slot_id: slot.slot_id,
             team_name: userTeam?.team_name || 'My Team',
+            test_mode: isTestAccount && testModeEnabled,
           }),
         })
         let createData: any = {}
@@ -308,22 +309,28 @@ function loadRazorpayScript(): Promise<boolean> {
           rzpOpened = false
         }
 
-        // Fallback confirmation if Razorpay is not configured or fails to open
+        // Fallback confirmation only if test mode is active
         if (!rzpOpened) {
-          const confirmRes = await fetch('/api/booking/confirm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              booking_id: createData.booking_id,
-              razorpay_payment_id: `pay_sim_${Date.now()}`,
-              razorpay_order_id: `order_sim_${Date.now()}`,
-              razorpay_signature: 'simulated_signature',
-            }),
-          })
-          const confirmData = await confirmRes.json()
+          if (createData.is_test_booking || (isTestAccount && testModeEnabled)) {
+            const confirmRes = await fetch('/api/booking/confirm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                booking_id: createData.booking_id,
+                razorpay_payment_id: `pay_sim_${Date.now()}`,
+                razorpay_order_id: `order_sim_${Date.now()}`,
+                razorpay_signature: 'simulated_signature',
+              }),
+            })
+            const confirmData = await confirmRes.json()
 
-          if (!confirmRes.ok) {
-            alert(confirmData.error || 'Registration confirmation failed.')
+            if (!confirmRes.ok) {
+              alert(confirmData.error || 'Registration confirmation failed.')
+              setBookingSlotId(null)
+              return
+            }
+          } else {
+            alert('Unable to launch Razorpay payment. Please disable pop-up blockers, check your internet connection, or try again.')
             setBookingSlotId(null)
             return
           }

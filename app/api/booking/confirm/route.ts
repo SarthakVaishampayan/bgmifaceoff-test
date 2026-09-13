@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     // Fetch the booking with slot info
     const { data: booking, error: bookErr } = await admin
       .from('bookings')
-      .select('booking_id, team_id, slot_id, payment_status, slots(slot_id, capacity, teams_booked_count, status, whatsapp_link, entry_fee, date, time_label)')
+      .select('booking_id, team_id, slot_id, payment_status, is_test_booking, slots(slot_id, capacity, teams_booked_count, status, whatsapp_link, entry_fee, date, time_label)')
       .eq('booking_id', booking_id)
       .single()
 
@@ -41,6 +41,31 @@ export async function POST(request: Request) {
       // Already confirmed — idempotent
       const slot = booking.slots as any
       return NextResponse.json({ success: true, already_paid: true, whatsapp_link: slot?.whatsapp_link || null })
+    }
+
+    // Security Guard: Check whether simulated confirmation is permitted
+    const { data: userProfile } = await admin
+      .from('users')
+      .select('role, is_test_account')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    const hasRazorpayKeys = Boolean(
+      (process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) &&
+      process.env.RAZORPAY_KEY_SECRET
+    )
+
+    const isTestAllowed = Boolean(
+      booking.is_test_booking ||
+      userProfile?.role === 'admin' ||
+      userProfile?.is_test_account ||
+      !hasRazorpayKeys
+    )
+
+    if (!isTestAllowed) {
+      return NextResponse.json({
+        error: 'Online payment required. Please complete registration via Razorpay.'
+      }, { status: 403 })
     }
 
     const slot = booking.slots as any
