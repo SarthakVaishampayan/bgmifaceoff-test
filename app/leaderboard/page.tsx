@@ -20,6 +20,7 @@ export default async function LeaderboardPage() {
     slotsResult,
     testTeamsResult,
     bookingsResult,
+    publishedSlotsResult,
   ] = await Promise.all([
     // Overall leaderboard
     supabase
@@ -53,9 +54,25 @@ export default async function LeaderboardPage() {
       .select('booking_id, team_id, slot_id, room_slot_number, is_test_booking, created_at, teams(team_name)')
       .eq('payment_status', 'paid')
       .order('created_at', { ascending: true }),
+
+    // Published slots (pushed to points table via "Update The Table")
+    supabase
+      .from('config')
+      .select('value')
+      .eq('key', 'scores_published_slots')
+      .maybeSingle(),
   ])
 
   const testTeamIds = new Set(testTeamsResult.data?.map(t => t.team_id) || [])
+
+  // Parse published slot IDs
+  let publishedSlotIds = new Set<string>()
+  if (publishedSlotsResult?.data?.value) {
+    try {
+      const parsed = JSON.parse(publishedSlotsResult.data.value)
+      if (Array.isArray(parsed)) publishedSlotIds = new Set(parsed)
+    } catch {}
+  }
 
   // Handle room_slot_number column missing gracefully
   let filteredBookings: any[] = bookingsResult.data || []
@@ -68,9 +85,9 @@ export default async function LeaderboardPage() {
     filteredBookings = fallback.data || []
   }
 
-  // CRITICAL: Only matches from slots with status = 'completed' are published and counted
+  // CRITICAL: Only matches from slots pushed to the points table via "Update The Table" are published and counted
   const allMatchesData = ((matchesResult.data || []) as any[])
-  const completedMatches = allMatchesData.filter(m => !testTeamIds.has(m.team_id) && m.slots?.status === 'completed')
+  const completedMatches = allMatchesData.filter(m => !testTeamIds.has(m.team_id) && publishedSlotIds.has(m.slot_id))
 
   // Compute team performance from completed matches only
   const teamSlotMap: Record<string, Record<string, { total_points: number; kills: number; matches_count: number }>> = {}

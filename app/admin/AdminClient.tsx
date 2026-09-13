@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
@@ -29,6 +29,23 @@ export function sortSlotsDescending(slotsList: any[]): any[] {
   })
 }
 
+export function getTodayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function getTomorrowStr() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function getDayAfterStr() {
+  const d = new Date()
+  d.setDate(d.getDate() + 2)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 interface Props {
   userRole?: string
   slots: any[]
@@ -48,6 +65,10 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   const [slots, setSlots] = useState(initialSlots)
   const [payouts, setPayouts] = useState(initialPayouts)
   const [users, setUsers] = useState(usersList)
+  const todayStr = getTodayStr()
+  const tomorrowStr = getTomorrowStr()
+  const dayAfterStr = getDayAfterStr()
+  const [selectedDate, setSelectedDate] = useState(tomorrowStr)
   const [adminEmail, setAdminEmail] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -267,8 +288,28 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
       {/* Main content */}
       <main className={styles.adminMain}>
         <div className={styles.adminContent}>
-          {tab === 'scores' && <ScoreEntryTab slots={slots} teams={teams} supabase={supabase} onSyncPayouts={refreshPayouts} />}
-          {isSuperAdmin && tab === 'slots' && <SlotsTab slots={slots} setSlots={setSlots} supabase={supabase} teams={teams} onSyncPayouts={refreshPayouts} />}
+          {tab === 'scores' && (
+            <ScoreEntryTab
+              slots={slots}
+              teams={teams}
+              supabase={supabase}
+              onSyncPayouts={refreshPayouts}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              config={config}
+            />
+          )}
+          {isSuperAdmin && tab === 'slots' && (
+            <SlotsTab
+              slots={slots}
+              setSlots={setSlots}
+              supabase={supabase}
+              teams={teams}
+              onSyncPayouts={refreshPayouts}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+            />
+          )}
           {tab === 'upi_info' && (
             <UpiInfoTab
               slots={slots}
@@ -300,15 +341,91 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
 }
 
 // ── SCORE ENTRY TAB ──────────────────────────────────────────────
-function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
-  const sortedSlots = useMemo(() => {
-    return sortSlotsDescending(slots)
-  }, [slots])
+function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, setSelectedDate, config }: any) {
+  const todayStr = getTodayStr()
+  const tomorrowStr = getTomorrowStr()
+  const dayAfterStr = getDayAfterStr()
+  const [showAllDates, setShowAllDates] = useState(false)
 
-  const [selectedSlot, setSelectedSlot] = useState(() => {
-    const list = sortSlotsDescending(slots)
-    return list.length > 0 ? list[0].slot_id : ''
-  })
+  // Track published slots (pushed to leaderboard via "Update The Table")
+  const initialPublished = useMemo(() => {
+    try {
+      if (config?.scores_published_slots) {
+        const arr = JSON.parse(config.scores_published_slots)
+        if (Array.isArray(arr)) return arr
+      }
+    } catch {}
+    return []
+  }, [config])
+
+  const [publishedSlotIds, setPublishedSlotIds] = useState<string[]>(initialPublished)
+  const [isPublishingTable, setIsPublishingTable] = useState(false)
+  const [publishMsg, setPublishMsg] = useState('')
+
+  // Sync published slots list on mount
+  useEffect(() => {
+    supabase
+      .from('config')
+      .select('value')
+      .eq('key', 'scores_published_slots')
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data?.value) {
+          try {
+            const arr = JSON.parse(data.value)
+            if (Array.isArray(arr)) setPublishedSlotIds(arr)
+          } catch {}
+        }
+      })
+  }, [supabase])
+
+  async function handleUpdateTable() {
+    if (!selectedSlot) return
+    setIsPublishingTable(true)
+    setPublishMsg('')
+    try {
+      const res = await fetch('/api/admin/slots/publish-scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot_id: selectedSlot }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update table')
+      }
+      setPublishedSlotIds(prev => Array.from(new Set([...prev, selectedSlot])))
+      setPublishMsg('✅ Points table updated! Scores for this slot are now live on the leaderboard.')
+    } catch (err: any) {
+      setPublishMsg('❌ Error updating table: ' + err.message)
+    } finally {
+      setIsPublishingTable(false)
+    }
+  }
+
+  // Only slots that are CLOSED (full, manually closed, marked completed, or 10m before start if registered teams exist)
+  const isSlotClosed = useCallback((s: any) => {
+    if (!s) return false
+    // 1. Manually completed or closed by admin
+    if (s.status === 'completed' || s.status === 'closed') return true
+    // 2. Full capacity reached
+    if (s.status === 'full' || (s.capacity > 0 && s.teams_booked_count >= s.capacity)) return true
+    // 3. For the slot date: 10-minute auto cutoff before match start time (only if slot has bookings)
+    if ((s.teams_booked_count || 0) > 0 && isSlotPastOrEnded(s.date, s.time_label, s.status)) {
+      return true
+    }
+    return false
+  }, [])
+
+  const sortedSlots = useMemo(() => {
+    const closedSlots = (slots || []).filter((s: any) => {
+      if (!isSlotClosed(s)) return false
+      if (showAllDates) return true
+      return s.date === selectedDate
+    })
+    return sortSlotsDescending(closedSlots)
+  }, [slots, isSlotClosed, selectedDate, showAllDates])
+
+  const [selectedSlot, setSelectedSlot] = useState('')
   const [selectedTeam, setSelectedTeam] = useState('')
   const [matchNum, setMatchNum] = useState(1)
   const [position, setPosition] = useState('')
@@ -320,12 +437,21 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
   const [loadingMatches, setLoadingMatches] = useState(false)
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
 
-  // Automatically load data for the latest slot on initial render
+  // Automatically load data for the latest closed slot on initial render or when sortedSlots update
   useEffect(() => {
-    if (selectedSlot) {
-      loadSlotData(selectedSlot)
+    if (sortedSlots.length > 0) {
+      if (!selectedSlot || !sortedSlots.some((s: any) => s.slot_id === selectedSlot)) {
+        const nextId = sortedSlots[0].slot_id
+        setSelectedSlot(nextId)
+        loadSlotData(nextId)
+      } else {
+        loadSlotData(selectedSlot)
+      }
+    } else {
+      setSelectedSlot('')
+      loadSlotData('')
     }
-  }, [])
+  }, [sortedSlots])
 
   // Live Mathematical Auto-Calculations
   const posNum = parseInt(position)
@@ -578,8 +704,32 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
           <h2 className={styles.tabTitle}>Points Table Score Entry</h2>
         </div>
 
-        {/* 💾 Instant Backup & Restore Actions */}
+        {/* 💾 Actions: Update The Table (left of Backup/Restore), Export, Restore */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{
+              fontSize: '0.78rem',
+              background: '#22c55e',
+              borderColor: '#22c55e',
+              color: '#111111',
+              fontWeight: 800,
+              padding: '0.45rem 0.85rem',
+              borderRadius: '6px',
+              cursor: !selectedSlot || sortedSlots.length === 0 || isPublishingTable ? 'not-allowed' : 'pointer',
+              opacity: !selectedSlot || sortedSlots.length === 0 || isPublishingTable ? 0.5 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              boxShadow: '0 0 10px rgba(34, 197, 94, 0.25)',
+            }}
+            onClick={handleUpdateTable}
+            disabled={!selectedSlot || sortedSlots.length === 0 || isPublishingTable}
+          >
+            {isPublishingTable ? '⏳ Updating Table...' : '📊 Update The Table'}
+          </button>
+
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -600,6 +750,23 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
         </div>
       </div>
 
+      {publishMsg && (
+        <div
+          style={{
+            padding: '0.5rem 0.85rem',
+            borderRadius: '6px',
+            marginBottom: '0.75rem',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            background: publishMsg.includes('❌') ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+            border: publishMsg.includes('❌') ? '1px solid #ef4444' : '1px solid #22c55e',
+            color: publishMsg.includes('❌') ? '#ef4444' : '#4ade80',
+          }}
+        >
+          {publishMsg}
+        </div>
+      )}
+
       {backupMsg && (
         <div
           style={{
@@ -617,6 +784,126 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
         </div>
       )}
 
+      {/* ── DATE SELECTOR BAR ── */}
+      <div
+        style={{
+          background: '#141414',
+          border: '1px solid #282828',
+          borderRadius: '12px',
+          padding: '0.85rem 1.15rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+          <span style={{ color: '#aaaaaa', fontSize: '0.82rem', fontWeight: 700 }}>SELECT DATE:</span>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{
+              background: !showAllDates && selectedDate === todayStr ? '#fbbf24' : '#1e1e1e',
+              color: !showAllDates && selectedDate === todayStr ? '#111111' : '#ffffff',
+              fontWeight: 800,
+              borderColor: !showAllDates && selectedDate === todayStr ? '#fbbf24' : '#333333',
+            }}
+            onClick={() => {
+              setShowAllDates(false)
+              setSelectedDate(todayStr)
+            }}
+          >
+            Today ({formatMonthDay(todayStr)})
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{
+              background: !showAllDates && selectedDate === tomorrowStr ? '#fbbf24' : '#1e1e1e',
+              color: !showAllDates && selectedDate === tomorrowStr ? '#111111' : '#ffffff',
+              fontWeight: 800,
+              borderColor: !showAllDates && selectedDate === tomorrowStr ? '#fbbf24' : '#333333',
+            }}
+            onClick={() => {
+              setShowAllDates(false)
+              setSelectedDate(tomorrowStr)
+            }}
+          >
+            Tomorrow ({formatMonthDay(tomorrowStr)})
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{
+              background: !showAllDates && selectedDate === dayAfterStr ? '#fbbf24' : '#1e1e1e',
+              color: !showAllDates && selectedDate === dayAfterStr ? '#111111' : '#ffffff',
+              fontWeight: 800,
+              borderColor: !showAllDates && selectedDate === dayAfterStr ? '#fbbf24' : '#333333',
+            }}
+            onClick={() => {
+              setShowAllDates(false)
+              setSelectedDate(dayAfterStr)
+            }}
+          >
+            Day After ({formatMonthDay(dayAfterStr)})
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{
+              background: showAllDates ? '#fbbf24' : '#1e1e1e',
+              color: showAllDates ? '#111111' : '#ffffff',
+              fontWeight: 800,
+              borderColor: showAllDates ? '#fbbf24' : '#333333',
+            }}
+            onClick={() => setShowAllDates(true)}
+          >
+            All Dates (History)
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <label style={{ fontSize: '0.78rem', color: '#888888', fontWeight: 600 }}>Custom Date:</label>
+          <input
+            type="date"
+            className="form-input"
+            style={{ padding: '0.35rem 0.6rem', fontSize: '0.82rem', width: 'auto' }}
+            value={selectedDate}
+            onChange={e => {
+              setShowAllDates(false)
+              setSelectedDate(e.target.value)
+            }}
+          />
+        </div>
+      </div>
+
+      {sortedSlots.length === 0 && (
+        <div
+          style={{
+            background: 'rgba(251, 191, 36, 0.05)',
+            border: '1px dashed rgba(251, 191, 36, 0.3)',
+            borderRadius: '10px',
+            padding: '1.25rem',
+            textAlign: 'center',
+            marginBottom: '1rem',
+          }}
+        >
+          <div style={{ fontSize: '1.4rem', marginBottom: '0.35rem' }}>🔍</div>
+          <div style={{ fontWeight: 700, color: '#f3f4f6', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+            No closed or completed slots found for {showAllDates ? 'all history' : formatFullLongDate(selectedDate)}
+          </div>
+          <div style={{ color: '#888888', fontSize: '0.82rem' }}>
+            None of the slots on this date are currently closed or completed. Slots only appear here once closed (via 10m auto-cutoff, full capacity, manual close, or marked completed).
+          </div>
+        </div>
+      )}
+
       <div className={styles.scoreEntryLayout}>
         {/* Main Entry Form */}
         <div className={styles.scoreFormCard}>
@@ -624,7 +911,20 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
             {/* Top Row: Slot & Team Selection */}
             <div className={styles.scoreFormTopRow}>
               <div>
-                <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Select Slot</label>
+                <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                  <span>Select Slot</span>
+                  {selectedSlot && (
+                    publishedSlotIds.includes(selectedSlot) ? (
+                      <span style={{ color: '#4ade80', fontWeight: 700, fontSize: '0.72rem' }}>
+                        ● Live on Points Table
+                      </span>
+                    ) : (
+                      <span style={{ color: '#fbbf24', fontWeight: 600, fontSize: '0.72rem' }}>
+                        ○ Draft Scores (Click &quot;Update The Table&quot; to publish)
+                      </span>
+                    )
+                  )}
+                </label>
                 <select
                   className="form-input"
                   style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
@@ -634,14 +934,22 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
                     setSelectedTeam('')
                     loadSlotData(e.target.value)
                   }}
+                  disabled={sortedSlots.length === 0}
                   required
                 >
-                  <option value="">Select slot...</option>
-                  {sortedSlots.map((s: any) => (
-                    <option key={s.slot_id} value={s.slot_id}>
-                      {formatShortDate(s.date)} • {s.time_label}
-                    </option>
-                  ))}
+                  <option value="">
+                    {sortedSlots.length === 0
+                      ? `No closed/completed slots for ${showAllDates ? 'any date' : formatMonthDay(selectedDate)}`
+                      : 'Select slot...'}
+                  </option>
+                  {sortedSlots.map((s: any) => {
+                    const isLive = publishedSlotIds.includes(s.slot_id)
+                    return (
+                      <option key={s.slot_id} value={s.slot_id}>
+                        {formatShortDate(s.date)} • {s.time_label} {isLive ? '📊 (Live on Table)' : '📝 (Draft)'} {s.status === 'completed' ? '🟣 (Done)' : '🔒 (Closed)'}
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
 
@@ -794,7 +1102,7 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts }: any) {
                 type="submit"
                 className="btn btn-primary"
                 style={{ flex: 1, padding: '0.55rem', fontWeight: 800, fontSize: '0.85rem' }}
-                disabled={saving}
+                disabled={saving || !selectedSlot || sortedSlots.length === 0}
               >
                 {saving ? 'Saving Score...' : editingMatchId ? 'Update Match Score →' : 'Save Match Score →'}
               </button>
@@ -966,23 +1274,6 @@ const FIXED_DAILY_SLOTS = [
   { id: 6, name: 'Slot 6', defaultLabel: '11:00 PM – 1:00 AM', shortTime: '11:00 PM' },
 ]
 
-function getTodayStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function getTomorrowStr() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function getDayAfterStr() {
-  const d = new Date()
-  d.setDate(d.getDate() + 2)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 function parseMatchTimeFromLabel(timeLabelStr: string, matchNum: number): string {
   if (!timeLabelStr) return ''
   const regex = new RegExp(`(?:match\\s*${matchNum}|m${matchNum})\\D*(\\d{1,2}:?\\d{2}?\\s*(?:AM|PM))`, 'i')
@@ -1017,12 +1308,11 @@ function normalizeStartTime(timeStr: string): string {
 }
 
 // ── SLOTS MANAGEMENT TAB ──────────────────────────────────────────
-function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
+function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDate, setSelectedDate }: any) {
   const todayStr = getTodayStr()
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
 
-  const [selectedDate, setSelectedDate] = useState(tomorrowStr)
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'not_open' | 'completed'>('all')
   const [msg, setMsg] = useState('')
   const [loadingPresetId, setLoadingPresetId] = useState<number | null>(null)
@@ -1357,7 +1647,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
       if (data && setSlots) {
         setSlots((prev: any[]) => [...prev, data])
       }
-      setMsg(`✅ ${preset.name} (${selectedDate}) marked as COMPLETED! Results published to leaderboards & UPI info.`)
+      setMsg(`✅ ${preset.name} (${selectedDate}) marked as DONE! Payout slips (top 2) & 3rd-place coupon generated.`)
       if (onSyncPayouts) onSyncPayouts()
     } else {
       const nextStatus = existing.status === 'completed' ? 'open' : 'completed'
@@ -1373,7 +1663,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
         setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
       }
       if (nextStatus === 'completed') {
-        setMsg(`✅ ${preset.name} (${selectedDate}) marked as COMPLETED! Standings officially published on leaderboards & UPI info.`)
+        setMsg(`✅ ${preset.name} (${selectedDate}) marked as DONE! Payout slips (top 2) & 3rd-place coupon generated.`)
         if (onSyncPayouts) onSyncPayouts()
       } else {
         setMsg(`↩️ ${preset.name} (${selectedDate}) reverted to OPEN status.`)
@@ -1390,7 +1680,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
         <div>
           <h2 className={styles.tabTitle}>Daily Slots Management (6 Fixed Slots)</h2>
           <p className={styles.tabDesc}>
-            Select a date below to configure match schedules, open/close bookings, and finalize completed slots. When a slot is marked completed, its scores are officially published to the live leaderboards and UPI payout queue.
+            Select a date below to configure match schedules and open/close bookings. Once match scores are pushed via &apos;Update The Table&apos; in Score Entry, mark a slot as Done here to generate UPI payout slips (top 2) and 3rd-place coupon code.
           </p>
         </div>
       </div>
@@ -1891,7 +2181,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts }: any) {
                           disabled={isLoading}
                           onClick={() => handleToggleCompleted(preset)}
                         >
-                          {isLoading ? '...' : isCompleted ? '↩️ Revert Open' : '🏆 Complete'}
+                          {isLoading ? '...' : isCompleted ? '↩️ Revert Open' : '🏆 Mark as Done'}
                         </button>
                       </div>
 

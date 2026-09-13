@@ -96,6 +96,7 @@ export default async function DashboardPage() {
     leaderboardResult,
     payoutsResult,
     couponsResult,
+    publishedSlotsResult,
   ] = await Promise.all([
     // Bookings
     allUserTeamIds.length > 0
@@ -131,11 +132,10 @@ export default async function DashboardPage() {
       .eq('key', 'whatsapp_invite_link')
       .maybeSingle(),
 
-    // All completed matches for accurate leaderboard ranking (only published completed slots)
+    // All matches for leaderboard ranking
     admin
       .from('matches')
-      .select('team_id, slot_id, total_points, kills, slots!inner(status)')
-      .eq('slots.status', 'completed'),
+      .select('team_id, slot_id, total_points, kills'),
 
     // Payouts
     admin
@@ -149,9 +149,25 @@ export default async function DashboardPage() {
       .select('coupon_id, code, type, status, issued_at')
       .eq('team_id', safeTeam.team_id)
       .order('issued_at', { ascending: false }),
+
+    // Published slots (pushed via "Update The Table")
+    admin
+      .from('config')
+      .select('value')
+      .eq('key', 'scores_published_slots')
+      .maybeSingle(),
   ])
 
   let bookings: any[] = bookingsResult.data || []
+
+  // Parse published slot IDs
+  let publishedSlotIds = new Set<string>()
+  if (publishedSlotsResult?.data?.value) {
+    try {
+      const parsed = JSON.parse(publishedSlotsResult.data.value)
+      if (Array.isArray(parsed)) publishedSlotIds = new Set(parsed)
+    } catch {}
+  }
 
   // Populate missing slot objects if join returned null
   if (bookings.length > 0) {
@@ -198,7 +214,8 @@ export default async function DashboardPage() {
     }
   }
 
-  const completedMatches = leaderboardResult.data || []
+  const allMatchesData = leaderboardResult.data || []
+  const completedMatches = allMatchesData.filter((m: any) => publishedSlotIds.has(m.slot_id))
   const teamSlotTotals: Record<string, Record<string, { total_points: number; kills: number; matches_count: number }>> = {}
   
   completedMatches.forEach((m: any) => {
@@ -239,7 +256,7 @@ export default async function DashboardPage() {
   const teamIndex = computedRankedList.findIndex(r => r.team_id === safeTeam.team_id)
   const rank = teamIndex >= 0 ? teamIndex + 1 : 0
   const leaderboardEntry = teamIndex >= 0 ? computedRankedList[teamIndex] : null
-  const completedTeamMatches = (matchesResult.data || []).filter((m: any) => m.slots?.status === 'completed')
+  const completedTeamMatches = (matchesResult.data || []).filter((m: any) => publishedSlotIds.has(m.slot_id))
   const isTestAccount = Boolean(userProfile?.is_test_account || (team as any)?.is_test_account)
 
   return (
