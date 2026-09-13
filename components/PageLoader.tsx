@@ -7,6 +7,7 @@ export default function PageLoader() {
   const pathname = usePathname()
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [message, setMessage] = useState<string | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const prevPath = useRef(pathname)
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -18,6 +19,7 @@ export default function PageLoader() {
       hideTimerRef.current = setTimeout(() => {
         setLoading(false)
         setProgress(0)
+        setMessage(null)
       }, 350)
       prevPath.current = pathname
     }
@@ -25,8 +27,9 @@ export default function PageLoader() {
 
   // Listen for custom show/hide events & dev preview key 'L'
   useEffect(() => {
-    const handleShow = () => {
+    const handleShow = (e?: any) => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      setMessage(e?.detail?.message || null)
       setLoading(true)
       setProgress(0)
 
@@ -45,6 +48,7 @@ export default function PageLoader() {
       setTimeout(() => {
         setLoading(false)
         setProgress(0)
+        setMessage(null)
       }, 350)
     }
 
@@ -176,6 +180,23 @@ export default function PageLoader() {
           />
         </div>
       </div>
+
+      {message && (
+        <div style={{
+          marginTop: '1.25rem',
+          fontSize: '0.85rem',
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: '#fbbf24',
+          textAlign: 'center',
+          maxWidth: '90vw',
+          padding: '0 1rem',
+          textShadow: '0 0 16px rgba(251, 191, 36, 0.4)',
+        }}>
+          {message}
+        </div>
+      )}
     </div>
   )
 }

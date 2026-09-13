@@ -179,6 +179,9 @@ function loadRazorpayScript(): Promise<boolean> {
     }
 
     setBookingSlotId(slot.slot_id)
+    window.dispatchEvent(new CustomEvent('app:showLoader', {
+      detail: { message: isFree ? 'Redeeming Free Slot Reward...' : 'Preparing Secure Registration...' }
+    }))
 
     try {
       if (isFree && remainingCoupons.length > 0) {
@@ -196,6 +199,7 @@ function loadRazorpayScript(): Promise<boolean> {
         const data = await res.json()
 
         if (!res.ok || !data.success) {
+          window.dispatchEvent(new Event('app:hideLoader'))
           alert(data.error || 'Failed to claim free slot.')
           setBookingSlotId(null)
           return
@@ -221,6 +225,7 @@ function loadRazorpayScript(): Promise<boolean> {
         }
 
         if (!createRes.ok || !createData.booking_id) {
+          window.dispatchEvent(new Event('app:hideLoader'))
           if (createRes.status === 401) {
             alert('Your session has expired. Please sign in again to book a slot.')
             router.push('/login?redirect=/slots')
@@ -234,6 +239,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
         // Direct Instant Booking Confirmation (Bypasses Razorpay for testing)
         if (createData.auto_confirmed || createData.is_test_booking) {
+          window.dispatchEvent(new Event('app:hideLoader'))
           setBookedSlotIds(prev => Array.from(new Set([...prev, slot.slot_id])))
           setSlotsList(prev => prev.map(s => {
             if (s.slot_id === slot.slot_id) {
@@ -273,33 +279,53 @@ function loadRazorpayScript(): Promise<boolean> {
                 description: `Slot Registration: ${slot.time_label}`,
                 order_id: orderData.orderId,
                 handler: async function (response: any) {
-                  const verifyRes = await fetch('/api/payment/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      bookingId: createData.booking_id,
-                      razorpayPaymentId: response.razorpay_payment_id,
-                      razorpayOrderId: response.razorpay_order_id,
-                      razorpaySignature: response.razorpay_signature,
-                    }),
-                  })
-                  const verifyData = await verifyRes.json()
-                  if (verifyRes.ok && verifyData.success) {
-                    setBookedSlotIds(prev => [...prev, slot.slot_id])
-                    setSuccessToast(`Slot for ${slot.time_label} booked! Join WhatsApp group below.`)
-                  } else {
-                    alert(verifyData.error || 'Payment verification failed. Please contact support.')
+                  // Show loader during server signature verification & slot allocation
+                  window.dispatchEvent(new CustomEvent('app:showLoader', {
+                    detail: { message: 'Verifying Payment & Allocating Room Slot...' }
+                  }))
+                  try {
+                    const verifyRes = await fetch('/api/payment/verify', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        bookingId: createData.booking_id,
+                        razorpayPaymentId: response.razorpay_payment_id,
+                        razorpayOrderId: response.razorpay_order_id,
+                        razorpaySignature: response.razorpay_signature,
+                      }),
+                    })
+                    const verifyData = await verifyRes.json()
+                    window.dispatchEvent(new Event('app:hideLoader'))
+                    if (verifyRes.ok && verifyData.success) {
+                      setBookedSlotIds(prev => [...prev, slot.slot_id])
+                      setSuccessToast(`Slot for ${slot.time_label} booked! Join WhatsApp group below.`)
+                    } else {
+                      alert(verifyData.error || 'Payment verification failed. Please contact support.')
+                    }
+                  } catch (err: any) {
+                    window.dispatchEvent(new Event('app:hideLoader'))
+                    alert('Payment verification connection error. Please contact support.')
                   }
                   setBookingSlotId(null)
                 },
                 modal: {
                   ondismiss: function () {
+                    window.dispatchEvent(new Event('app:hideLoader'))
                     setBookingSlotId(null)
+                    if (createData?.booking_id) {
+                      fetch('/api/booking/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ booking_id: createData.booking_id }),
+                      }).catch(() => {})
+                    }
                   },
                 },
                 prefill: {},
                 theme: { color: '#fbbf24' },
               })
+              // Hide page loader just before opening checkout modal
+              window.dispatchEvent(new Event('app:hideLoader'))
               rzp.open()
               rzpOpened = true
               return
@@ -325,11 +351,21 @@ function loadRazorpayScript(): Promise<boolean> {
             const confirmData = await confirmRes.json()
 
             if (!confirmRes.ok) {
+              window.dispatchEvent(new Event('app:hideLoader'))
               alert(confirmData.error || 'Registration confirmation failed.')
               setBookingSlotId(null)
               return
             }
           } else {
+            // Cancel pending booking if payment failed to open
+            if (createData?.booking_id) {
+              fetch('/api/booking/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ booking_id: createData.booking_id }),
+              }).catch(() => {})
+            }
+            window.dispatchEvent(new Event('app:hideLoader'))
             alert('Unable to launch Razorpay payment. Please disable pop-up blockers, check your internet connection, or try again.')
             setBookingSlotId(null)
             return
@@ -337,13 +373,15 @@ function loadRazorpayScript(): Promise<boolean> {
         }
       }
 
-      // Success: Lock slot as booked immediately
+      // Success for Free Coupon or Authorized Test Mode
+      window.dispatchEvent(new Event('app:hideLoader'))
       setBookedSlotIds(prev => [...prev, slot.slot_id])
       setSuccessToast(`Slot for ${slot.time_label} registered successfully! Join WhatsApp group below.`)
       setBookingSlotId(null)
 
       setTimeout(() => setSuccessToast(null), 5000)
     } catch (err: any) {
+      window.dispatchEvent(new Event('app:hideLoader'))
       console.error('Booking error:', err)
       const errMsg = err?.message?.includes('Load failed') || err?.message?.includes('Failed to fetch')
         ? 'Connection lost or session expired. Please refresh the page and try again.'

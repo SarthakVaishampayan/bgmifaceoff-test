@@ -130,7 +130,7 @@ export default async function SlotsPage() {
     if (allUserTeamIds.length > 0) {
       const [couponsRes, bookingsRes] = await Promise.all([
         admin.from('coupons').select('coupon_id, code').in('team_id', allUserTeamIds).eq('status', 'unused'),
-        admin.from('bookings').select('slot_id').in('team_id', allUserTeamIds),
+        admin.from('bookings').select('slot_id').in('team_id', allUserTeamIds).eq('payment_status', 'paid'),
       ])
 
       unusedCoupons = couponsRes.data || []

@@ -104,6 +104,7 @@ export default async function DashboardPage() {
           .from('bookings')
           .select('booking_id, slot_id, payment_status, amount_paid, coupon_used, created_at, room_slot_number, slots(slot_id, date, time_label, status, entry_fee, is_grand_finals, whatsapp_link)')
           .in('team_id', allUserTeamIds)
+          .eq('payment_status', 'paid')
           .order('created_at', { ascending: false })
           .then(res => {
             // Fallback: if room_slot_number column missing, retry without it
@@ -112,6 +113,7 @@ export default async function DashboardPage() {
                 .from('bookings')
                 .select('booking_id, slot_id, payment_status, amount_paid, coupon_used, created_at, slots(slot_id, date, time_label, status, entry_fee, is_grand_finals, whatsapp_link)')
                 .in('team_id', allUserTeamIds)
+                .eq('payment_status', 'paid')
                 .order('created_at', { ascending: false })
             }
             return res
