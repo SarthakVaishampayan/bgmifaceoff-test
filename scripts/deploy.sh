@@ -20,7 +20,7 @@ set -e
 # ─── Colors ───
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\1;33m'
+YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
@@ -173,7 +173,7 @@ if ! command -v git &>/dev/null; then
   exit 1
 fi
 
-UNCOMMITTED=$(git status --porcelain 2>/dev/null | grep -v 'package-lock.json' | grep -v '\.env' | wc -l)
+UNCOMMITTED=$(git status --porcelain 2>/dev/null | grep -v 'package-lock.json' | grep -v '\.env' | grep -v 'ecosystem.config.cjs' | wc -l)
 if [ "$UNCOMMITTED" -gt 0 ]; then
   if [ "$FORCE" = true ]; then
     warn "$UNCOMMITTED uncommitted change(s) found. Stashing them..."
@@ -181,7 +181,7 @@ if [ "$UNCOMMITTED" -gt 0 ]; then
     pass "Local changes stashed"
   else
     warn "You have $UNCOMMITTED uncommitted change(s):"
-    git status --short | grep -v 'package-lock.json' | grep -v '\.env'
+    git status --short | grep -v 'package-lock.json' | grep -v '\.env' | grep -v 'ecosystem.config.cjs'
     echo ""
     echo "  Commit or stash them first, or use --force to deploy anyway."
     exit 1
