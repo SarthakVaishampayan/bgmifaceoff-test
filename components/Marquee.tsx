@@ -7,7 +7,7 @@ export default function Marquee() {
     { text: '🔥 BGFS SEASON 1 REGISTRATIONS ARE NOW LIVE', highlight: true },
     { text: 'WEEK 1 PAID LEAGUE SLOTS • ₹50 ENTRY FEE', highlight: false },
     { text: 'TOP 16 TEAMS QUALIFY FOR FREE GRAND FINALS', highlight: true },
-    { text: 'BEST 5 SLOTS (15 MATCHES) SCORING SYSTEM ACTIVE', highlight: false },
+    { text: 'BEST 6 SLOTS (18 MATCHES) SCORING SYSTEM ACTIVE', highlight: false },
     { text: 'DAILY MATCHES: 3 MATCHES PER SLOT', highlight: true },
   ]
 

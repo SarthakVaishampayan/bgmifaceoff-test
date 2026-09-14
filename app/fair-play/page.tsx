@@ -88,7 +88,7 @@ export default function FairPlayPage() {
               <ul className={styles.legalList}>
                 <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>Placement Points:</strong> 1st Place (10 pts), 2nd Place (6 pts), 3rd Place (5 pts), 4th Place (4 pts), 5th Place (3 pts), 6th–10th (2 pts), 11th–15th (1 pt).</span></li>
                 <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>Elimination Points:</strong> 1 Point per verified in-game elimination.</span></li>
-                <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>Best 5 Slots Aggregate:</strong> Leaderboard rankings automatically calculate a team&apos;s best 5 slot scores (15 matches total) across the cycle.</span></li>
+                <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>Best 6 Slots Aggregate:</strong> Leaderboard rankings automatically calculate a team&apos;s best 6 slot scores (18 matches total) across the cycle.</span></li>
               </ul>
             </div>
 

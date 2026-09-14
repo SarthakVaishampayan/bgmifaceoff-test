@@ -439,19 +439,21 @@
   transition: all 0.2s ease;
 }
 
-/* Top 5 Qualifying Slots: Gradient Yellow Highlight */
+/* Top 6 Qualifying Slots: Gradient Yellow Highlight */
+.perfTop6Card,
 .perfTop5Card {
   background: linear-gradient(135deg, rgba(250, 204, 21, 0.16) 0%, rgba(202, 138, 4, 0.08) 50%, rgba(20, 20, 20, 0.95) 100%);
   border: 1px solid rgba(250, 204, 21, 0.45);
   box-shadow: 0 4px 20px rgba(250, 204, 21, 0.05);
 }
 
+.perfTop6Card:hover,
 .perfTop5Card:hover {
   border-color: rgba(250, 204, 21, 0.65);
   box-shadow: 0 6px 24px rgba(250, 204, 21, 0.1);
 }
 
-/* Slots beyond Top 5: Dark muted styling */
+/* Slots beyond Top 6: Dark muted styling */
 .perfOtherCard {
   background: #121212;
   border: 1px solid #242424;
@@ -488,6 +490,7 @@
   flex-shrink: 0;
 }
 
+.perfTop6Card .perfRankBadge,
 .perfTop5Card .perfRankBadge {
   background: #fbbf24;
   color: #111;
@@ -501,6 +504,7 @@
   font-weight: 700;
 }
 
+.perfTop6Card .perfMatchChip,
 .perfTop5Card .perfMatchChip {
   border-color: rgba(250, 204, 21, 0.2);
 }
@@ -524,6 +528,7 @@
   gap: 4px;
 }
 
+.badgeTop6Counting,
 .badgeTop5Counting {
   font-size: 0.62rem;
   font-weight: 800;
@@ -559,6 +564,7 @@
   line-height: 1.2;
 }
 
+.perfTop6Card .perfPointsVal,
 .perfTop5Card .perfPointsVal {
   color: #fbbf24;
 }
@@ -572,6 +578,29 @@
   font-weight: 700;
   color: #777;
   letter-spacing: 0.05em;
+}
+
+.viewSlotRankingBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.viewSlotRankingBtn:hover {
+  background: #fbbf24;
+  color: #111111;
+  border-color: #fbbf24;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.35);
 }
 
 .perfMatchesGrid {
@@ -988,10 +1017,40 @@
     width: 100%;
   }
 
+  .perfMatchesGrid {
+    display: none !important;
+  }
+
+  .perfSlotFooter {
+    display: none !important;
+  }
+
+  .perfRankBadge {
+    display: none !important;
+  }
+
+  .perfSlotRoom {
+    display: none !important;
+  }
+
+  .perfSlotCard {
+    padding: 0.85rem 1rem;
+  }
+
   .perfSlotHeader {
     flex-direction: column;
     align-items: stretch;
     gap: 0.5rem;
+  }
+
+  .perfSlotLeft {
+    width: 100%;
+  }
+
+  .perfSlotDate {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #ffffff;
   }
 
   .perfSlotRight {
@@ -999,8 +1058,14 @@
     justify-content: space-between;
     align-items: center;
     border-top: 1px dashed rgba(255, 255, 255, 0.08);
-    padding-top: 0.5rem;
+    padding-top: 0.55rem;
     margin-top: 0.25rem;
+    width: 100%;
+  }
+
+  .viewSlotRankingBtn {
+    font-size: 0.75rem;
+    padding: 6px 12px;
   }
 
   .statsBar {

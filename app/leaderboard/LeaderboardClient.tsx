@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, Fragment } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Trophy, Medal, Award, Layers, ChevronDown, Check } from 'lucide-react'
 import { formatMonthDay, formatFullDate } from '@/lib/utils/formatDate'
@@ -79,6 +79,8 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     urlSlotId || (slots.length > 0 ? slots[0].slot_id : '')
   )
 
+  const isInitialMount = useRef(true)
+
   useEffect(() => {
     if (urlSlotId) {
       setSelectedSlotId(urlSlotId)
@@ -88,12 +90,19 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     }
   }, [urlSlotId, urlTab])
 
-  // Auto-select first slot when toggle changes
+  // Auto-select first slot only when user explicitly toggles My Slots
   useEffect(() => {
-    if (filteredSlots.length > 0) {
-      setSelectedSlotId(filteredSlots[0].slot_id)
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
     }
-  }, [mySlotsOnly])
+    if (filteredSlots.length > 0) {
+      const isCurrentInFiltered = filteredSlots.some(s => s.slot_id === selectedSlotId)
+      if (!isCurrentInFiltered) {
+        setSelectedSlotId(filteredSlots[0].slot_id)
+      }
+    }
+  }, [mySlotsOnly, filteredSlots, selectedSlotId])
 
   // Filter overall standings
   const filteredOverall = useMemo(() =>
@@ -206,7 +215,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
           <div>
             <h1 className={styles.title}>STANDINGS & LEADERBOARD</h1>
             <p className={styles.subtitle}>
-              Official BGFS League Standings • Best 5 Slots (15 Matches) Scoring System
+              Official BGFS League Standings • Best 6 Slots (18 Matches) Scoring System
             </p>
           </div>
           <div className={styles.headerRight}>
@@ -250,7 +259,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
             }}
           >
             <Trophy size={16} color={viewMode === 'overall' ? '#000000' : '#facc15'} />
-            <span>OVERALL STANDINGS (BEST 5 SLOTS)</span>
+            <span>OVERALL STANDINGS (BEST 6 SLOTS)</span>
           </button>
 
           <button
@@ -295,7 +304,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', width: '64px' }}>RANK</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a' }}>TEAM NAME</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>MATCHES PLAYED</th>
-                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>BEST 5 SLOTS TOTAL</th>
+                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>BEST 6 SLOTS TOTAL</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>ELIMINATIONS</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', width: '60px' }}></th>
                     </tr>
@@ -397,7 +406,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                       <div className={styles.mobileCardRight}>
                         <div>
                           <div className={styles.mobileStatVal}>{row.best_16_total}</div>
-                          <div className={styles.mobileStatLabel}>BEST-16</div>
+                          <div className={styles.mobileStatLabel}>BEST-6</div>
                         </div>
                         <span className={styles.expandIcon}>{expandedTeam === row.team_id ? '▲' : '▼'}</span>
                       </div>
@@ -759,30 +768,30 @@ function MatchBreakdown({ matches }: { matches: MatchEntry[] }) {
     return a.match_number - b.match_number
   })
 
-  // Mark top 16 matches
+  // Mark top 18 matches (6 slots * 3 matches)
   const scoresSorted = [...matches].sort((a, b) => b.total_points - a.total_points)
-  const top16Set = new Set(scoresSorted.slice(0, 16).map(m => `${m.slot_id}-${m.match_number}`))
+  const top18Set = new Set(scoresSorted.slice(0, 18).map(m => `${m.slot_id}-${m.match_number}`))
 
   return (
     <div style={{ padding: '1rem 1.25rem', overflowX: 'auto' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
         {sorted.map((m, i) => {
           const key = `${m.slot_id}-${m.match_number}`
-          const isTop16 = top16Set.has(key)
+          const isTop18 = top18Set.has(key)
           return (
             <div
               key={i}
               title={`Placement: #${m.placement} | Eliminations: ${m.kills} | Points: ${m.total_points}`}
               style={{
-                background: isTop16 ? '#272727' : '#1d1d1d',
-                border: `1px solid ${isTop16 ? '#facc15' : '#323232'}`,
+                background: isTop18 ? '#272727' : '#1d1d1d',
+                border: `1px solid ${isTop18 ? '#facc15' : '#323232'}`,
                 borderRadius: '6px',
                 padding: '0.35rem 0.6rem',
                 fontSize: '0.75rem',
                 minWidth: '44px',
                 textAlign: 'center',
-                color: isTop16 ? '#facc15' : '#b8b8b8',
-                fontWeight: isTop16 ? 800 : 500,
+                color: isTop18 ? '#facc15' : '#b8b8b8',
+                fontWeight: isTop18 ? 800 : 500,
                 fontFamily: 'Inter, sans-serif',
               }}
             >

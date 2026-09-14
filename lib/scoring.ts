@@ -28,16 +28,20 @@ export function getTotalPoints(placement: number, kills: number): number {
 }
 
 /**
- * Best 5 Slots calculation: sum of top 5 slot scores (15 matches total)
+ * Best 6 Slots calculation: sum of top 6 slot scores (18 matches total)
  */
-export function calcBest5Slots(slotScores: number[]): number {
+export function calcBest6Slots(slotScores: number[]): number {
   if (slotScores.length === 0) return 0
   const sorted = [...slotScores].sort((a, b) => b - a)
-  return sorted.slice(0, 5).reduce((sum, s) => sum + s, 0)
+  return sorted.slice(0, 6).reduce((sum, s) => sum + s, 0)
+}
+
+export function calcBest5Slots(slotScores: number[]): number {
+  return calcBest6Slots(slotScores)
 }
 
 export function calcBest16(scores: number[]): number {
-  return calcBest5Slots(scores)
+  return calcBest6Slots(scores)
 }
 
 /**
@@ -52,5 +56,5 @@ export const SLOT_PRIZES = {
 export const ENTRY_FEE = 50 // ₹50 per slot
 export const MAX_TEAMS_PER_SLOT = 24
 export const TARGET_TEAMS_PER_SLOT = 18
-export const BEST_N_SLOTS = 5
-export const BEST_N_MATCHES = 15
+export const BEST_N_SLOTS = 6
+export const BEST_N_MATCHES = 18

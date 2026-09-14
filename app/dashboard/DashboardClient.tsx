@@ -317,13 +317,13 @@ export default function DashboardClient({
             </div>
           </div>
 
-          {/* ── MY PERFORMANCE (BEST 5 SLOTS RANKING) ── */}
+          {/* ── MY PERFORMANCE (BEST 6 SLOTS RANKING) ── */}
           <div className={styles.performanceCard}>
             <div className={styles.cardHeader}>
               <Award size={16} color="#facc15" />
               <h2 className={styles.cardTitle}>MY PERFORMANCE</h2>
               <span className={styles.perfHeaderTag}>
-                {performanceSlots.length > 5 ? `Top 5 of ${performanceSlots.length} Slots Counted` : 'Top 5 Slots System'}
+                {performanceSlots.length > 6 ? `Top 6 of ${performanceSlots.length} Slots Counted` : 'Top 6 Slots System'}
               </span>
             </div>
 
@@ -338,11 +338,11 @@ export default function DashboardClient({
               ) : (
                 <div className={styles.perfSlotList}>
                   {performanceSlots.map((slot, index) => {
-                    const isTop5 = index < 5
+                    const isTop6 = index < 6
                     return (
                       <div
                         key={slot.slotId}
-                        className={`${styles.perfSlotCard} ${isTop5 ? styles.perfTop5Card : styles.perfOtherCard}`}
+                        className={`${styles.perfSlotCard} ${isTop6 ? (styles.perfTop6Card || styles.perfTop5Card) : styles.perfOtherCard}`}
                       >
                         <div className={styles.perfSlotHeader}>
                           <div className={styles.perfSlotLeft}>
@@ -365,6 +365,12 @@ export default function DashboardClient({
                             <div className={styles.perfPointsVal}>
                               {slot.totalPoints} <span className={styles.perfPointsLabel}>PTS</span>
                             </div>
+                            <Link
+                              href={`/leaderboard?slot_id=${slot.slotId}&tab=slot`}
+                              className={styles.viewSlotRankingBtn}
+                            >
+                              View Slot Ranking →
+                            </Link>
                           </div>
                         </div>
 

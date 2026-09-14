@@ -123,8 +123,8 @@ export default async function LeaderboardPage() {
   const computedStandings = Object.values(teamMetaMap).map(team => {
     const slotsPlayed = Object.values(teamSlotMap[team.team_id] || {})
     slotsPlayed.sort((a, b) => b.total_points - a.total_points)
-    const top5Slots = slotsPlayed.slice(0, 5)
-    const best_5_total = top5Slots.reduce((sum, s) => sum + s.total_points, 0)
+    const top6Slots = slotsPlayed.slice(0, 6)
+    const best_6_total = top6Slots.reduce((sum, s) => sum + s.total_points, 0)
     const total_kills = slotsPlayed.reduce((sum, s) => sum + s.kills, 0)
     const matches_played = slotsPlayed.reduce((sum, s) => sum + s.matches_count, 0)
 
@@ -132,7 +132,7 @@ export default async function LeaderboardPage() {
       team_id: team.team_id,
       team_name: team.team_name,
       matches_played,
-      best_16_total: best_5_total,
+      best_16_total: best_6_total,
       total_kills,
     }
   })

@@ -238,8 +238,8 @@ export default async function DashboardPage() {
   const computedRankedList = Object.entries(teamSlotTotals).map(([tId, slotMap]) => {
     const slotsPlayed = Object.values(slotMap)
     slotsPlayed.sort((a, b) => b.total_points - a.total_points)
-    const top5 = slotsPlayed.slice(0, 5)
-    const best_16_total = top5.reduce((sum, s) => sum + s.total_points, 0)
+    const top6 = slotsPlayed.slice(0, 6)
+    const best_16_total = top6.reduce((sum, s) => sum + s.total_points, 0)
     const total_kills = slotsPlayed.reduce((sum, s) => sum + s.kills, 0)
     const matches_played = slotsPlayed.reduce((sum, s) => sum + s.matches_count, 0)
     return {
