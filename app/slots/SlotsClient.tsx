@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert } from 'lucide-react'
+import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { isSlotPastOrEnded, getFirstMatchStartMinutes } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
@@ -30,6 +30,7 @@ interface Props {
   freeCoupon: FreeCoupon | null
   unusedCoupons?: FreeCoupon[]
   userBookedSlotIds?: string[]
+  userBookedSlotsMap?: Record<string, number>
   whatsappLink: string
   entryFee: number
   isLoggedIn: boolean
@@ -77,6 +78,7 @@ export default function SlotsClient({
   freeCoupon,
   unusedCoupons = [],
   userBookedSlotIds = [],
+  userBookedSlotsMap = {},
   whatsappLink,
   entryFee,
   isLoggedIn,
@@ -89,7 +91,10 @@ export default function SlotsClient({
     setSlotsList(slots)
   }, [slots])
 
-  const [bookedSlotIds, setBookedSlotIds] = useState<string[]>(userBookedSlotIds)
+  const [bookedSlotsMap, setBookedSlotsMap] = useState<Record<string, number>>(userBookedSlotsMap)
+  const [bookedSlotIds, setBookedSlotIds] = useState<string[]>(() => {
+    return Array.from(new Set([...userBookedSlotIds, ...Object.keys(userBookedSlotsMap)]))
+  })
   const [bookingSlotId, setBookingSlotId] = useState<string | null>(null)
   const [confirmFreeSlot, setConfirmFreeSlot] = useState<Slot | null>(null)
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false)
@@ -183,6 +188,8 @@ function loadRazorpayScript(): Promise<boolean> {
       detail: { message: isFree ? 'Redeeming Free Slot Reward...' : 'Preparing Secure Registration...' }
     }))
 
+    let allocatedRoomSlot = 5
+
     try {
       if (isFree && remainingCoupons.length > 0) {
         const couponToUse = remainingCoupons[0]
@@ -205,6 +212,7 @@ function loadRazorpayScript(): Promise<boolean> {
           return
         }
 
+        allocatedRoomSlot = data.room_slot_number || 5
         setRemainingCoupons(prev => prev.slice(1))
       } else {
         // Create booking record first
@@ -239,8 +247,10 @@ function loadRazorpayScript(): Promise<boolean> {
 
         // Direct Instant Booking Confirmation (Bypasses Razorpay for testing)
         if (createData.auto_confirmed || createData.is_test_booking) {
+          allocatedRoomSlot = createData.room_slot_number || 5
           window.dispatchEvent(new Event('app:hideLoader'))
           setBookedSlotIds(prev => Array.from(new Set([...prev, slot.slot_id])))
+          setBookedSlotsMap(prev => ({ ...prev, [slot.slot_id]: allocatedRoomSlot }))
           setSlotsList(prev => prev.map(s => {
             if (s.slot_id === slot.slot_id) {
               const newCount = (s.teams_booked_count || 0) + 1
@@ -249,7 +259,7 @@ function loadRazorpayScript(): Promise<boolean> {
             }
             return s
           }))
-          setSuccessToast(`✅ Slot for ${slot.time_label} registered successfully!`)
+          setSuccessToast(`✅ Slot for ${slot.time_label} registered! You are alloted Room Slot #${allocatedRoomSlot}.`)
           setBookingSlotId(null)
           return
         }
@@ -297,8 +307,10 @@ function loadRazorpayScript(): Promise<boolean> {
                     const verifyData = await verifyRes.json()
                     window.dispatchEvent(new Event('app:hideLoader'))
                     if (verifyRes.ok && verifyData.success) {
-                      setBookedSlotIds(prev => [...prev, slot.slot_id])
-                      setSuccessToast(`Slot for ${slot.time_label} booked! Join WhatsApp group below.`)
+                      const rSlot = verifyData.room_slot_number || 5
+                      setBookedSlotIds(prev => Array.from(new Set([...prev, slot.slot_id])))
+                      setBookedSlotsMap(prev => ({ ...prev, [slot.slot_id]: rSlot }))
+                      setSuccessToast(`Slot for ${slot.time_label} booked! You are alloted Room Slot #${rSlot}. Join WhatsApp group below.`)
                     } else {
                       alert(verifyData.error || 'Payment verification failed. Please contact support.')
                     }
@@ -356,6 +368,8 @@ function loadRazorpayScript(): Promise<boolean> {
               setBookingSlotId(null)
               return
             }
+
+            allocatedRoomSlot = confirmData.room_slot_number || 5
           } else {
             // Cancel pending booking if payment failed to open
             if (createData?.booking_id) {
@@ -375,8 +389,9 @@ function loadRazorpayScript(): Promise<boolean> {
 
       // Success for Free Coupon or Authorized Test Mode
       window.dispatchEvent(new Event('app:hideLoader'))
-      setBookedSlotIds(prev => [...prev, slot.slot_id])
-      setSuccessToast(`Slot for ${slot.time_label} registered successfully! Join WhatsApp group below.`)
+      setBookedSlotIds(prev => Array.from(new Set([...prev, slot.slot_id])))
+      setBookedSlotsMap(prev => ({ ...prev, [slot.slot_id]: allocatedRoomSlot }))
+      setSuccessToast(`Slot for ${slot.time_label} registered! You are alloted Room Slot #${allocatedRoomSlot}. Join WhatsApp group below.`)
       setBookingSlotId(null)
 
       setTimeout(() => setSuccessToast(null), 5000)
@@ -557,6 +572,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
                 if (isAlreadyBooked) {
                   const matchTimes = getMatchTimes(slot.time_label)
+                  const roomSlotNum = bookedSlotsMap[slot.slot_id] || 5
 
                   return (
                     <div key={slot.slot_id} className={styles.slotCardBooked}>
@@ -594,7 +610,7 @@ function loadRazorpayScript(): Promise<boolean> {
                             justifyContent: 'center',
                             gap: '2px',
                             width: '100%',
-                            margin: '0.2rem 0 0.35rem 0',
+                            margin: '0.2rem 0 0.3rem 0',
                           }}
                         >
                           <div
@@ -611,7 +627,7 @@ function loadRazorpayScript(): Promise<boolean> {
                             }}
                           >
                             <Key size={11} color="#fbbf24" style={{ flexShrink: 0 }} />
-                            <span>Join WhatsApp group for Room ID &amp; Pass</span>
+                            <span>Room ID &amp; Password on WhatsApp</span>
                           </div>
                           <div
                             style={{
@@ -622,19 +638,28 @@ function loadRazorpayScript(): Promise<boolean> {
                               lineHeight: 1,
                             }}
                           >
-                            Posted 10 mins before each match
+                            Posted 10 mins before match start
                           </div>
                         </div>
                       </div>
 
-                      <a
-                        href={slot.whatsapp_link || whatsappLink || 'https://chat.whatsapp.com'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.bookedBtn}
-                      >
-                        <MessageCircle size={13} /> Join WhatsApp Group
-                      </a>
+                      {/* Single bottom row divided into 2 buttons: Left = Join WhatsApp, Right = Slot # info */}
+                      <div className={styles.bookedActionRow}>
+                        <a
+                          href={slot.whatsapp_link || whatsappLink || 'https://chat.whatsapp.com'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.bookedWhatsappBtn}
+                        >
+                          <MessageCircle size={13} />
+                          <span>Join WhatsApp</span>
+                        </a>
+
+                        <div className={styles.bookedSlotBtn}>
+                          <span className={styles.bookedSlotDot}>●</span>
+                          <span>Room Slot: #{roomSlotNum}</span>
+                        </div>
+                      </div>
                     </div>
                   )
                 }

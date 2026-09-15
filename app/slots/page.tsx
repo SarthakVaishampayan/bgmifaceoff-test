@@ -54,6 +54,7 @@ export default async function SlotsPage() {
   let freeCoupon = null
   let unusedCoupons: FreeCoupon[] = []
   let userBookedSlotIds: string[] = []
+  let userBookedSlotsMap: Record<string, number> = {}
   let isTestAccount = false
 
   if (user) {
@@ -126,16 +127,23 @@ export default async function SlotsPage() {
       new Set([teamId, userProfile?.team_id, ...(userCaptainedTeams || []).map(t => t.team_id)].filter(Boolean))
     )
 
+    userBookedSlotsMap = {}
+
     // Fetch coupons and bookings in parallel
     if (allUserTeamIds.length > 0) {
       const [couponsRes, bookingsRes] = await Promise.all([
         admin.from('coupons').select('coupon_id, code').in('team_id', allUserTeamIds).eq('status', 'unused'),
-        admin.from('bookings').select('slot_id').in('team_id', allUserTeamIds).eq('payment_status', 'paid'),
+        admin.from('bookings').select('slot_id, room_slot_number').in('team_id', allUserTeamIds).eq('payment_status', 'paid'),
       ])
 
       unusedCoupons = couponsRes.data || []
       freeCoupon = unusedCoupons.length > 0 ? unusedCoupons[0] : null
       userBookedSlotIds = Array.from(new Set((bookingsRes.data || []).map(b => b.slot_id).filter(Boolean)))
+      bookingsRes.data?.forEach(b => {
+        if (b.slot_id) {
+          userBookedSlotsMap[b.slot_id] = b.room_slot_number || 5
+        }
+      })
     }
   }
 
@@ -149,6 +157,7 @@ export default async function SlotsPage() {
       freeCoupon={freeCoupon}
       unusedCoupons={unusedCoupons}
       userBookedSlotIds={userBookedSlotIds}
+      userBookedSlotsMap={userBookedSlotsMap}
       whatsappLink={config.whatsapp_invite_link || ''}
       entryFee={parseInt(config.slot_entry_fee || '50')}
       isLoggedIn={!!user}

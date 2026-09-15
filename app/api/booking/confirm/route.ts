@@ -116,6 +116,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       whatsapp_link: whatsappLink,
+      room_slot_number,
       slot_date: slot.date,
       slot_time: slot.time_label,
     })

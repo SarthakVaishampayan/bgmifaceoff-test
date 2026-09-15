@@ -213,6 +213,7 @@ export async function POST(request: Request) {
         booking_id: booking?.booking_id,
         is_test_booking: true,
         auto_confirmed: true,
+        room_slot_number,
         amount: 0,
       })
     }
