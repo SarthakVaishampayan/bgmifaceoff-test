@@ -1,0 +1,519 @@
+.roadmapSection {
+  background: #0a0a0a;
+  padding: 6rem 0;
+  border-top: 1px solid #1f1f1f;
+  border-bottom: 1px solid #1f1f1f;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background vertical guidelines like the broadcast graphic */
+.roadmapSection::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px
+  );
+  background-size: clamp(60px, 12vw, 150px) 100%;
+  pointer-events: none;
+}
+
+.container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* Top Broadcast Header */
+.topBroadcastHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid #262626;
+  padding-bottom: 1.75rem;
+  margin-bottom: 3.5rem;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.trophyCrest {
+  width: 64px;
+  height: 64px;
+  background: #161616;
+  border: 1px solid #fbbf24;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fbbf24;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.2);
+  flex-shrink: 0;
+}
+
+.trophyCrestText {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fbbf24;
+  margin-top: 2px;
+}
+
+.mainTitleBlock {
+  display: flex;
+  flex-direction: column;
+}
+
+.seasonTag {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: #fbbf24;
+  text-transform: uppercase;
+}
+
+.mainTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #ffffff;
+  line-height: 1;
+  margin: 0.25rem 0 0;
+}
+
+.headerRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.statusIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #4ade80;
+  text-transform: uppercase;
+}
+
+.pulseDot {
+  width: 7px;
+  height: 7px;
+  background: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #22c55e;
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.headerSubtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  color: #888888;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── TIMELINE CANVAS ── */
+.timelineWrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
+  padding: 1rem 0;
+}
+
+/* Dashed vertical axis */
+.timelineWrapper::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 190px;
+  width: 2px;
+  background: repeating-linear-gradient(
+    to bottom,
+    #fbbf24 0px,
+    #fbbf24 8px,
+    transparent 8px,
+    transparent 16px
+  );
+  opacity: 0.75;
+  z-index: 1;
+}
+
+.timelineRow {
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  gap: 1.5rem;
+}
+
+/* Date Marker (Left of Dashed Axis) */
+.dateMarker {
+  width: 165px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.dateMonth {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.dateSub {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Connector Branch from Dashed Axis */
+.branchLine {
+  width: 30px;
+  height: 2px;
+  background: #fbbf24;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.branchLine::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 8px #fbbf24;
+}
+
+/* Two-Tone Krafton Esports Tournament Block */
+.twoToneBlock {
+  display: flex;
+  align-items: stretch;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  border: 1px solid #333333;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  min-width: 330px;
+  max-width: 440px;
+  background: #121212;
+}
+
+.twoToneBlock:hover {
+  transform: translateY(-3px) scale(1.02);
+  border-color: #fbbf24;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(251, 191, 36, 0.2);
+}
+
+.blockActive {
+  border-color: #fbbf24;
+  box-shadow: 0 0 25px rgba(251, 191, 36, 0.25);
+}
+
+/* Left Half of Block (Gold/Tan Krafton Tone) */
+.blockGoldSide {
+  background: linear-gradient(135deg, #c5a059 0%, #9e7d3b 100%);
+  color: #111111;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 120px;
+  flex-shrink: 0;
+  border-right: 2px solid #111111;
+  text-align: center;
+}
+
+.crestIcon {
+  color: #111111;
+}
+
+.crestLabel {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #111111;
+  line-height: 1.1;
+}
+
+/* Right Half of Block (Charcoal Black Tone) */
+.blockBlackSide {
+  background: #111111;
+  color: #ffffff;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex-grow: 1;
+}
+
+.blockAcronym {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffffff;
+  line-height: 1.1;
+}
+
+.blockYear {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #fbbf24;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.blockDetails {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  color: #999999;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
+/* Side Track Span / Auxiliary Gold Bar */
+.sideTrackContainer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-grow: 1;
+}
+
+.trackLine {
+  height: 1px;
+  background: #2a2a2a;
+  flex-grow: 1;
+  min-width: 20px;
+}
+
+.openForAllBadge {
+  background: linear-gradient(90deg, #c5a059 0%, #9e7d3b 100%);
+  color: #111111;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.5rem 1.25rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.openForAllBadgeSub {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #33260c;
+  display: block;
+}
+
+/* Bottom Summary Footer */
+.broadcastFooter {
+  margin-top: 3.5rem;
+  border-top: 1px solid #222222;
+  padding-top: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  background: #111111;
+  border-radius: 10px;
+  padding: 1.5rem 2rem;
+  border: 1px solid #242424;
+}
+
+.footerLeftText {
+  display: flex;
+  flex-direction: column;
+}
+
+.footerTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin: 0;
+}
+
+.footerSubtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  color: #888888;
+  margin: 0.2rem 0 0;
+}
+
+.footerCta {
+  background: #fbbf24;
+  color: #111111;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.footerCta:hover {
+  background: #fde047;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(251, 191, 36, 0.45);
+}
+
+@media (max-width: 860px) {
+  .timelineRow {
+    flex-wrap: wrap;
+    gap: 0.85rem;
+  }
+
+  .sideTrackContainer {
+    width: 100%;
+    margin-left: 110px;
+  }
+
+  .topBroadcastHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .headerRight {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .roadmapSection {
+    padding: 3.5rem 0;
+  }
+
+  .container {
+    padding: 0 0.75rem;
+  }
+
+  .timelineWrapper::before {
+    left: 104px;
+  }
+
+  .timelineRow {
+    gap: 0.6rem;
+  }
+
+  .dateMarker {
+    width: 90px;
+  }
+
+  .dateMonth {
+    font-size: 0.95rem;
+  }
+
+  .dateSub {
+    font-size: 0.62rem;
+  }
+
+  .branchLine {
+    width: 12px;
+  }
+
+  .twoToneBlock {
+    min-width: 230px;
+    width: calc(100% - 114px);
+    max-width: none;
+    flex-grow: 1;
+  }
+
+  .sideTrackContainer {
+    margin-left: 114px;
+    width: calc(100% - 114px);
+  }
+
+  .blockGoldSide {
+    min-width: 100px;
+    padding: 0.85rem 0.65rem;
+  }
+
+  .crestLabel {
+    font-size: 0.62rem;
+  }
+
+  .blockBlackSide {
+    padding: 0.85rem 1rem;
+  }
+
+  .blockAcronym {
+    font-size: 1.05rem;
+  }
+
+  .blockYear {
+    font-size: 0.75rem;
+  }
+
+  .blockDetails {
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .broadcastFooter {
+    display: none;
+  }
+}

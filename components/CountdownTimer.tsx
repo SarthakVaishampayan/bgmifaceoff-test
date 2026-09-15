@@ -19,14 +19,14 @@ function getValidTargetTime(targetDateProp?: string): number {
   const now = Date.now()
   let target = targetDateProp ? new Date(targetDateProp).getTime() : NaN
 
-  // If target date is invalid or in the past, fallback to upcoming October 3 at 9:30 PM IST
+  // If target date is invalid or in the past, fallback to upcoming September 21 at 1:00 PM IST (Slot 1 start)
   if (isNaN(target) || target <= now) {
     const currentYear = new Date().getFullYear()
-    let oct3 = new Date(`${currentYear}-10-03T21:30:00+05:30`).getTime()
-    if (oct3 <= now) {
-      oct3 = new Date(`${currentYear + 1}-10-03T21:30:00+05:30`).getTime()
+    let sep21 = new Date(`${currentYear}-09-21T13:00:00+05:30`).getTime()
+    if (sep21 <= now) {
+      sep21 = new Date(`${currentYear + 1}-09-21T13:00:00+05:30`).getTime()
     }
-    return oct3
+    return sep21
   }
 
   return target
@@ -34,6 +34,7 @@ function getValidTargetTime(targetDateProp?: string): number {
 
 export default function CountdownTimer({
   targetDate,
+  label = 'LEAGUE STAGE STARTS IN',
 }: CountdownTimerProps) {
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     days: 0,
@@ -73,15 +74,23 @@ export default function CountdownTimer({
   ]
 
   return (
-    <div className={styles.container}>
-      {units.map((u) => (
-        <div key={u.label} className={styles.box}>
-          <span className={styles.num}>
-            {mounted ? String(u.value).padStart(2, '0') : '00'}
-          </span>
-          <span className={styles.unitLabel}>{u.label}</span>
+    <div className={styles.wrapper}>
+      {label && (
+        <div className={styles.labelWrapper}>
+          <span className={styles.liveDot} />
+          <span>{label}</span>
         </div>
-      ))}
+      )}
+      <div className={styles.container}>
+        {units.map((u) => (
+          <div key={u.label} className={styles.box}>
+            <span className={styles.num}>
+              {mounted ? String(u.value).padStart(2, '0') : '00'}
+            </span>
+            <span className={styles.unitLabel}>{u.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

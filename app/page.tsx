@@ -5,21 +5,23 @@ import Image from 'next/image'
 import { Users, Calendar, Crosshair, Trophy, Medal, Award, Zap, Check, ArrowRight, ShieldCheck } from 'lucide-react'
 import CountdownTimer from '@/components/CountdownTimer'
 import HeroCTA from '@/components/HeroCTA'
+import Roadmap from '@/components/Roadmap'
+import HowItWorks from '@/components/HowItWorks'
 import { createClient } from '@/lib/supabase/server'
 import styles from './page.module.css'
 
 export default async function LandingPage() {
-  // Fetch grand finals date from config (fallback to August 29, 11:00 PM IST)
+  // Fetch slot 1 date from config (fallback to September 21, 1:00 PM IST)
   const supabase = await createClient()
   const { data: configRows } = await supabase
     .from('config')
     .select('key, value')
-    .in('key', ['grand_finals_date', 'cycle_start_date', 'cycle_end_date'])
+    .in('key', ['first_slot_date', 'grand_finals_date', 'cycle_start_date', 'cycle_end_date'])
 
   const config: Record<string, string> = {}
   configRows?.forEach(row => { config[row.key] = row.value })
 
-  const grandFinalsDate = config.grand_finals_date || '2026-10-03T21:30:00+05:30'
+  const firstSlotDate = config.first_slot_date || '2026-09-21T13:00:00+05:30'
 
   return (
     <main>
@@ -50,7 +52,7 @@ export default async function LandingPage() {
               </p>
 
               {/* Countdown timer block */}
-              <CountdownTimer targetDate={grandFinalsDate} />
+              <CountdownTimer targetDate={firstSlotDate} />
 
               {/* Action buttons */}
               <HeroCTA />
@@ -76,62 +78,11 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* ── HOW IT WORKS ── */}
-        <section className={styles.howItWorks}>
-          <div className="container">
-            <div className={styles.sectionCenter}>
-              <h2 className={styles.sectionTitle}>
-                ROAD TO GRAND FINALS
-              </h2>
-              <p className={styles.sectionSubtitle}>
-                Four structured steps from signup to championship glory
-              </p>
-            </div>
+        {/* ── ROADMAP SECTION ── */}
+        <Roadmap />
 
-            <div className={styles.stepsGrid}>
-              {[
-                {
-                  num: '01',
-                  step: 'STEP 01',
-                  title: 'SIGN UP & SQUAD UP',
-                  desc: 'Log in via secure email OTP, create your roster, and invite your teammates.',
-                  Icon: Users,
-                },
-                {
-                  num: '02',
-                  step: 'STEP 02',
-                  title: 'REGISTER FOR SLOTS',
-                  desc: 'Select preferred daily match slots with instant registration confirmation.',
-                  Icon: Calendar,
-                },
-                {
-                  num: '03',
-                  step: 'STEP 03',
-                  title: 'GRIND & DOMINATE',
-                  desc: '3 matches per slot. Play as many slots as you want: only your top 6 slot scores (18 matches) count.',
-                  Icon: Crosshair,
-                },
-                {
-                  num: '04',
-                  step: 'STEP 04',
-                  title: 'EARN REWARDS & QUALIFY',
-                  desc: 'Prize pool rewards distributed after slot completion. Top 16 overall teams advance to FREE Grand Finals.',
-                  Icon: Trophy,
-                },
-              ].map((s) => (
-                <div key={s.step} className={styles.stepCard}>
-                  <div className={styles.stepBgNum}>{s.num}</div>
-                  <div className={styles.stepHeader}>
-                    <s.Icon className={styles.stepIconLucide} size={20} color="#facc15" strokeWidth={2} />
-                    <span className={styles.stepNum}>{s.step}</span>
-                  </div>
-                  <h3 className={styles.stepTitle}>{s.title}</h3>
-                  <p className={styles.stepDesc}>{s.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* ── HOW IT WORKS SECTION ── */}
+        <HowItWorks />
 
         {/* ── GRAND FINALS PRIZE POOL ── */}
         <section className={styles.prizesSection}>
@@ -187,60 +138,6 @@ export default async function LandingPage() {
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── SCORING FORMAT ── */}
-        <section className={styles.scoringSection}>
-          <div className="container">
-            <div className={styles.scoringInner}>
-              <div>
-                <h2 className={styles.sectionTitle}>BGIS SCORING SYSTEM</h2>
-                <p className={styles.scoringDesc}>
-                  Official esports placement point system + 1 point per elimination. Play unlimited slots without penalty: our system automatically aggregates your <strong>Best 6 Slots (18 Matches total)</strong>.
-                </p>
-                <div className={styles.scoringFeatures}>
-                  {[
-                    '1st Place = 10 Placement Points',
-                    '1 Elimination = 1 Point',
-                    'Unlimited Slot Re-entry allowed',
-                    'Best 6 Slots (18 Matches) auto-calculation',
-                    'Off-days do not hurt your overall rank',
-                  ].map(f => (
-                    <div key={f} className={styles.scoringFeature}>
-                      <Check size={16} color="#facc15" style={{ flexShrink: 0 }} />
-                      <span>{f}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/leaderboard" className={styles.secondaryCta} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem' }}>
-                  <span>VIEW STANDINGS</span>
-                  <ArrowRight size={16} />
-                </Link>
-              </div>
-              <div className={styles.scoringTable}>
-                <h3 className={styles.tableHeading}>Placement Point Table</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Placement</th>
-                      <th>Points</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ['1st Place', '10 Pts'], ['2nd Place', '6 Pts'], ['3rd Place', '5 Pts'], ['4th Place', '4 Pts'],
-                      ['5th Place', '3 Pts'], ['6th–10th', '2 Pts'], ['11th–15th', '1 Pt'], ['16th–24th', '0 Pts'],
-                    ].map(([p, pts]) => (
-                      <tr key={p}>
-                        <td>{p}</td>
-                        <td style={{ color: '#fbbf24', fontWeight: '800' }}>{pts}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           </div>

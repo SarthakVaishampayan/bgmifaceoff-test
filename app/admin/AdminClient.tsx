@@ -3131,11 +3131,26 @@ function PayoutsTab({
                     <td style={{ textAlign: 'center' }}>
                       <button
                         id={`mark-paid-${p.payout_id}`}
-                        className="btn btn-success btn-sm"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', background: '#16a34a' }}
+                        className="btn btn-sm"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          padding: '6px 14px',
+                          background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                          color: '#ffffff',
+                          border: '1px solid rgba(74, 222, 128, 0.5)',
+                          borderRadius: '6px',
+                          boxShadow: '0 2px 10px rgba(34, 197, 94, 0.35)',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          letterSpacing: '0.01em',
+                        }}
                         onClick={() => openPayoutPrompt(p)}
                       >
-                        <CheckCircle size={12} /> Mark as Paid Out
+                        <CheckCircle size={14} color="#ffffff" strokeWidth={2.5} /> Mark as Paid Out
                       </button>
                     </td>
                   </tr>
@@ -3684,23 +3699,27 @@ function UpiInfoTab({
                               </button>
                             ) : (
                               <button
+                                type="button"
                                 className="btn btn-sm"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '5px',
-                                  fontSize: '0.75rem',
-                                  padding: '4px 10px',
-                                  background: '#16a34a',
-                                  color: '#fff',
-                                  border: 'none',
+                                  gap: '6px',
+                                  fontSize: '0.8rem',
                                   fontWeight: 700,
+                                  padding: '5px 12px',
+                                  background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                                  color: '#ffffff',
+                                  border: '1px solid rgba(74, 222, 128, 0.5)',
+                                  borderRadius: '6px',
+                                  boxShadow: '0 2px 10px rgba(34, 197, 94, 0.35)',
                                   cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
                                 }}
                                 onClick={() => openPayoutPrompt(t)}
                                 title="Mark this team as paid out"
                               >
-                                <CheckCircle size={12} /> Mark as Paid Out
+                                <CheckCircle size={13} color="#ffffff" strokeWidth={2.5} /> Mark as Paid Out
                               </button>
                             )}
                           </div>
@@ -3867,16 +3886,21 @@ function UpiInfoTab({
                   }
                   return (
                     <button
+                      type="button"
                       className="btn btn-sm"
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '5px',
-                        fontSize: '0.8rem',
-                        background: '#16a34a',
-                        color: '#fff',
+                        gap: '6px',
+                        fontSize: '0.85rem',
                         fontWeight: 700,
-                        border: 'none',
+                        padding: '7px 16px',
+                        background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                        color: '#ffffff',
+                        border: '1px solid rgba(74, 222, 128, 0.5)',
+                        borderRadius: '6px',
+                        boxShadow: '0 2px 10px rgba(34, 197, 94, 0.35)',
+                        cursor: 'pointer',
                       }}
                       onClick={() => {
                         const target = activeUpiModal
@@ -3884,7 +3908,7 @@ function UpiInfoTab({
                         openPayoutPrompt(target)
                       }}
                     >
-                      <CheckCircle size={14} /> Mark as Paid Out
+                      <CheckCircle size={15} color="#ffffff" strokeWidth={2.5} /> Mark as Paid Out
                     </button>
                   )
                 })()}
