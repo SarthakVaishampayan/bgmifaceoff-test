@@ -24,6 +24,7 @@ export default async function SlotsPage() {
     supabase
       .from('slots')
       .select('*')
+      .gte('date', '2026-09-16')
       .order('date', { ascending: true })
       .order('time_label', { ascending: true }),
     supabase

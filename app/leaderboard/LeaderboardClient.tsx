@@ -65,18 +65,22 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null)
   const [mySlotsOnly, setMySlotsOnly] = useState(false)
 
+  const activeSlots = useMemo(() => {
+    return slots.filter(s => !s.date || s.date >= '2026-09-16')
+  }, [slots])
+
   // Slots filtered by "My Slots" toggle
   const filteredSlots = useMemo(() => {
-    if (!mySlotsOnly || !userTeamId) return slots
+    if (!mySlotsOnly || !userTeamId) return activeSlots
     const bookedSlotIds = new Set(
       bookings.filter(b => b.team_id === userTeamId).map(b => b.slot_id)
     )
-    return slots.filter(s => bookedSlotIds.has(s.slot_id))
-  }, [slots, mySlotsOnly, userTeamId, bookings])
+    return activeSlots.filter(s => bookedSlotIds.has(s.slot_id))
+  }, [activeSlots, mySlotsOnly, userTeamId, bookings])
 
   // Default selected slot to the URL slot_id or most recent one
   const [selectedSlotId, setSelectedSlotId] = useState<string>(
-    urlSlotId || (slots.length > 0 ? slots[0].slot_id : '')
+    urlSlotId || (activeSlots.length > 0 ? activeSlots[0].slot_id : '')
   )
 
   const isInitialMount = useRef(true)

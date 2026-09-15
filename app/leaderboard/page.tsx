@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: 'Live BGFS Battlegrounds Faceoff Series standings. Best-16 match system, updated after every slot.',
 }
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function LeaderboardPage() {
   const supabase = await createAdminClient()
@@ -35,10 +35,11 @@ export default async function LeaderboardPage() {
       .select('match_id, team_id, slot_id, match_number, total_points, placement, kills, placement_points, kill_points, teams(team_name), slots(date, time_label)')
       .order('created_at', { ascending: true }) as any),
 
-    // Slots
+    // Slots (only active tournament/testing cycle slots >= Sept 16)
     supabase
       .from('slots')
       .select('slot_id, date, time_label, status, teams_booked_count')
+      .gte('date', '2026-09-16')
       .order('date', { ascending: false })
       .order('time_label', { ascending: false }),
 
@@ -87,7 +88,12 @@ export default async function LeaderboardPage() {
 
   // CRITICAL: Only matches from slots pushed to the points table via "Update The Table" are published and counted
   const allMatchesData = ((matchesResult.data || []) as any[])
-  const completedMatches = allMatchesData.filter(m => !testTeamIds.has(m.team_id) && publishedSlotIds.has(m.slot_id))
+  const completedMatches = allMatchesData.filter(m => {
+    if (testTeamIds.has(m.team_id)) return false
+    if (!publishedSlotIds.has(m.slot_id)) return false
+    if (m.slots?.date && m.slots.date < '2026-09-16') return false
+    return true
+  })
 
   // Compute team performance from completed matches only
   const teamSlotMap: Record<string, Record<string, { total_points: number; kills: number; matches_count: number }>> = {}

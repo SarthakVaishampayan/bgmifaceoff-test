@@ -46,13 +46,17 @@ export default async function AdminPage({
     { data: coupons },
     { data: configRows },
   ] = await Promise.all([
-    admin.from('slots').select('*').order('date', { ascending: false }),
+    admin.from('slots').select('*').gte('date', '2026-09-16').order('date', { ascending: false }),
     admin.from('teams').select('team_id, team_name, invite_code').order('team_name'),
     admin.from('payouts').select('*, teams(team_name), slots(date, time_label)').order('created_at', { ascending: false }),
     admin.from('bookings').select('*, teams(team_name), slots(date, time_label)').eq('payment_status', 'paid').order('created_at', { ascending: false }),
     admin.from('coupons').select('*, teams(team_name), slots!issued_from_slot(date, time_label), bookings(slot_id, created_at, slots(date, time_label))').order('issued_at', { ascending: false }),
     admin.from('config').select('key, value'),
   ])
+
+  const filteredPayouts = (payouts || []).filter(p => !p.slots?.date || p.slots.date >= '2026-09-16')
+  const filteredBookings = (bookings || []).filter(b => !b.slots?.date || b.slots.date >= '2026-09-16')
+  const filteredCoupons = (coupons || []).filter(c => !c.slots?.date || c.slots.date >= '2026-09-16')
 
   // Fetch complete user list combining Supabase Auth service & public.users table
   let finalUserList: any[] = []
@@ -95,9 +99,9 @@ export default async function AdminPage({
       userRole={role}
       slots={slots || []}
       teams={teams || []}
-      payouts={payouts || []}
-      bookings={bookings || []}
-      coupons={coupons || []}
+      payouts={filteredPayouts}
+      bookings={filteredBookings}
+      coupons={filteredCoupons}
       config={config}
       usersList={finalUserList}
       initialTab={initialTab}

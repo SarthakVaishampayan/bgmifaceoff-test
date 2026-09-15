@@ -192,6 +192,9 @@ export default async function DashboardPage() {
     }
   }
 
+  // Filter out any bookings from test dates (on or before Sept 15)
+  bookings = bookings.filter(b => !b.slots?.date || b.slots.date >= '2026-09-16')
+
   // Fetch room slot layout for booked slots
   const slotIds = Array.from(new Set(bookings.map(b => b.slot_id).filter(Boolean)))
   let slotBookingsMap: Record<string, any[]> = {}
