@@ -233,6 +233,8 @@
   font-size: 0.95rem;
   font-weight: 600;
   color: #ffffff;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .contactValueNote {
@@ -440,11 +442,54 @@
 
 @media (max-width: 768px) {
   .hero {
-    padding: 3rem 0 2.5rem;
+    padding: 2.25rem 0 2rem;
   }
 
   .section {
-    padding: 3rem 0;
+    padding: 2rem 0 3rem;
+  }
+
+  .contactGrid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .contactCard {
+    padding: 1.25rem 1rem;
+    border-radius: 12px;
+  }
+
+  .contactRow {
+    gap: 0.75rem;
+    padding: 0.85rem 0;
+  }
+
+  .contactIcon {
+    padding: 0.45rem;
+  }
+
+  .contactValue {
+    font-size: 0.88rem;
+  }
+
+  .contactValueNote {
+    font-size: 0.75rem;
+  }
+
+  .noteBox {
+    margin-top: 1.25rem;
+    padding: 0.85rem 1rem;
+    font-size: 0.82rem;
+    border-radius: 8px;
+  }
+
+  .formTitle {
+    font-size: 1.05rem;
+  }
+
+  .formSubtitle {
+    font-size: 0.8rem;
+    margin-bottom: 0.85rem;
   }
 
   .statGrid {
@@ -452,7 +497,7 @@
   }
 
   .pricingCard {
-    padding: 1.75rem;
+    padding: 1.5rem 1rem;
   }
 
   .narrowContainer {
@@ -461,6 +506,31 @@
 }
 
 @media (max-width: 480px) {
+  .hero {
+    padding: 1.75rem 0 1.5rem;
+  }
+
+  .heroTitle {
+    font-size: clamp(1.6rem, 7vw, 2.2rem);
+  }
+
+  .heroDesc {
+    font-size: 0.9rem;
+  }
+
+  .sectionTitle {
+    font-size: 1.35rem;
+  }
+
+  .contactCard {
+    padding: 1.15rem 0.85rem;
+  }
+
+  .contactRow {
+    gap: 0.65rem;
+    padding: 0.75rem 0;
+  }
+
   .statGrid {
     grid-template-columns: 1fr 1fr;
   }
