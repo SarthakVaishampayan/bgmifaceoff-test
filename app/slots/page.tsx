@@ -4,7 +4,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import SlotsClient from './SlotsClient'
 import type { Metadata } from 'next'
 
-import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
 
 export const metadata: Metadata = {
   title: 'Slot Booking | BGFS',
@@ -25,8 +25,7 @@ export default async function SlotsPage() {
       .from('slots')
       .select('*')
       .gte('date', '2026-09-16')
-      .order('date', { ascending: true })
-      .order('time_label', { ascending: true }),
+      .order('date', { ascending: true }),
     supabase
       .from('config')
       .select('key, value')
@@ -34,6 +33,18 @@ export default async function SlotsPage() {
   ])
 
   let slots = slotsResult.data || []
+
+  // Ensure slots are strictly ordered: date asc, then morning to night asc (earliest start time to latest)
+  slots.sort((a, b) => {
+    const aDate = String(a.date || '').split('T')[0]
+    const bDate = String(b.date || '').split('T')[0]
+    const dateComp = aDate.localeCompare(bDate)
+    if (dateComp !== 0) return dateComp
+
+    const aMins = getSlotStartMinutes(a.time_label)
+    const bMins = getSlotStartMinutes(b.time_label)
+    return aMins - bMins
+  })
 
   // Auto-close slots whose registration cutoff (10 mins before start) has passed
   const autoCloseSlotIds = slots

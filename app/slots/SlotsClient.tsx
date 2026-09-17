@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck } from 'lucide-react'
-import { isSlotPastOrEnded, getFirstMatchStartMinutes } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getFirstMatchStartMinutes, getSlotStartMinutes } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
 interface Slot {
@@ -133,21 +133,39 @@ export default function SlotsClient({
 
   // Filter slots based on date/time expiration (auto-closes 10 mins before start)
   const filteredSlots = useMemo(() => {
-    return slotsList.filter(slot => {
+    const list = slotsList.filter(slot => {
       if (!mounted) return true
       const isPast = isSlotPastOrEnded(slot.date, slot.time_label, slot.status)
       if (filterTab === 'upcoming') return !isPast
       if (filterTab === 'past') return isPast
       return true
     })
+
+    return [...list].sort((a, b) => {
+      const aDate = String(a.date || '').split('T')[0]
+      const bDate = String(b.date || '').split('T')[0]
+      const dateComp = aDate.localeCompare(bDate)
+      if (dateComp !== 0) return dateComp
+
+      const aMins = getSlotStartMinutes(a.time_label)
+      const bMins = getSlotStartMinutes(b.time_label)
+      return aMins - bMins
+    })
   }, [slotsList, filterTab, mounted, tick])
 
-  // Group filtered slots by date
+  // Group filtered slots by date, ensuring morning to night ordering within each date
   const slotsByDate = useMemo(() => {
     const groups: Record<string, Slot[]> = {}
     filteredSlots.forEach(slot => {
       if (!groups[slot.date]) groups[slot.date] = []
       groups[slot.date].push(slot)
+    })
+    Object.keys(groups).forEach(date => {
+      groups[date].sort((a, b) => {
+        const aMins = getSlotStartMinutes(a.time_label)
+        const bMins = getSlotStartMinutes(b.time_label)
+        return aMins - bMins
+      })
     })
     return groups
   }, [filteredSlots])
@@ -551,8 +569,10 @@ function loadRazorpayScript(): Promise<boolean> {
         )}
 
         {/* Date groups with Square Card Grid */}
-        {Object.entries(slotsByDate).map(([date, dateSlots]) => (
-          <div key={date} className={styles.daySection}>
+        {Object.keys(slotsByDate).sort().map(date => {
+          const dateSlots = slotsByDate[date]
+          return (
+            <div key={date} className={styles.daySection}>
             <h2 className={styles.dayHeader}>📅 {fmtDateHeader(date)}</h2>
 
             <div className={styles.slotGrid}>
@@ -786,7 +806,8 @@ function loadRazorpayScript(): Promise<boolean> {
               })}
             </div>
           </div>
-        ))}
+        )})
+      }
       </div>
 
       {/* ── CONFIRM DIALOG FOR FREE SLOT ── */}

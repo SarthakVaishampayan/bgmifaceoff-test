@@ -509,7 +509,7 @@
   width: 100%;
   background: transparent;
   border: none;
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -521,13 +521,13 @@
 .mobileCardLeft {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .mobileTeamName {
   font-family: 'Inter', sans-serif;
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   text-align: left;
   color: #ffffff;
@@ -535,7 +535,7 @@
 
 .mobileTeamMeta {
   font-family: 'Inter', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   color: #777777;
   text-align: left;
   text-transform: uppercase;
@@ -544,12 +544,12 @@
 .mobileCardRight {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .mobileStatVal {
   font-family: 'Inter', sans-serif;
-  font-size: 1.3rem;
+  font-size: 1.15rem;
   font-weight: 900;
   color: #fbbf24;
   text-align: right;
@@ -557,7 +557,7 @@
 
 .mobileStatLabel {
   font-family: 'Inter', sans-serif;
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #777777;
@@ -566,7 +566,7 @@
 
 .mobileExpanded {
   border-top: 1px solid #212121;
-  padding: 0.85rem 1.25rem 1.25rem;
+  padding: 0.75rem 1rem 1rem;
   background: #151515;
 }
 

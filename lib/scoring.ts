@@ -48,7 +48,7 @@ export function calcBest16(scores: number[]): number {
  * Slot prize structure (at 18 teams = ₹900 revenue)
  */
 export const SLOT_PRIZES = {
-  first: 250,   // ₹250 cash
+  first: 200,   // ₹200 cash
   second: 150,  // ₹150 cash
   third: 'free_slot', // 1 Free Slot Reward
 } as const

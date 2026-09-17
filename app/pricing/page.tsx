@@ -14,7 +14,7 @@ export default function PricingPage() {
     'Access to that slot\'s in-game room credentials via WhatsApp',
     'Scores recorded and reflected on the public leaderboard',
     'Qualifies toward your Best-16 seasonal score',
-    'Eligible for slot rewards (₹250 / ₹150 / Free Slot Pass)',
+    'Eligible for slot rewards (₹200 / ₹150 / Free Slot Pass)',
     'Grand Finals qualification tracking (top 16 overall teams)',
   ]
 

@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import LeaderboardClient from './LeaderboardClient'
+import { getPlacementPoints } from '@/lib/scoring'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -96,7 +97,7 @@ export default async function LeaderboardPage() {
   })
 
   // Compute team performance from completed matches only
-  const teamSlotMap: Record<string, Record<string, { total_points: number; kills: number; matches_count: number }>> = {}
+  const teamSlotMap: Record<string, Record<string, { total_points: number; position_points: number; kills: number; wwcd: number; matches_count: number }>> = {}
   const teamMetaMap: Record<string, { team_id: string; team_name: string }> = {}
 
   // Include confirmed booking teams
@@ -119,10 +120,20 @@ export default async function LeaderboardPage() {
     }
     if (!teamSlotMap[m.team_id]) teamSlotMap[m.team_id] = {}
     if (!teamSlotMap[m.team_id][m.slot_id]) {
-      teamSlotMap[m.team_id][m.slot_id] = { total_points: 0, kills: 0, matches_count: 0 }
+      teamSlotMap[m.team_id][m.slot_id] = {
+        total_points: 0,
+        position_points: 0,
+        kills: 0,
+        wwcd: 0,
+        matches_count: 0,
+      }
     }
+    const posPts = m.placement_points != null ? Number(m.placement_points) : getPlacementPoints(Number(m.placement))
+    const isWWCD = Number(m.placement) === 1 || Number(m.position) === 1
     teamSlotMap[m.team_id][m.slot_id].total_points += Number(m.total_points) || 0
+    teamSlotMap[m.team_id][m.slot_id].position_points += posPts || 0
     teamSlotMap[m.team_id][m.slot_id].kills += Number(m.kills) || 0
+    if (isWWCD) teamSlotMap[m.team_id][m.slot_id].wwcd += 1
     teamSlotMap[m.team_id][m.slot_id].matches_count += 1
   })
 
@@ -131,21 +142,28 @@ export default async function LeaderboardPage() {
     slotsPlayed.sort((a, b) => b.total_points - a.total_points)
     const top6Slots = slotsPlayed.slice(0, 6)
     const best_6_total = top6Slots.reduce((sum, s) => sum + s.total_points, 0)
-    const total_kills = slotsPlayed.reduce((sum, s) => sum + s.kills, 0)
+    const best_6_position_points = top6Slots.reduce((sum, s) => sum + s.position_points, 0)
+    const best_6_kills = top6Slots.reduce((sum, s) => sum + s.kills, 0)
+    const best_6_wwcd = top6Slots.reduce((sum, s) => sum + s.wwcd, 0)
     const matches_played = slotsPlayed.reduce((sum, s) => sum + s.matches_count, 0)
 
     return {
       team_id: team.team_id,
       team_name: team.team_name,
       matches_played,
+      wwcd: best_6_wwcd,
+      position_points: best_6_position_points,
+      finishes: best_6_kills,
       best_16_total: best_6_total,
-      total_kills,
+      total_kills: best_6_kills,
     }
   })
 
   computedStandings.sort((a, b) => {
     if (b.best_16_total !== a.best_16_total) return b.best_16_total - a.best_16_total
-    return b.total_kills - a.total_kills
+    if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+    if (b.position_points !== a.position_points) return b.position_points - a.position_points
+    return b.finishes - a.finishes
   })
 
   const ranked = computedStandings.map((row, idx) => ({ ...row, rank: idx + 1 }))
