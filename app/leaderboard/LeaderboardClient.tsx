@@ -65,7 +65,6 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     urlSlotId || urlTab === 'slot' ? 'slot' : 'overall'
   )
   const [search, setSearch] = useState('')
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(null)
   const [mySlotsOnly, setMySlotsOnly] = useState(false)
 
   const activeSlots = useMemo(() => {
@@ -117,16 +116,6 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     [rows, search]
   )
 
-  // Build per-team match map for expanded breakdown
-  const teamMatchesMap = useMemo(() => {
-    const map: Record<string, MatchEntry[]> = {}
-    allMatches.forEach(m => {
-      if (!map[m.team_id]) map[m.team_id] = []
-      map[m.team_id].push(m)
-    })
-    return map
-  }, [allMatches])
-
   // Compute per-slot leaderboard for the selected slot
   const slotLeaderboard = useMemo(() => {
     if (!selectedSlotId) return { items: [], hasMatches: false }
@@ -135,6 +124,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
       team_id: string
       team_name: string
       room_slot_number: number
+      wwcd: number
       m1?: MatchEntry
       m2?: MatchEntry
       m3?: MatchEntry
@@ -151,6 +141,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
         team_id: b.team_id,
         team_name: b.teams?.team_name || 'Team #' + b.team_id.slice(0, 5),
         room_slot_number: roomSlot,
+        wwcd: 0,
         total_points: 0,
         total_kills: 0,
         total_position_points: 0,
@@ -165,12 +156,14 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
           team_id: m.team_id,
           team_name: m.teams?.team_name || 'Team #' + m.team_id.slice(0, 5),
           room_slot_number: 5,
+          wwcd: 0,
           total_points: 0,
           total_kills: 0,
           total_position_points: 0,
         }
       }
       const entry = teamMap[m.team_id]
+      if (m.placement === 1) entry.wwcd += 1
       if (m.match_number === 1) entry.m1 = m
       if (m.match_number === 2) entry.m2 = m
       if (m.match_number === 3) entry.m3 = m
@@ -184,6 +177,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
 
     const list = Object.values(teamMap).sort((a, b) => {
       if (b.total_points !== a.total_points) return b.total_points - a.total_points
+      if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
       if (b.total_kills !== a.total_kills) return b.total_kills - a.total_kills
       return a.room_slot_number - b.room_slot_number
     })
@@ -314,16 +308,12 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>POSITION POINTS</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>FINISHES</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>TOTAL POINTS</th>
-                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', width: '60px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredOverall.map((row, idx) => (
                       <Fragment key={row.team_id}>
-                        <tr
-                          className={`${styles.teamRow} ${getRowRankClass(row.rank)} ${expandedTeam === row.team_id ? styles.expanded : ''}`}
-                          onClick={() => setExpandedTeam(expandedTeam === row.team_id ? null : row.team_id)}
-                        >
+                        <tr className={`${styles.teamRow} ${getRowRankClass(row.rank)}`}>
                           <td>
                             <span className={`badge ${getRankBadgeClass(row.rank)}`}>
                               #{row.rank}
@@ -351,26 +341,12 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                               {row.best_16_total}
                             </strong>
                           </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={styles.expandIcon}>
-                              {expandedTeam === row.team_id ? '▲' : '▼'}
-                            </span>
-                          </td>
                         </tr>
-
-                        {/* Expanded match breakdown */}
-                        {expandedTeam === row.team_id && (
-                          <tr key={`${row.team_id}-expanded`}>
-                            <td colSpan={7} className={styles.expandedCell}>
-                              <MatchBreakdown matches={teamMatchesMap[row.team_id] || []} />
-                            </td>
-                          </tr>
-                        )}
 
                         {/* Grand Finals Qualification Cutoff Line after Rank 16 */}
                         {row.rank === 16 && idx < filteredOverall.length - 1 && (
                           <tr key="cutoff-row" className={styles.cutoffRow}>
-                            <td colSpan={7} style={{ padding: 0 }}>
+                            <td colSpan={6} style={{ padding: 0 }}>
                               <div className={styles.cutoffBanner}>
                                 🏆 TOP 16 GRAND FINALS QUALIFICATION CUTOFF 🏆
                               </div>
@@ -381,7 +357,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     ))}
                     {filteredOverall.length === 0 && (
                       <tr>
-                        <td colSpan={7} style={{ textAlign: 'center', color: '#888888', padding: '3rem 1.5rem', fontFamily: 'Inter, sans-serif' }}>
+                        <td colSpan={6} style={{ textAlign: 'center', color: '#888888', padding: '3rem 1.5rem', fontFamily: 'Inter, sans-serif' }}>
                           No registered teams found matching search query
                         </td>
                       </tr>
@@ -396,10 +372,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
               {filteredOverall.map((row, idx) => (
                 <Fragment key={row.team_id}>
                   <div className={`${styles.mobileCard} ${getRowRankClass(row.rank)}`}>
-                    <button
-                      className={styles.mobileCardHeader}
-                      onClick={() => setExpandedTeam(expandedTeam === row.team_id ? null : row.team_id)}
-                    >
+                    <div className={styles.mobileCardHeader}>
                       <div className={styles.mobileCardLeft}>
                         <span className={`badge ${getRankBadgeClass(row.rank)}`}>#{row.rank}</span>
                         <div>
@@ -419,9 +392,8 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                           <div className={styles.mobileStatVal}>{row.best_16_total}</div>
                           <div className={styles.mobileStatLabel}>TOTAL PTS</div>
                         </div>
-                        <span className={styles.expandIcon}>{expandedTeam === row.team_id ? '▲' : '▼'}</span>
                       </div>
-                    </button>
+                    </div>
 
                     {/* Mobile Stats Summary Row */}
                     <div style={{ display: 'flex', gap: '6px', fontSize: '0.68rem', color: '#b8b8b8', background: '#141414', padding: '6px 10px', borderRadius: '6px', justifyContent: 'space-around', margin: '0 0.85rem 0.75rem 0.85rem' }}>
@@ -429,17 +401,6 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                       <span>Pos Pts: <strong style={{ color: '#60a5fa' }}>{row.position_points ?? 0}</strong></span>
                       <span>Finishes: <strong style={{ color: '#e5e5e5' }}>{row.finishes ?? row.total_kills ?? 0}</strong></span>
                     </div>
-
-                    {expandedTeam === row.team_id && (
-                      <div className={styles.mobileExpanded}>
-                        {row.rank <= 16 && (
-                          <div style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'center' }}>
-                            <span className="badge badge-gold" style={{ fontSize: '0.65rem', padding: '2px 8px' }}>✓ QUALIFIES FOR FINALS</span>
-                          </div>
-                        )}
-                        <MatchBreakdown matches={teamMatchesMap[row.team_id] || []} />
-                      </div>
-                    )}
                   </div>
 
                   {/* Mobile Cutoff Banner */}
@@ -519,9 +480,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     <tr style={{ background: '#161616', borderBottom: '1px solid #2a2a2a' }}>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', width: '64px' }}>RANK</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a' }}>TEAM NAME</th>
-                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>MATCH 1</th>
-                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>MATCH 2</th>
-                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>MATCH 3</th>
+                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>CHICKEN</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>POSITION POINTS</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>ELIMINATIONS</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>SLOT POINTS</th>
@@ -548,32 +507,8 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                             )}
                           </div>
                         </td>
-                        <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>
-                          {row.m1 ? (
-                            <span style={{ color: '#e5e5e5', fontWeight: 600 }}>
-                              {row.m1.total_points} pts <span style={{ color: '#888', fontSize: '0.78rem' }}>(#{row.m1.placement})</span>
-                            </span>
-                          ) : (
-                            <span style={{ color: '#555' }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>
-                          {row.m2 ? (
-                            <span style={{ color: '#e5e5e5', fontWeight: 600 }}>
-                              {row.m2.total_points} pts <span style={{ color: '#888', fontSize: '0.78rem' }}>(#{row.m2.placement})</span>
-                            </span>
-                          ) : (
-                            <span style={{ color: '#555' }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ textAlign: 'center', fontSize: '0.85rem' }}>
-                          {row.m3 ? (
-                            <span style={{ color: '#e5e5e5', fontWeight: 600 }}>
-                              {row.m3.total_points} pts <span style={{ color: '#888', fontSize: '0.78rem' }}>(#{row.m3.placement})</span>
-                            </span>
-                          ) : (
-                            <span style={{ color: '#555' }}>—</span>
-                          )}
+                        <td style={{ textAlign: 'center', color: '#fbbf24', fontWeight: '700', fontSize: '0.95rem' }}>
+                          {row.wwcd ?? 0}
                         </td>
                         <td style={{ textAlign: 'center', color: '#60a5fa', fontWeight: '700', fontSize: '0.95rem' }}>
                           {row.total_position_points}
@@ -610,7 +545,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     ))}
                     {slotLeaderboard.items.length === 0 && (
                       <tr>
-                        <td colSpan={9} style={{ textAlign: 'center', color: '#888888', padding: '3rem 1.5rem', fontFamily: 'Inter, sans-serif' }}>
+                        <td colSpan={7} style={{ textAlign: 'center', color: '#888888', padding: '3rem 1.5rem', fontFamily: 'Inter, sans-serif' }}>
                           No registered teams or match scores for this slot yet.
                         </td>
                       </tr>
@@ -644,7 +579,8 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: '#b8b8b8', background: '#141414', padding: '6px 12px', borderRadius: '6px', justifyContent: 'space-around', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '6px', fontSize: '0.68rem', color: '#b8b8b8', background: '#141414', padding: '6px 10px', borderRadius: '6px', justifyContent: 'space-around', marginBottom: '0.5rem' }}>
+                    <span>Chicken: <strong style={{ color: '#fbbf24' }}>{row.wwcd ?? 0}</strong></span>
                     <span>Pos Pts: <strong style={{ color: '#60a5fa' }}>{row.total_position_points}</strong></span>
                     <span>Elims: <strong style={{ color: '#e5e5e5' }}>{row.total_kills}</strong></span>
                   </div>
@@ -759,58 +695,6 @@ function CustomSlotDropdown({
           </ul>
         </>
       )}
-    </div>
-  )
-}
-
-function MatchBreakdown({ matches }: { matches: MatchEntry[] }) {
-  if (matches.length === 0) {
-    return <p style={{ color: '#777777', fontSize: '0.72rem', padding: '0.5rem 0.75rem', margin: 0, textAlign: 'center' }}>No match score history recorded yet</p>
-  }
-
-  // Sort by date then match number
-  const sorted = [...matches].sort((a, b) => {
-    const dateA = a.slots?.date || ''
-    const dateB = b.slots?.date || ''
-    if (dateA !== dateB) return dateA.localeCompare(dateB)
-    return a.match_number - b.match_number
-  })
-
-  // Mark top 18 matches (6 slots * 3 matches)
-  const scoresSorted = [...matches].sort((a, b) => b.total_points - a.total_points)
-  const top18Set = new Set(scoresSorted.slice(0, 18).map(m => `${m.slot_id}-${m.match_number}`))
-
-  return (
-    <div style={{ padding: '0.5rem 0.75rem', overflowX: 'auto', textAlign: 'center' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', justifyContent: 'center' }}>
-        {sorted.map((m, i) => {
-          const key = `${m.slot_id}-${m.match_number}`
-          const isTop18 = top18Set.has(key)
-          return (
-            <div
-              key={i}
-              title={`Placement: #${m.placement} | Eliminations: ${m.kills} | Points: ${m.total_points}`}
-              style={{
-                background: isTop18 ? '#272727' : '#1d1d1d',
-                border: `1px solid ${isTop18 ? '#facc15' : '#323232'}`,
-                borderRadius: '5px',
-                padding: '0.3rem 0.5rem',
-                fontSize: '0.68rem',
-                minWidth: '40px',
-                textAlign: 'center',
-                color: isTop18 ? '#facc15' : '#b8b8b8',
-                fontWeight: isTop18 ? 800 : 500,
-                fontFamily: 'Inter, sans-serif',
-              }}
-            >
-              {m.total_points} Pts
-            </div>
-          )
-        })}
-      </div>
-      <p style={{ fontSize: '0.65rem', color: '#777777', marginTop: '0.5rem', marginBottom: 0, fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
-        ⚡ Gold outline indicates scores included in Best-16 total calculation.
-      </p>
     </div>
   )
 }

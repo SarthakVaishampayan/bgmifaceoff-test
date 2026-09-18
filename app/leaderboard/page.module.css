@@ -362,7 +362,6 @@
 }
 
 .teamRow {
-  cursor: pointer;
   transition: background 0.15s ease;
   border-bottom: 1px solid #2a2a2a;
 }
@@ -513,7 +512,6 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  cursor: pointer;
   color: #ffffff;
   font-family: 'Inter', sans-serif;
 }

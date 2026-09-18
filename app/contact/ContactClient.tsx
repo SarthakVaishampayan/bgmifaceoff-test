@@ -4,7 +4,11 @@ import { useState } from 'react'
 import { Mail, MessageCircle, Clock, Send } from 'lucide-react'
 import styles from './page.module.css'
 
-export default function ContactPage() {
+interface Props {
+  whatsappLink?: string
+}
+
+export default function ContactPage({ whatsappLink = 'https://chat.whatsapp.com/KjNw5o6aktB6Xbe3J3ZgYt' }: Props) {
   const [form, setForm] = useState({ name: '', email: '', message: '' })
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
@@ -70,17 +74,17 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <p className={styles.contactLabel}>WhatsApp Support</p>
-                    <p className={styles.contactValue}>
+                    <div>
                       <a
-                        href="https://wa.me/916388024698?text=Hi%20BGFS%20Support%2C%20I%20have%20a%20query%20regarding%20tournament%20slots."
+                        href={whatsappLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: '#22c55e', fontWeight: 700 }}
+                        className={styles.whatsappBtn}
                       >
-                        +91 63880 24698
+                        <MessageCircle size={15} />
+                        <span>Chat on WhatsApp →</span>
                       </a>
-                    </p>
-                    <p className={styles.contactValueNote}>Click to chat directly on WhatsApp</p>
+                    </div>
                   </div>
                 </div>
 

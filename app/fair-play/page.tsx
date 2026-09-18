@@ -105,7 +105,7 @@ export default function FairPlayPage() {
               </p>
               <ul className={styles.legalList}>
                 <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>Email Support:</strong> <a href="mailto:battlegroundsfaceoffseries@gmail.com" style={{ color: '#fbbf24' }}>battlegroundsfaceoffseries@gmail.com</a></span></li>
-                <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>WhatsApp Support:</strong> <a href="https://wa.me/916388024698?text=Hi%20BGFS%20Support%2C%20I%20have%20a%20query%20regarding%20fair%20play." target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e' }}>+91 63880 24698</a></span></li>
+                <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>WhatsApp Support:</strong> <a href="https://chat.whatsapp.com/KjNw5o6aktB6Xbe3J3ZgYt" target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e' }}>Join WhatsApp Support →</a></span></li>
                 <li><span className={styles.legalBullet}>●</span><span><strong style={{ color: '#ffffff' }}>Hours:</strong> 10:00 AM to 8:00 PM IST (All Days)</span></li>
               </ul>
             </div>
