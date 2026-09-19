@@ -1,6 +1,7 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/booking/create
 export async function POST(request: Request) {
@@ -23,12 +24,15 @@ export async function POST(request: Request) {
     // Get user's team profile & check test account status
     const { data: userProfile } = await admin
       .from('users')
-      .select('team_id, is_test_account')
+      .select('team_id, is_test_account, role')
       .eq('user_id', user.id)
       .maybeSingle()
 
     let team_id = userProfile?.team_id
     let isTestAccount = Boolean(userProfile?.is_test_account)
+    const assignedRole = isSuperAdminEmail(user.email)
+      ? 'admin'
+      : ((userProfile?.role === 'admin' || userProfile?.role === 'admin_scores') ? userProfile.role : 'captain')
 
     // Fallback: Check if user is already captain of an existing team in teams table
     if (!team_id) {
@@ -43,7 +47,7 @@ export async function POST(request: Request) {
         if (existingTeam.is_test_account) isTestAccount = true
         await admin
           .from('users')
-          .upsert({ user_id: user.id, email: user.email, team_id, role: 'captain' }, { onConflict: 'user_id' })
+          .upsert({ user_id: user.id, email: user.email, team_id, role: assignedRole }, { onConflict: 'user_id' })
       }
     } else {
       const { data: teamRec } = await admin
@@ -102,7 +106,7 @@ export async function POST(request: Request) {
           user_id: user.id,
           email: user.email,
           team_id: team_id,
-          role: 'captain',
+          role: assignedRole,
         }, { onConflict: 'user_id' })
     }
 

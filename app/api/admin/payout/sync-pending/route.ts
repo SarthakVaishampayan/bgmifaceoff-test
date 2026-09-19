@@ -1,6 +1,7 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { syncPendingPayouts } from '@/lib/payouts/sync'
 import { NextResponse } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/admin/payout/sync-pending
 // Syncs and returns all payouts, ensuring completed slots have pending records for top 2 teams
@@ -13,13 +14,14 @@ export async function POST() {
     }
 
     const admin = await createAdminClient()
+    const isPermAdmin = isSuperAdminEmail(user.email)
     const { data: userProfile } = await admin
       .from('users')
       .select('role')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
+    if (!isPermAdmin && userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 

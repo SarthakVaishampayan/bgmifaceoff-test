@@ -39,8 +39,8 @@ async function testAndFixBookingsRls() {
         team = teams.find(t => t.team_name?.toLowerCase() === (u.email?.split('@')[0] || '').toLowerCase())
       }
       if (team) {
-        console.log(`Syncing user ${u.email} (${u.user_id}) -> team_id: ${team.team_id}`)
-        await admin.from('users').update({ team_id: team.team_id, role: 'captain' }).eq('user_id', u.user_id)
+        const safeRole = (u.role === 'admin' || u.role === 'admin_scores') ? u.role : 'captain'
+        await admin.from('users').update({ team_id: team.team_id, role: safeRole }).eq('user_id', u.user_id)
         await admin.from('teams').update({ captain_user_id: u.user_id }).eq('team_id', team.team_id)
       }
     }

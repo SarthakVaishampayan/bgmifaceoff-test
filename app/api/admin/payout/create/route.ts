@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/admin/payout/create
 // Creates or marks a payout slip as paid for a team in a completed slot
@@ -12,13 +13,14 @@ export async function POST(request: Request) {
     }
 
     const admin = await createAdminClient()
+    const isPermAdmin = isSuperAdminEmail(user.email)
     const { data: userProfile } = await admin
       .from('users')
       .select('role')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
+    if (!isPermAdmin && userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
     }
 

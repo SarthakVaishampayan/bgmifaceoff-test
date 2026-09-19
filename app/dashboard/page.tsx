@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 import DashboardClient from './DashboardClient'
 import type { Metadata } from 'next'
 
@@ -54,10 +55,13 @@ export default async function DashboardPage() {
 
     if (existingTeam) {
       teamId = existingTeam.team_id
+      const assignedRole = isSuperAdminEmail(user.email)
+        ? 'admin'
+        : ((userProfile?.role === 'admin' || userProfile?.role === 'admin_scores') ? userProfile.role : 'captain')
       await admin
         .from('users')
         .upsert(
-          { user_id: user.id, email: user.email, team_id: teamId, role: 'captain', display_name: existingTeam.team_name },
+          { user_id: user.id, email: user.email, team_id: teamId, role: assignedRole, display_name: existingTeam.team_name },
           { onConflict: 'user_id' }
         )
     }

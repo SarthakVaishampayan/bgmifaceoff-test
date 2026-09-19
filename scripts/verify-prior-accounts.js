@@ -55,8 +55,9 @@ async function syncPriorAccounts() {
         }
         // Ensure team_id is set on user profile
         if (!u.team_id) {
+          const safeRole = (u.role === 'admin' || u.role === 'admin_scores') ? u.role : 'captain'
           console.log(`Updating user ${u.email} team_id -> ${team.team_id}`)
-          await admin.from('users').update({ team_id: team.team_id, role: 'captain' }).eq('user_id', u.user_id)
+          await admin.from('users').update({ team_id: team.team_id, role: safeRole }).eq('user_id', u.user_id)
         }
       } else {
         // Provision team for user if none exists
@@ -70,7 +71,8 @@ async function syncPriorAccounts() {
           .single()
 
         if (newTeam) {
-          await admin.from('users').update({ team_id: newTeam.team_id, role: 'captain' }).eq('user_id', u.user_id)
+          const safeRole = (u.role === 'admin' || u.role === 'admin_scores') ? u.role : 'captain'
+          await admin.from('users').update({ team_id: newTeam.team_id, role: safeRole }).eq('user_id', u.user_id)
         }
       }
     }

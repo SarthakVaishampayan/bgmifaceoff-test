@@ -38,6 +38,8 @@ interface SlotItem {
   time_label: string
   status: string
   teams_booked_count: number
+  first_prize?: number
+  second_prize?: number
 }
 
 interface BookingEntry {
@@ -522,22 +524,28 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                           </strong>
                         </td>
                         <td style={{ textAlign: 'center' }}>
-                          {row.rank === 1 && (
-                            <span className={styles.prizeTagGold}>
-                              <Trophy size={12} /> ₹200 REWARD
-                            </span>
-                          )}
-                          {row.rank === 2 && (
-                            <span className={styles.prizeTagSilver}>
-                              <Medal size={12} /> ₹150 REWARD
-                            </span>
-                          )}
-                          {row.rank === 3 && (
-                            <span className={styles.prizeTagBronze}>
-                              <Award size={12} /> FREE SLOT PASS
-                            </span>
-                          )}
-                          {row.rank > 3 && (
+                          {selectedSlot?.status === 'completed' ? (
+                            <>
+                              {row.rank === 1 && (
+                                <span className={styles.prizeTagGold}>
+                                  <Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 200} REWARD
+                                </span>
+                              )}
+                              {row.rank === 2 && (
+                                <span className={styles.prizeTagSilver}>
+                                  <Medal size={12} /> ₹{selectedSlot?.second_prize ?? 150} REWARD
+                                </span>
+                              )}
+                              {row.rank === 3 && (
+                                <span className={styles.prizeTagBronze}>
+                                  <Award size={12} /> FREE SLOT PASS
+                                </span>
+                              )}
+                              {row.rank > 3 && (
+                                <span style={{ color: '#555555', fontSize: '0.75rem' }}>—</span>
+                              )}
+                            </>
+                          ) : (
                             <span style={{ color: '#555555', fontSize: '0.75rem' }}>—</span>
                           )}
                         </td>
@@ -585,10 +593,10 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     <span>Elims: <strong style={{ color: '#e5e5e5' }}>{row.total_kills}</strong></span>
                   </div>
 
-                  {row.rank <= 3 && (
+                  {selectedSlot?.status === 'completed' && row.rank <= 3 && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-                      {row.rank === 1 && <span className={styles.prizeTagGold}><Trophy size={12} /> ₹200 REWARD</span>}
-                      {row.rank === 2 && <span className={styles.prizeTagSilver}><Medal size={12} /> ₹150 REWARD</span>}
+                      {row.rank === 1 && <span className={styles.prizeTagGold}><Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 200} REWARD</span>}
+                      {row.rank === 2 && <span className={styles.prizeTagSilver}><Medal size={12} /> ₹{selectedSlot?.second_prize ?? 150} REWARD</span>}
                       {row.rank === 3 && <span className={styles.prizeTagBronze}><Award size={12} /> FREE SLOT PASS</span>}
                     </div>
                   )}

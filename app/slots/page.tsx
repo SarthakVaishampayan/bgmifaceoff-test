@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 import SlotsClient from './SlotsClient'
 import type { Metadata } from 'next'
 
@@ -29,10 +30,28 @@ export default async function SlotsPage() {
     supabase
       .from('config')
       .select('key, value')
-      .in('key', ['whatsapp_invite_link', 'slot_entry_fee']),
+      .in('key', ['whatsapp_invite_link', 'slot_entry_fee', 'slot_first_prize', 'slot_second_prize', 'slot_prizes_map']),
   ])
 
   let slots = slotsResult.data || []
+
+  const configObj: Record<string, string> = {}
+  configResult.data?.forEach(r => { configObj[r.key] = r.value })
+
+  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize_text?: string }> = {}
+  if (configObj.slot_prizes_map) {
+    try { slotPrizesMap = JSON.parse(configObj.slot_prizes_map) } catch {}
+  }
+
+  const defaultFirst = parseInt(configObj.slot_first_prize || '200', 10)
+  const defaultSecond = parseInt(configObj.slot_second_prize || '150', 10)
+
+  slots = slots.map(s => ({
+    ...s,
+    first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
+    second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
+    third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? '100% Free Slot Pass',
+  }))
 
   // Ensure slots are strictly ordered: date asc, then morning to night asc (earliest start time to latest)
   slots.sort((a, b) => {
@@ -75,7 +94,7 @@ export default async function SlotsPage() {
     // Fetch user profile
     let { data: userProfile } = await admin
       .from('users')
-      .select('team_id, is_test_account')
+      .select('team_id, is_test_account, role')
       .eq('user_id', user.id)
       .maybeSingle()
 
@@ -111,10 +130,13 @@ export default async function SlotsPage() {
         userTeam = teamByCaptain
         if (teamByCaptain.is_test_account) isTestAccount = true
 
+        const assignedRole = isSuperAdminEmail(user.email)
+          ? 'admin'
+          : ((userProfile?.role === 'admin' || userProfile?.role === 'admin_scores') ? userProfile.role : 'captain')
         await admin
           .from('users')
           .upsert(
-            { user_id: user.id, email: user.email, team_id: teamId, role: 'captain', display_name: teamByCaptain.team_name },
+            { user_id: user.id, email: user.email, team_id: teamId, role: assignedRole, display_name: teamByCaptain.team_name },
             { onConflict: 'user_id' }
           )
       }
@@ -172,6 +194,8 @@ export default async function SlotsPage() {
       userBookedSlotsMap={userBookedSlotsMap}
       whatsappLink={config.whatsapp_invite_link || ''}
       entryFee={parseInt(config.slot_entry_fee || '50')}
+      firstPrize={parseInt(config.slot_first_prize || '200')}
+      secondPrize={parseInt(config.slot_second_prize || '150')}
       isLoggedIn={!!user}
       isTestAccount={isTestAccount}
     />

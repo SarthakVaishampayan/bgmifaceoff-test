@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck, Calendar, AlertCircle, Trophy, CreditCard } from 'lucide-react'
 import { isSlotPastOrEnded, getFirstMatchStartMinutes, getSlotStartMinutes } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
@@ -14,6 +14,8 @@ interface Slot {
   capacity: number
   teams_booked_count: number
   entry_fee: number
+  first_prize?: number
+  second_prize?: number
   status: 'open' | 'full' | 'completed'
   is_grand_finals: boolean
   whatsapp_link?: string
@@ -33,6 +35,8 @@ interface Props {
   userBookedSlotsMap?: Record<string, number>
   whatsappLink: string
   entryFee: number
+  firstPrize?: number
+  secondPrize?: number
   isLoggedIn: boolean
   isTestAccount?: boolean
 }
@@ -81,6 +85,8 @@ export default function SlotsClient({
   userBookedSlotsMap = {},
   whatsappLink,
   entryFee,
+  firstPrize = 200,
+  secondPrize = 150,
   isLoggedIn,
   isTestAccount = false,
 }: Props) {
@@ -98,6 +104,8 @@ export default function SlotsClient({
   const [bookingSlotId, setBookingSlotId] = useState<string | null>(null)
   const [confirmFreeSlot, setConfirmFreeSlot] = useState<Slot | null>(null)
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false)
+  const [showPrizeModal, setShowPrizeModal] = useState<boolean>(false)
+  const [prizeModalTab, setPrizeModalTab] = useState<'offer' | 'standard'>('offer')
 
   const [remainingCoupons, setRemainingCoupons] = useState<FreeCoupon[]>(() => {
     if (unusedCoupons && unusedCoupons.length > 0) return unusedCoupons
@@ -517,10 +525,26 @@ function loadRazorpayScript(): Promise<boolean> {
           <div>
             <h1 className={styles.title}>MATCH SLOTS</h1>
             <p className={styles.subtitle}>
-              3 Matches per Slot · ₹{entryFee} Entry · Max 20 Teams
+              3 Matches per Slot · {entryFee === 1 ? (
+                <span>
+                  <span style={{ textDecoration: 'line-through', color: '#71717a', marginRight: '4px' }}>₹40</span>
+                  <span style={{ color: '#fbbf24', fontWeight: 800 }}>₹1</span>
+                </span>
+              ) : (
+                `₹${entryFee}`
+              )} Entry · Max 20 Teams
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={styles.rulesBtnHeader}
+              onClick={() => setShowPrizeModal(true)}
+              style={{ background: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.4)', color: '#fbbf24' }}
+            >
+              <Trophy size={16} color="#fbbf24" />
+              <span>PRIZE POOL</span>
+            </button>
             <button
               type="button"
               className={styles.rulesBtnHeader}
@@ -695,6 +719,13 @@ function loadRazorpayScript(): Promise<boolean> {
                       ${showFreeOption ? styles.slotCardFree : ''}
                     `}
                   >
+                    {/* Diagonal Corner Ribbon stating OFFER */}
+                    {currentFee === 1 && !isCompleted && !showFreeOption && (
+                      <div className={styles.cornerRibbonWrapper}>
+                        <div className={styles.cornerRibbonOffer}>OFFER</div>
+                      </div>
+                    )}
+
                     {/* Top Row: Spots Left Pill (Top-Left) & FREE Ribbon (Top-Right) */}
                     <div className={styles.cardTopRow}>
                       <span className={`
@@ -740,8 +771,16 @@ function loadRazorpayScript(): Promise<boolean> {
                           <Check size={13} color="#22c55e" /> Reward available
                         </div>
                       ) : (
-                        <div className={styles.normalPriceTag}>
-                          ₹{currentFee} <span className={styles.priceMeta}>/ 3 Matches</span>
+                        <div className={styles.normalPriceTag} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {currentFee === 1 ? (
+                            <>
+                              <span style={{ textDecoration: 'line-through', color: '#71717a', fontSize: '0.92em', fontWeight: 600 }}>₹40</span>
+                              <span style={{ color: '#fbbf24', fontWeight: 800, fontSize: '1.05em' }}>₹1</span>
+                              <span className={styles.priceMeta}>/ 3 Matches</span>
+                            </>
+                          ) : (
+                            <>₹{currentFee} <span className={styles.priceMeta}>/ 3 Matches</span></>
+                          )}
                         </div>
                       )}
                     </div>
@@ -795,6 +834,10 @@ function loadRazorpayScript(): Promise<boolean> {
                             <><span className="spinner" /> REGISTERING...</>
                           ) : isTestAccount && testModeEnabled ? (
                             <><FlaskConical size={13} /> Register (Test Mode)</>
+                          ) : currentFee === 1 ? (
+                            <span>
+                              Register • <span style={{ textDecoration: 'line-through', opacity: 0.65, fontSize: '0.88em', marginRight: '2px' }}>₹40</span> ₹1
+                            </span>
                           ) : (
                             'Register'
                           )}
@@ -856,6 +899,155 @@ function loadRazorpayScript(): Promise<boolean> {
                 onClick={() => setConfirmFreeSlot(null)}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ── PRIZE POOL OVERLAY MODAL ── */}
+      {showPrizeModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowPrizeModal(false)}>
+          <div className={styles.prizeModalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.rulesModalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Trophy size={20} color="#f59e0b" />
+                <h2 className={styles.rulesModalTitle}>Slot Prize Pool &amp; Rewards</h2>
+              </div>
+              <button className={styles.modalCloseBtn} onClick={() => setShowPrizeModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className={styles.rulesModalSubtitle} style={{ marginBottom: '0.9rem' }}>
+              Every match slot awards instant cash prizes via UPI and 100% Free Slot passes for 3rd place.
+            </p>
+
+            {/* Date / Prize Tier Switcher */}
+            <div className={styles.prizeTabContainer}>
+              <button
+                type="button"
+                className={`${styles.prizeTabBtn} ${prizeModalTab === 'offer' ? styles.prizeTabBtnActiveOffer : ''}`}
+                onClick={() => setPrizeModalTab('offer')}
+              >
+                <Flame size={15} color={prizeModalTab === 'offer' ? '#fbbf24' : '#a1a1aa'} />
+                <span>21 Sep (₹1 Offer)</span>
+                <span className={styles.prizeTabBadge} style={{ background: '#f59e0b', color: '#000' }}>
+                  🔥 OFFER
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.prizeTabBtn} ${prizeModalTab === 'standard' ? styles.prizeTabBtnActiveStandard : ''}`}
+                onClick={() => setPrizeModalTab('standard')}
+              >
+                <Trophy size={15} color={prizeModalTab === 'standard' ? '#60a5fa' : '#a1a1aa'} />
+                <span>22 Sep Onwards (₹40)</span>
+                <span className={styles.prizeTabBadge} style={{ background: '#2563eb', color: '#fff' }}>
+                  STANDARD
+                </span>
+              </button>
+            </div>
+
+            {/* Date-Specific Context Banner */}
+            {prizeModalTab === 'offer' ? (
+              <div className={`${styles.prizeBanner} ${styles.prizeBannerOffer}`}>
+                <div className={styles.prizeBannerLeft}>
+                  <span>⚡</span>
+                  <span><strong>Monday, 21 Sep Matchday</strong> · Special Launch Offer</span>
+                </div>
+                <div className={styles.prizeBannerRight}>
+                  <span style={{ color: '#a1a1aa' }}>Entry Fee:</span>
+                  <span style={{ textDecoration: 'line-through', color: '#71717a', margin: '0 2px' }}>₹40</span>
+                  <strong style={{ color: '#fbbf24' }}>₹1</strong>
+                  <span style={{ color: '#a1a1aa', fontSize: '0.7rem' }}>/ squad</span>
+                </div>
+              </div>
+            ) : (
+              <div className={`${styles.prizeBanner} ${styles.prizeBannerStandard}`}>
+                <div className={styles.prizeBannerLeft}>
+                  <span>🏆</span>
+                  <span><strong>Starting 22 Sep Onwards</strong> · Standard Rewards</span>
+                </div>
+                <div className={styles.prizeBannerRight}>
+                  <span style={{ color: '#a1a1aa' }}>Entry Fee:</span>
+                  <strong style={{ color: '#60a5fa' }}>₹40</strong>
+                  <span style={{ color: '#a1a1aa', fontSize: '0.7rem' }}>/ squad</span>
+                </div>
+              </div>
+            )}
+
+            {/* Podium Cards Grid */}
+            <div className={styles.prizeModalGrid}>
+              {/* 1st Place */}
+              <div className={`${styles.prizeMiniCard} ${styles.prizeMiniCardGold}`}>
+                <div className={styles.prizeMiniRank}>🥇 1ST PLACE</div>
+                <div className={styles.prizeMiniAmount} style={{ color: prizeModalTab === 'offer' ? '#fbbf24' : '#60a5fa' }}>
+                  ₹{prizeModalTab === 'offer' ? 120 : 200}
+                </div>
+                <div className={styles.prizeMiniType}>Instant UPI Cash</div>
+                <div className={styles.prizeMiniNote}>Transferred directly to captain&apos;s verified UPI</div>
+              </div>
+
+              {/* 2nd Place */}
+              <div className={`${styles.prizeMiniCard} ${styles.prizeMiniCardSilver}`}>
+                <div className={styles.prizeMiniRank}>🥈 2ND PLACE</div>
+                <div className={styles.prizeMiniAmount}>
+                  ₹{prizeModalTab === 'offer' ? 80 : 100}
+                </div>
+                <div className={styles.prizeMiniType}>Instant UPI Cash</div>
+                <div className={styles.prizeMiniNote}>Transferred directly to captain&apos;s verified UPI</div>
+              </div>
+
+              {/* 3rd Place */}
+              <div className={`${styles.prizeMiniCard} ${styles.prizeMiniCardBronze}`}>
+                <div className={styles.prizeMiniRank}>🥉 3RD PLACE</div>
+                <div className={styles.prizeMiniAmount} style={{ color: '#4ade80' }}>
+                  100% FREE
+                </div>
+                <div className={styles.prizeMiniType}>Free Slot Pass</div>
+                <div className={styles.prizeMiniNote}>Auto-issued coupon for ₹0 entry on any upcoming slot</div>
+              </div>
+            </div>
+
+            {/* Clarification Note */}
+            <div className={styles.prizeClarificationNote}>
+              <span className={styles.prizeClarificationIcon}>💡</span>
+              <span className={styles.prizeClarificationText}>
+                {prizeModalTab === 'offer'
+                  ? 'Note: 21 Sep features our ₹1 promotional launch fee with ₹120 (1st) & ₹80 (2nd) payouts + 100% Free Slot Pass (3rd).'
+                  : 'Note: Starting 22 Sep onwards, standard ₹40 slots unlock enhanced rewards: ₹200 (1st) & ₹100 (2nd) payouts + 100% Free Slot Pass (3rd).'}
+              </span>
+            </div>
+
+            {/* Concise UPI Setup Instructions Box */}
+            <div className={styles.prizeModalUpiBox}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <CreditCard size={16} color="#22c55e" />
+                <strong style={{ color: '#ffffff', fontSize: '0.85rem' }}>How to Add UPI ID for Prize Payouts</strong>
+              </div>
+              <ol style={{ margin: 0, paddingLeft: '1.1rem', color: '#a1a1aa', fontSize: '0.78rem', lineHeight: '1.55' }}>
+                <li>Go to Your Profile.</li>
+                <li>Enter your active <strong>UPI ID</strong> (e.g. <code style={{ color: '#4ade80' }}>yourname@oksbi</code>, <code style={{ color: '#4ade80' }}>mobile@paytm</code>) &amp; click <strong>Save</strong>.</li>
+                <li>When your squad finishes 1st or 2nd, cash rewards are sent straight to your UPI after score verification!</li>
+              </ol>
+            </div>
+
+            {/* Modal Bottom Action Row */}
+            <div className={styles.prizeModalFooter}>
+              <Link
+                href="/profile"
+                className={styles.prizeProfileLink}
+              >
+                Open Profile to Add UPI ID →
+              </Link>
+              <button
+                type="button"
+                className={styles.prizeGotItBtn}
+                onClick={() => setShowPrizeModal(false)}
+              >
+                OK, Got It
               </button>
             </div>
           </div>

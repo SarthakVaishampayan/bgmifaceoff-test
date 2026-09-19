@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/team/rename
 // Allows teams to set or change their team name (1-time edit)
@@ -44,9 +45,12 @@ export async function POST(request: Request) {
 
       if (teamByCaptain) {
         teamId = teamByCaptain.team_id
+        const assignedRole = isSuperAdminEmail(user.email)
+          ? 'admin'
+          : ((userProfile?.role === 'admin' || userProfile?.role === 'admin_scores') ? userProfile.role : 'captain')
         await admin
           .from('users')
-          .upsert({ user_id: user.id, email: user.email, team_id: teamId, role: 'captain' }, { onConflict: 'user_id' })
+          .upsert({ user_id: user.id, email: user.email, team_id: teamId, role: assignedRole }, { onConflict: 'user_id' })
       }
     }
 
@@ -80,13 +84,16 @@ export async function POST(request: Request) {
       }
 
       // Link new team to user profile
+      const assignedRole = isSuperAdminEmail(user.email)
+        ? 'admin'
+        : ((userProfile?.role === 'admin' || userProfile?.role === 'admin_scores') ? userProfile.role : 'captain')
       await admin
         .from('users')
         .upsert({
           user_id: user.id,
           email: user.email,
           team_id: newTeam.team_id,
-          role: 'captain',
+          role: assignedRole,
           display_name: trimmedName,
         }, { onConflict: 'user_id' })
 

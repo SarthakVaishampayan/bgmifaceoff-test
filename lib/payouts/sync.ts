@@ -12,7 +12,7 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     // 1. Fetch completed slots
     const { data: completedSlots, error: slotsErr } = await admin
       .from('slots')
-      .select('slot_id, date, time_label')
+      .select('*')
       .eq('status', 'completed')
 
     if (slotsErr || !completedSlots || completedSlots.length === 0) {
@@ -20,6 +20,20 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     }
 
     const slotIds = completedSlots.map(s => s.slot_id)
+
+    // Fetch default prize config
+    const { data: prizeConfigs } = await admin
+      .from('config')
+      .select('key, value')
+      .in('key', ['slot_first_prize', 'slot_second_prize', 'slot_prizes_map'])
+
+    const defaultFirstPrize = parseInt(prizeConfigs?.find(c => c.key === 'slot_first_prize')?.value || '200', 10)
+    const defaultSecondPrize = parseInt(prizeConfigs?.find(c => c.key === 'slot_second_prize')?.value || '150', 10)
+    let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number }> = {}
+    try {
+      const rawMap = prizeConfigs?.find(c => c.key === 'slot_prizes_map')?.value
+      if (rawMap) slotPrizesMap = JSON.parse(rawMap)
+    } catch {}
 
     // 2. Fetch all matches for these slots
     const { data: matches } = await admin
@@ -151,12 +165,15 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
         const key = `${slotId}_${team.team_id}`
         if (!existingPayoutMap.has(key)) {
           const place = index === 0 ? '1st' : '2nd'
+          const prizeAmount = index === 0 
+            ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? defaultFirstPrize) 
+            : (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? defaultSecondPrize)
           const upiId = teamUpiMap.get(team.team_id) || (team.captain_user_id ? captainUpiMap.get(team.captain_user_id) : null)
 
           payoutsToInsert.push({
             slot_id: slotId,
             team_id: team.team_id,
-            amount: 0, // No fixed amount; admin enters actual amount on disbursement
+            amount: prizeAmount,
             place,
             status: 'pending',
             upi_id: upiId || null,

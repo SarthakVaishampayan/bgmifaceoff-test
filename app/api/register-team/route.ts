@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/register-team
 // Called client-side after signUp+signIn succeeds.
@@ -99,6 +100,12 @@ export async function POST(request: Request) {
 
     const teamId = team?.team_id || null
 
+    // Check existing role so admin is not downgraded
+    const { data: existingUser } = await admin.from('users').select('role, email').eq('user_id', targetUserId).maybeSingle()
+    const assignedRole = (isSuperAdminEmail(targetUser?.email) || isSuperAdminEmail(existingUser?.email))
+      ? 'admin'
+      : ((existingUser?.role === 'admin' || existingUser?.role === 'admin_scores') ? existingUser.role : 'captain')
+
     // Upsert user profile — service role ignores RLS
     const { error: userErr } = await admin
       .from('users')
@@ -106,7 +113,7 @@ export async function POST(request: Request) {
         user_id: targetUserId,
         email: targetUser?.email || '',
         team_id: teamId,
-        role: 'captain',
+        role: assignedRole,
         display_name: displayName?.trim() || teamName.trim(),
       }, { onConflict: 'user_id' })
 
@@ -118,7 +125,7 @@ export async function POST(request: Request) {
           user_id: targetUserId,
           email: targetUser?.email || '',
           team_id: teamId,
-          role: 'captain',
+          role: assignedRole,
           display_name: displayName?.trim() || teamName.trim(),
         }, { onConflict: 'user_id' })
     }

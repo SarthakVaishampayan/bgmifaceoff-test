@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 import styles from './page.module.css'
 
 export default function AdminLoginPage() {
@@ -15,12 +16,17 @@ export default function AdminLoginPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
         // Check if user is admin before redirecting
-        checkAdminAndRedirect(data.user.id)
+        checkAdminAndRedirect(data.user.id, data.user.email)
       }
     })
   }, [router, supabase])
 
-  async function checkAdminAndRedirect(userId: string) {
+  async function checkAdminAndRedirect(userId: string, userEmail?: string | null) {
+    if (isSuperAdminEmail(userEmail)) {
+      router.replace('/admin')
+      return
+    }
+
     const { data } = await supabase
       .from('users')
       .select('role')
@@ -60,6 +66,8 @@ export default function AdminLoginPage() {
     }
 
     if (data.user) {
+      const isPermanentAdmin = isSuperAdminEmail(data.user.email) || isSuperAdminEmail(cleanEmail)
+
       // Verify admin role
       const { data: profile } = await supabase
         .from('users')
@@ -67,12 +75,22 @@ export default function AdminLoginPage() {
         .eq('user_id', data.user.id)
         .maybeSingle()
 
-      if (profile?.role !== 'admin' && profile?.role !== 'admin_scores') {
+      const effectiveRole = isPermanentAdmin ? 'admin' : profile?.role
+
+      if (effectiveRole !== 'admin' && effectiveRole !== 'admin_scores') {
         setLoading(false)
         setError('Access denied. This account does not have admin privileges.')
         // Sign out the non-admin user
         await supabase.auth.signOut()
         return
+      }
+
+      // Self-heal: Ensure role is 'admin' in database for permanent admin
+      if (isPermanentAdmin && profile?.role !== 'admin') {
+        await supabase
+          .from('users')
+          .update({ role: 'admin' })
+          .eq('user_id', data.user.id)
       }
 
       setLoading(false)

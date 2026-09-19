@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/setup-team
 // Used by OnboardPage to create or join a team.
@@ -50,6 +51,11 @@ export async function POST(request: Request) {
         )
       }
 
+      const { data: existingUser } = await admin.from('users').select('role, email').eq('user_id', user.id).maybeSingle()
+      const assignedRole = (isSuperAdminEmail(user.email) || isSuperAdminEmail(existingUser?.email))
+        ? 'admin'
+        : ((existingUser?.role === 'admin' || existingUser?.role === 'admin_scores') ? existingUser.role : 'captain')
+
       // Upsert user profile (handles missing row from trigger)
       const { error: userErr } = await admin
         .from('users')
@@ -57,7 +63,7 @@ export async function POST(request: Request) {
           user_id: user.id,
           email: user.email,
           team_id: team.team_id,
-          role: 'captain',
+          role: assignedRole,
           display_name: displayName?.trim() || teamName.trim(),
         }, { onConflict: 'user_id' })
 
@@ -83,6 +89,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid invite code. Please check and try again.' }, { status: 404 })
       }
 
+      const { data: existingUser } = await admin.from('users').select('role, email').eq('user_id', user.id).maybeSingle()
+      const assignedRole = (isSuperAdminEmail(user.email) || isSuperAdminEmail(existingUser?.email))
+        ? 'admin'
+        : ((existingUser?.role === 'admin' || existingUser?.role === 'admin_scores') ? existingUser.role : 'player')
+
       // Upsert user profile linked to the found team
       const { error: userErr } = await admin
         .from('users')
@@ -90,7 +101,7 @@ export async function POST(request: Request) {
           user_id: user.id,
           email: user.email,
           team_id: team.team_id,
-          role: 'player',
+          role: assignedRole,
           display_name: displayName?.trim() || null,
         }, { onConflict: 'user_id' })
 

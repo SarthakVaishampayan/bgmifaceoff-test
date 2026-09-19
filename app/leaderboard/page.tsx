@@ -39,7 +39,7 @@ export default async function LeaderboardPage() {
     // Slots (only active tournament/testing cycle slots >= Sept 16)
     supabase
       .from('slots')
-      .select('slot_id, date, time_label, status, teams_booked_count')
+      .select('*')
       .gte('date', '2026-09-16')
       .order('date', { ascending: false })
       .order('time_label', { ascending: false }),
@@ -57,24 +57,41 @@ export default async function LeaderboardPage() {
       .eq('payment_status', 'paid')
       .order('created_at', { ascending: true }),
 
-    // Published slots (pushed to points table via "Update The Table")
+    // Config: Published slots & prize config
     supabase
       .from('config')
-      .select('value')
-      .eq('key', 'scores_published_slots')
-      .maybeSingle(),
+      .select('key, value')
+      .in('key', ['scores_published_slots', 'slot_first_prize', 'slot_second_prize', 'slot_prizes_map']),
   ])
 
   const testTeamIds = new Set(testTeamsResult.data?.map(t => t.team_id) || [])
 
+  const configMap: Record<string, string> = {}
+  publishedSlotsResult.data?.forEach((r: any) => { configMap[r.key] = r.value })
+
   // Parse published slot IDs
   let publishedSlotIds = new Set<string>()
-  if (publishedSlotsResult?.data?.value) {
+  if (configMap.scores_published_slots) {
     try {
-      const parsed = JSON.parse(publishedSlotsResult.data.value)
+      const parsed = JSON.parse(configMap.scores_published_slots)
       if (Array.isArray(parsed)) publishedSlotIds = new Set(parsed)
     } catch {}
   }
+
+  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize_text?: string }> = {}
+  if (configMap.slot_prizes_map) {
+    try { slotPrizesMap = JSON.parse(configMap.slot_prizes_map) } catch {}
+  }
+
+  const defaultFirst = parseInt(configMap.slot_first_prize || '200', 10)
+  const defaultSecond = parseInt(configMap.slot_second_prize || '150', 10)
+
+  const enrichedSlots = (slotsResult.data || []).map((s: any) => ({
+    ...s,
+    first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
+    second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
+    third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? '100% Free Slot Pass',
+  }))
 
   // Handle room_slot_number column missing gracefully
   let filteredBookings: any[] = bookingsResult.data || []
@@ -188,7 +205,7 @@ export default async function LeaderboardPage() {
       <LeaderboardClient
         rows={ranked}
         allMatches={completedMatches}
-        slots={slotsResult.data || []}
+        slots={enrichedSlots}
         bookings={filteredBookings as any[]}
         userTeamId={userTeamId}
       />

@@ -830,6 +830,38 @@
   box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
 }
 
+/* ── DIAGONAL CORNER RIBBON (OFFER) ── */
+.cornerRibbonWrapper {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 76px;
+  height: 76px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 10;
+  border-top-right-radius: 14px;
+}
+
+.cornerRibbonOffer {
+  position: absolute;
+  top: 14px;
+  right: -24px;
+  width: 96px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #facc15 0%, #d97706 100%);
+  color: #111111;
+  text-align: center;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 0;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+
 /* Time (Large) */
 .cardTime {
   font-size: 1.05rem;
@@ -1413,3 +1445,354 @@
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
+
+/* ── PRIZE POOL MODAL ── */
+/* ── PRIZE POOL MODAL ── */
+.prizeModalContent {
+  background: #121214;
+  border: 1px solid #27272a;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  padding: 1.5rem;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  animation: fadeInModal 0.2s ease-out forwards;
+  scrollbar-width: thin;
+  scrollbar-color: #27272a transparent;
+}
+
+.prizeModalContent::-webkit-scrollbar {
+  width: 6px;
+}
+
+.prizeModalContent::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 999px;
+}
+
+.prizeTabContainer {
+  display: flex;
+  gap: 0.4rem;
+  background: #18181b;
+  padding: 0.35rem;
+  border-radius: 10px;
+  border: 1px solid #27272a;
+  margin-bottom: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.prizeTabBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #a1a1aa;
+  background: transparent;
+  box-sizing: border-box;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.prizeTabBtnActiveOffer {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.12);
+}
+
+.prizeTabBtnActiveStandard {
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.12);
+}
+
+.prizeTabBadge {
+  font-size: 0.66rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.prizeBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 0.9rem;
+  font-size: 0.8rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.prizeBannerOffer {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.prizeBannerStandard {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+.prizeBannerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1 1 230px;
+  min-width: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.prizeBannerRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  font-size: 0.76rem;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0.28rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.prizeBannerBadge {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.prizeModalGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.prizeMiniCard {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  padding: 0.85rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.prizeMiniCardGold {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.1) 0%, #18181b 100%);
+}
+
+.prizeMiniCardSilver {
+  border-color: rgba(148, 163, 184, 0.35);
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.08) 0%, #18181b 100%);
+}
+
+.prizeMiniCardBronze {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.08) 0%, #18181b 100%);
+}
+
+.prizeMiniRank {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #fbbf24;
+  margin-bottom: 0.35rem;
+  white-space: nowrap;
+}
+
+.prizeMiniAmount {
+  font-size: 1.45rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.15rem;
+}
+
+.prizeMiniType {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fbbf24;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.prizeMiniNote {
+  font-size: 0.68rem;
+  color: #a1a1aa;
+  line-height: 1.35;
+  margin-top: auto;
+  word-break: break-word;
+}
+
+.prizeClarificationNote {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.75rem;
+  color: #a1a1aa;
+  line-height: 1.45;
+  margin-bottom: 0.9rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.prizeClarificationIcon {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.prizeClarificationText {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.prizeModalUpiBox {
+  background: rgba(34, 197, 94, 0.05);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.9rem;
+  min-width: 0;
+}
+
+.prizeModalFooter {
+  margin-top: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.prizeProfileLink {
+  font-size: 0.78rem;
+  padding: 0.5rem 0.85rem;
+  background: #18181b;
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.18s ease;
+  box-sizing: border-box;
+}
+
+.prizeProfileLink:hover {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: #22c55e;
+  color: #86efac;
+}
+
+.prizeGotItBtn {
+  font-size: 0.78rem;
+  padding: 0.52rem 1.25rem;
+  background: #fbbf24;
+  color: #111111;
+  border: none;
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease;
+  box-sizing: border-box;
+}
+
+.prizeGotItBtn:hover {
+  background: #fde047;
+}
+
+@media (max-width: 640px) {
+  .prizeModalContent {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    padding: 1.25rem 1rem 1.75rem;
+    max-width: 100%;
+    max-height: calc(100vh - 36px);
+    margin-top: auto;
+    animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .prizeTabContainer {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .prizeBanner {
+    display: none !important;
+  }
+
+  .prizeModalGrid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .prizeModalFooter {
+    justify-content: stretch;
+  }
+
+  .prizeProfileLink,
+  .prizeGotItBtn {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+  }
+}
+

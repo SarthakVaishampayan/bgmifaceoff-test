@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // In-memory cache for maintenance mode (persists across requests in same worker)
 let maintenanceCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
@@ -72,14 +73,18 @@ export async function updateSession(request: NextRequest) {
         if (pathname !== '/maintenance') {
           let isAdmin = false
           if (user) {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('role')
-              .eq('user_id', user.id)
-              .maybeSingle()
-
-            if (userData?.role === 'admin' || userData?.role === 'admin_scores') {
+            if (isSuperAdminEmail(user.email)) {
               isAdmin = true
+            } else {
+              const { data: userData } = await supabase
+                .from('users')
+                .select('role')
+                .eq('user_id', user.id)
+                .maybeSingle()
+
+              if (userData?.role === 'admin' || userData?.role === 'admin_scores') {
+                isAdmin = true
+              }
             }
           }
 

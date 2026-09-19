@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/user/delete
 export async function POST(request: Request) {
@@ -20,22 +21,27 @@ export async function POST(request: Request) {
     const admin = await createAdminClient()
 
     // Verify requester is admin
+    const isPermAdmin = isSuperAdminEmail(user.email)
     const { data: requesterProfile } = await admin
       .from('users')
       .select('role')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (requesterProfile?.role !== 'admin') {
+    if (!isPermAdmin && requesterProfile?.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden: Super Admin access required' }, { status: 403 })
     }
 
-    // Get user's team ID to clean up associated records
+    // Protect permanent super admin from deletion
     const { data: targetProfile } = await admin
       .from('users')
-      .select('team_id')
+      .select('team_id, email')
       .eq('user_id', target_user_id)
       .maybeSingle()
+
+    if (isSuperAdminEmail(targetProfile?.email)) {
+      return NextResponse.json({ error: 'Cannot delete the primary Super Admin account.' }, { status: 400 })
+    }
 
     if (targetProfile?.team_id) {
       // Clean up bookings & team record

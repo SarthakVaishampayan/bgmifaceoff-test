@@ -1,6 +1,7 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // POST /api/coupon/redeem
 export async function POST(request: Request) {
@@ -23,11 +24,14 @@ export async function POST(request: Request) {
     // Get user's team
     const { data: userProfile } = await admin
       .from('users')
-      .select('team_id')
+      .select('team_id, role')
       .eq('user_id', user.id)
       .maybeSingle()
 
     let team_id = userProfile?.team_id
+    const assignedRole = isSuperAdminEmail(user.email)
+      ? 'admin'
+      : ((userProfile?.role === 'admin' || userProfile?.role === 'admin_scores') ? userProfile.role : 'captain')
 
     if (!team_id) {
       const finalTeamName = (team_name && team_name.trim()) || user.email?.split('@')[0] || 'Team User'
@@ -37,7 +41,7 @@ export async function POST(request: Request) {
         .from('teams')
         .insert({
           team_name: finalTeamName,
-          captain_id: user.id,
+          captain_user_id: user.id,
           invite_code: inviteCode,
           phone: phone || null,
         })
@@ -56,7 +60,7 @@ export async function POST(request: Request) {
           user_id: user.id,
           email: user.email,
           team_id: team_id,
-          role: 'captain',
+          role: assignedRole,
         }, { onConflict: 'user_id' })
     }
 

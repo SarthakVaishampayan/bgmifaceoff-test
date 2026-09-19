@@ -65,6 +65,8 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   const [slots, setSlots] = useState(initialSlots)
   const [payouts, setPayouts] = useState(initialPayouts)
   const [users, setUsers] = useState(usersList)
+  const [configState, setConfigState] = useState<Record<string, string>>(config || {})
+  const [savingUserRole, setSavingUserRole] = useState<string | null>(null)
   const todayStr = getTodayStr()
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
@@ -148,6 +150,12 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   }
 
   async function updateUserRole(userId: string, newRole: string) {
+    const target = users.find(u => u.user_id === userId)
+    if (target?.email?.toLowerCase() === 'admin@gmail.com' && newRole !== 'admin') {
+      alert('Cannot change or demote the primary Super Admin account (admin@gmail.com).')
+      return
+    }
+
     await supabase
       .from('users')
       .update({ role: newRole })
@@ -157,6 +165,12 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   }
 
   async function deleteUser(userId: string) {
+    const target = users.find(u => u.user_id === userId)
+    if (target?.email?.toLowerCase() === 'admin@gmail.com') {
+      alert('Cannot delete the primary Super Admin account.')
+      return
+    }
+
     if (!confirm('Are you sure you want to completely delete this user account? This will also remove their team bookings and registration.')) return
     try {
       const res = await fetch('/api/user/delete', {
@@ -296,7 +310,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               onSyncPayouts={refreshPayouts}
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
-              config={config}
+              config={configState}
             />
           )}
           {isSuperAdmin && tab === 'slots' && (
@@ -308,6 +322,8 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               onSyncPayouts={refreshPayouts}
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
+              config={configState}
+              setConfig={setConfigState}
             />
           )}
           {tab === 'upi_info' && (
@@ -325,7 +341,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
           )}
           {isSuperAdmin && tab === 'bookings' && <BookingsTab bookings={bookings} />}
           {isSuperAdmin && tab === 'coupons' && <CouponsTab coupons={coupons} teams={teams} supabase={supabase} />}
-          {isSuperAdmin && tab === 'config' && <ConfigTab config={config} supabase={supabase} />}
+          {isSuperAdmin && tab === 'config' && <ConfigTab config={configState} setConfig={setConfigState} supabase={supabase} />}
           {isSuperAdmin && tab === 'users' && (
             <UsersTab
               users={users}
@@ -1307,15 +1323,46 @@ function normalizeStartTime(timeStr: string): string {
   return cleaned
 }
 
+function getSlotStartTime(rawLabel: string): string {
+  if (!rawLabel) return ''
+  const windowPart = rawLabel.split('(')[0].trim()
+  const splitDash = windowPart.split(/\s*(?:–|-|to)\s*/i)
+  if (splitDash.length > 0) {
+    const rawStart = splitDash[0].replace(/^.*[•·|]\s*/, '').trim()
+    return normalizeStartTime(rawStart)
+  }
+  return ''
+}
+
 // ── SLOTS MANAGEMENT TAB ──────────────────────────────────────────
-function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDate, setSelectedDate }: any) {
+function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDate, setSelectedDate, config, setConfig }: any) {
   const todayStr = getTodayStr()
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
 
+  const defaultFirstPrize = parseInt(config?.slot_first_prize || '200', 10)
+  const defaultSecondPrize = parseInt(config?.slot_second_prize || '150', 10)
+
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'not_open' | 'completed'>('all')
   const [msg, setMsg] = useState('')
   const [loadingPresetId, setLoadingPresetId] = useState<number | null>(null)
+
+  async function persistSlotPrizeOverride(slotId: string, p1: number, p2: number) {
+    try {
+      let currentMap: Record<string, any> = {}
+      if (config?.slot_prizes_map) {
+        try { currentMap = JSON.parse(config.slot_prizes_map) } catch {}
+      }
+      currentMap[slotId] = { first_prize: p1, second_prize: p2 }
+      const mapJson = JSON.stringify(currentMap)
+      await supabase.from('config').upsert([{ key: 'slot_prizes_map', value: mapJson }], { onConflict: 'key' })
+      if (setConfig) {
+        setConfig((prev: any) => ({ ...prev, slot_prizes_map: mapJson }))
+      }
+    } catch (e) {
+      console.error('Failed to persist slot prize override to config:', e)
+    }
+  }
 
   // Compute standard 4-state slot status
   function computeSlotStatus(
@@ -1351,6 +1398,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     whatsapp_link?: string
     entry_fee?: number
     capacity?: number
+    first_prize?: any
+    second_prize?: any
   }>>({})
 
   // Local state to track which slot tiles are expanded (default: all collapsed)
@@ -1400,21 +1449,16 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       const nameRegex = new RegExp(`\\b${preset.name}\\b`, 'i')
       if (nameRegex.test(rawLabel)) return true
 
-      // 2. Base window before any parentheses (e.g. "9:00 PM – 11:00 PM (Match 1:...)")
-      const windowPart = rawLabel.split('(')[0].trim()
-      const windowNorm = windowPart.toLowerCase().replace(/\s+/g, ' ').trim()
-
-      if (windowNorm === presetLabelNorm || windowNorm.startsWith(presetLabelNorm)) {
+      // 2. Strict start time match (e.g. "1:00 PM" matches "1:00 PM - 3:00 PM")
+      const slotStartTime = getSlotStartTime(rawLabel)
+      if (slotStartTime && presetStartTime && slotStartTime === presetStartTime) {
         return true
       }
 
-      // 3. Strict START time match before the dash (e.g. "1:00 PM" from "1:00 PM – 3:00 PM")
-      const splitDash = windowPart.split(/\s*(?:–|-|to)\s*/i)
-      if (splitDash.length > 0) {
-        const rawStart = splitDash[0].replace(/^.*[•·|]\s*/, '').trim()
-        if (normalizeStartTime(rawStart) === presetStartTime) {
-          return true
-        }
+      // 3. Fallback: Base time label string includes normalized preset window
+      const cleanLabel = rawLabel.split('(')[0].toLowerCase().replace(/\s+/g, ' ').trim()
+      if (cleanLabel.includes(presetLabelNorm) || presetLabelNorm.includes(cleanLabel)) {
+        return true
       }
 
       return false
@@ -1437,39 +1481,76 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : (existing?.whatsapp_link || null)
     const entryFee = form.entry_fee || existing?.entry_fee || 50
     const capacity = form.capacity || existing?.capacity || 20
+    const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
+    const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
 
     if (existing) {
-      const { data, error } = await supabase
+      let updatePayload: any = {
+        status: 'open',
+        time_label: timeLabel,
+        whatsapp_link: whatsappLink,
+        entry_fee: entryFee,
+        capacity: capacity,
+        first_prize: firstPrize,
+        second_prize: secondPrize,
+      }
+      let { data, error } = await supabase
         .from('slots')
-        .update({
-          status: 'open',
-          time_label: timeLabel,
-          whatsapp_link: whatsappLink,
-          entry_fee: entryFee,
-          capacity: capacity,
-        })
+        .update(updatePayload)
         .eq('slot_id', existing.slot_id)
         .select()
         .single()
 
+      if (error && (error.message?.includes('first_prize') || error.message?.includes('column of \'slots\''))) {
+        delete updatePayload.first_prize
+        delete updatePayload.second_prize
+        const fallback = await supabase
+          .from('slots')
+          .update(updatePayload)
+          .eq('slot_id', existing.slot_id)
+          .select()
+          .single()
+        data = fallback.data
+        error = fallback.error
+        if (!error && data) {
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+        }
+      }
+
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? enriched : s))
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
     } else {
-      const { data, error } = await supabase.from('slots').insert({
+      let insertPayload: any = {
         date: selectedDate,
         time_label: timeLabel,
         capacity: capacity,
         entry_fee: entryFee,
         status: 'open',
         whatsapp_link: whatsappLink,
-      }).select().single()
+        first_prize: firstPrize,
+        second_prize: secondPrize,
+      }
+      let { data, error } = await supabase.from('slots').insert(insertPayload).select().single()
+
+      if (error && (error.message?.includes('first_prize') || error.message?.includes('column of \'slots\''))) {
+        delete insertPayload.first_prize
+        delete insertPayload.second_prize
+        const fallback = await supabase.from('slots').insert(insertPayload).select().single()
+        data = fallback.data
+        error = fallback.error
+        if (!error && data) {
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+        }
+      }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        setSlots((prev: any[]) => [...prev, data])
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
     }
@@ -1528,19 +1609,37 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : null
       const entryFee = form.entry_fee || 50
       const capacity = form.capacity || 20
+      const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : defaultFirstPrize
+      const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : defaultSecondPrize
 
-      const { data, error } = await supabase.from('slots').insert({
+      let insertPayload: any = {
         date: selectedDate,
         time_label: timeLabel,
         capacity: capacity,
         entry_fee: entryFee,
         status: 'full',
         whatsapp_link: whatsappLink,
-      }).select().single()
+        first_prize: firstPrize,
+        second_prize: secondPrize,
+      }
+
+      let { data, error } = await supabase.from('slots').insert(insertPayload).select().single()
+
+      if (error && (error.message?.includes('first_prize') || error.message?.includes('column of \'slots\''))) {
+        delete insertPayload.first_prize
+        delete insertPayload.second_prize
+        const fallback = await supabase.from('slots').insert(insertPayload).select().single()
+        data = fallback.data
+        error = fallback.error
+        if (!error && data) {
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+        }
+      }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        setSlots((prev: any[]) => [...prev, data])
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) marked CLOSED to registrations`)
       setLoadingPresetId(null)
@@ -1562,7 +1661,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     setLoadingPresetId(null)
   }
 
-  // Save changes to time, whatsapp link, entry fee, capacity
+  // Save changes to time, whatsapp link, entry fee, capacity, prizes
   async function handleSaveSlotDetails(preset: typeof FIXED_DAILY_SLOTS[0]) {
     setLoadingPresetId(preset.id)
     setMsg('')
@@ -1578,38 +1677,75 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : (existing?.whatsapp_link || null)
     const entryFee = form.entry_fee || existing?.entry_fee || 50
     const capacity = form.capacity || existing?.capacity || 20
+    const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
+    const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
 
     if (existing) {
-      const { data, error } = await supabase
+      let updatePayload: any = {
+        time_label: timeLabel,
+        whatsapp_link: whatsappLink,
+        entry_fee: entryFee,
+        capacity: capacity,
+        first_prize: firstPrize,
+        second_prize: secondPrize,
+      }
+      let { data, error } = await supabase
         .from('slots')
-        .update({
-          time_label: timeLabel,
-          whatsapp_link: whatsappLink,
-          entry_fee: entryFee,
-          capacity: capacity,
-        })
+        .update(updatePayload)
         .eq('slot_id', existing.slot_id)
         .select()
         .single()
 
+      if (error && (error.message?.includes('first_prize') || error.message?.includes('column of \'slots\''))) {
+        delete updatePayload.first_prize
+        delete updatePayload.second_prize
+        const fallback = await supabase
+          .from('slots')
+          .update(updatePayload)
+          .eq('slot_id', existing.slot_id)
+          .select()
+          .single()
+        data = fallback.data
+        error = fallback.error
+        if (!error && data) {
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+        }
+      }
+
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? enriched : s))
       }
       setMsg(`✅ Details saved for ${preset.name}!`)
     } else {
-      const { data, error } = await supabase.from('slots').insert({
+      let insertPayload: any = {
         date: selectedDate,
         time_label: timeLabel,
         capacity: capacity,
         entry_fee: entryFee,
         status: 'open',
         whatsapp_link: whatsappLink,
-      }).select().single()
+        first_prize: firstPrize,
+        second_prize: secondPrize,
+      }
+      let { data, error } = await supabase.from('slots').insert(insertPayload).select().single()
+
+      if (error && (error.message?.includes('first_prize') || error.message?.includes('column of \'slots\''))) {
+        delete insertPayload.first_prize
+        delete insertPayload.second_prize
+        const fallback = await supabase.from('slots').insert(insertPayload).select().single()
+        data = fallback.data
+        error = fallback.error
+        if (!error && data) {
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+        }
+      }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        setSlots((prev: any[]) => [...prev, data])
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ Created and saved details for ${preset.name}!`)
     }
@@ -1622,9 +1758,12 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     setLoadingPresetId(preset.id)
     setMsg('')
     const existing = getExistingSlot(preset)
+    const form = getForm(preset.id)
+
+    const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
+    const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
 
     if (!existing) {
-      const form = getForm(preset.id)
       const baseLabel = form.time_label ?? preset.defaultLabel
       const m1 = form.m1_time
       const m2 = form.m2_time
@@ -1634,18 +1773,34 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       const entryFee = form.entry_fee || 50
       const capacity = form.capacity || 20
 
-      const { data, error } = await supabase.from('slots').insert({
+      let insertPayload: any = {
         date: selectedDate,
         time_label: timeLabel,
         capacity,
         entry_fee: entryFee,
         status: 'completed',
         whatsapp_link: whatsappLink,
-      }).select().single()
+        first_prize: firstPrize,
+        second_prize: secondPrize,
+      }
+
+      let { data, error } = await supabase.from('slots').insert(insertPayload).select().single()
+
+      if (error && (error.message?.includes('first_prize') || error.message?.includes('column of \'slots\''))) {
+        delete insertPayload.first_prize
+        delete insertPayload.second_prize
+        const fallback = await supabase.from('slots').insert(insertPayload).select().single()
+        data = fallback.data
+        error = fallback.error
+        if (!error && data) {
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+        }
+      }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        setSlots((prev: any[]) => [...prev, data])
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) marked as DONE! Payout slips (top 2) & 3rd-place coupon generated.`)
       if (onSyncPayouts) onSyncPayouts()
@@ -1903,6 +2058,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                   const currentWhatsapp = form.whatsapp_link ?? existingSlot?.whatsapp_link ?? ''
                   const currentFee = form.entry_fee ?? existingSlot?.entry_fee ?? 50
                   const currentCap = form.capacity ?? existingSlot?.capacity ?? 20
+                  const currentFirstPrize = form.first_prize ?? existingSlot?.first_prize ?? defaultFirstPrize
+                  const currentSecondPrize = form.second_prize ?? existingSlot?.second_prize ?? defaultSecondPrize
 
                   return (
                     <div
@@ -2296,6 +2453,58 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                 value={currentCap}
                                 onChange={e => updatePresetFormField(preset.id, 'capacity', parseInt(e.target.value) || 20)}
                               />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: '0.45rem', background: '#18181b', padding: '0.5rem', borderRadius: '8px', border: '1px solid #27272a' }}>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#facc15', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                🥇 1st Prize (₹):
+                              </label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderColor: '#854d0e', background: '#09090b' }}
+                                value={currentFirstPrize}
+                                onChange={e => updatePresetFormField(preset.id, 'first_prize', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
+                                placeholder={String(defaultFirstPrize)}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#cbd5e1', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                🥈 2nd Prize (₹):
+                              </label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderColor: '#475569', background: '#09090b' }}
+                                value={currentSecondPrize}
+                                onChange={e => updatePresetFormField(preset.id, 'second_prize', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
+                                placeholder={String(defaultSecondPrize)}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                🥉 3rd Prize:
+                              </label>
+                              <div
+                                style={{
+                                  padding: '0.35rem 0.5rem',
+                                  fontSize: '0.74rem',
+                                  background: 'rgba(245, 158, 11, 0.1)',
+                                  color: '#fbbf24',
+                                  border: '1px dashed #d97706',
+                                  borderRadius: '6px',
+                                  fontWeight: 700,
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  textAlign: 'center'
+                                }}
+                                title="3rd Prize is always an automated Free Slot Pass coupon"
+                              >
+                                🎟️ Free Slot
+                              </div>
                             </div>
                           </div>
 
@@ -2794,6 +3003,68 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                 }
                               }}
                             />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: '0.45rem', background: '#18181b', padding: '0.5rem', borderRadius: '8px', border: '1px solid #27272a' }}>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#facc15', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              🥇 1st Prize (₹):
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderColor: '#854d0e', background: '#09090b' }}
+                              defaultValue={extraSlot.first_prize ?? defaultFirstPrize}
+                              onBlur={async (e) => {
+                                const newPrize = parseInt(e.target.value) || 0
+                                const { data } = await supabase.from('slots').update({ first_prize: newPrize }).eq('slot_id', extraSlot.slot_id).select().single()
+                                if (data && setSlots) {
+                                  setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#cbd5e1', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              🥈 2nd Prize (₹):
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderColor: '#475569', background: '#09090b' }}
+                              defaultValue={extraSlot.second_prize ?? defaultSecondPrize}
+                              onBlur={async (e) => {
+                                const newPrize = parseInt(e.target.value) || 0
+                                const { data } = await supabase.from('slots').update({ second_prize: newPrize }).eq('slot_id', extraSlot.slot_id).select().single()
+                                if (data && setSlots) {
+                                  setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              🥉 3rd Prize:
+                            </label>
+                            <div
+                              style={{
+                                padding: '0.35rem 0.5rem',
+                                fontSize: '0.74rem',
+                                background: 'rgba(245, 158, 11, 0.1)',
+                                color: '#fbbf24',
+                                border: '1px dashed #d97706',
+                                borderRadius: '6px',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                textAlign: 'center'
+                              }}
+                              title="3rd Prize is always an automated Free Slot Pass coupon"
+                            >
+                              🎟️ Free Slot
+                            </div>
                           </div>
                         </div>
 
@@ -4429,17 +4700,23 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
 }
 
 // ── CONFIG TAB ───────────────────────────────────────────────────
-function ConfigTab({ config, supabase }: { config: Record<string, string>; supabase: any }) {
+function ConfigTab({ config, setConfig, supabase }: { config: Record<string, string>; setConfig?: (cfg: any) => void; supabase: any }) {
   const [values, setValues] = useState(config)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    setValues(config)
+  }, [config])
 
   const fields = [
     { key: 'grand_finals_date', label: 'Grand Finals Date (ISO)', placeholder: '2025-09-14T18:00:00+05:30', type: 'text' },
     { key: 'whatsapp_invite_link', label: 'WhatsApp Community Link', placeholder: 'https://chat.whatsapp.com/...', type: 'text' },
     { key: 'cycle_start_date', label: 'Cycle Start Date', placeholder: '2025-09-01', type: 'date' },
     { key: 'cycle_end_date', label: 'Cycle End Date', placeholder: '2025-09-14', type: 'date' },
-    { key: 'slot_entry_fee', label: 'Slot Entry Fee (₹)', placeholder: '50', type: 'number' },
+    { key: 'slot_entry_fee', label: 'Default Slot Entry Fee (₹)', placeholder: '50', type: 'number' },
+    { key: 'slot_first_prize', label: 'Default 1st Place Cash Prize (₹)', placeholder: '200', type: 'number' },
+    { key: 'slot_second_prize', label: 'Default 2nd Place Cash Prize (₹)', placeholder: '150', type: 'number' },
   ]
 
   const isMaintenanceOn = values['maintenance_mode'] === 'true'
@@ -4453,7 +4730,9 @@ function ConfigTab({ config, supabase }: { config: Record<string, string>; supab
     if (error) {
       setMsg('❌ Failed to update maintenance mode: ' + error.message)
     } else {
-      setValues(prev => ({ ...prev, maintenance_mode: nextVal }))
+      const updated = { ...values, maintenance_mode: nextVal }
+      setValues(updated)
+      if (setConfig) setConfig(updated)
       setMsg(nextVal === 'true' ? '🔴 SITE IS NOW UNDER MAINTENANCE! Non-admin users are redirected to the maintenance page.' : '🟢 SITE IS NOW LIVE! Public access restored.')
     }
   }
@@ -4468,7 +4747,10 @@ function ConfigTab({ config, supabase }: { config: Record<string, string>; supab
 
     setSaving(false)
     if (error) { setMsg('❌ ' + error.message) }
-    else { setMsg('✅ Configuration saved!') }
+    else { 
+      setMsg('✅ Configuration saved!')
+      if (setConfig) setConfig(values)
+    }
   }
 
   return (
@@ -4537,6 +4819,28 @@ function ConfigTab({ config, supabase }: { config: Record<string, string>; supab
           </div>
         ))}
 
+        {/* 3rd Place Prize Policy Box */}
+        <div style={{
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: '10px',
+          padding: '0.85rem 1rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <span style={{ fontSize: '1.4rem' }}>🎟️</span>
+          <div>
+            <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '0.85rem' }}>
+              3rd Place Prize Policy: 100% Free Slot Pass
+            </div>
+            <div style={{ color: '#aaa', fontSize: '0.76rem', marginTop: '2px' }}>
+              3rd place winners automatically receive a single-use free slot coupon code (<code style={{ color: '#fbbf24' }}>FREE3RD-...</code>) upon slot completion.
+            </div>
+          </div>
+        </div>
+
         {msg && <p className={styles.scoreMsg}>{msg}</p>}
         <button id="save-config-btn" type="submit" className="btn btn-primary" disabled={saving}>
           {saving ? 'Saving...' : 'Save Configuration'}
@@ -4598,8 +4902,9 @@ function UsersTab({
                 <td>
                   <select
                     className="form-input"
-                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem', width: 'auto' }}
+                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem', width: 'auto', opacity: u.email?.toLowerCase() === 'admin@gmail.com' ? 0.6 : 1 }}
                     value={u.role || 'player'}
+                    disabled={u.email?.toLowerCase() === 'admin@gmail.com'}
                     onChange={e => onUpdateRole(u.user_id, e.target.value)}
                   >
                     <option value="player">Player</option>
@@ -4627,7 +4932,7 @@ function UsersTab({
                         {u.is_test_account ? 'Turn Test Mode OFF' : 'Turn Test Mode ON'}
                       </button>
                     )}
-                    {onDeleteUser && (
+                    {onDeleteUser && u.email?.toLowerCase() !== 'admin@gmail.com' && (
                       <button
                         className="btn"
                         style={{ background: '#ef4444', color: '#fff', padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
@@ -4635,6 +4940,11 @@ function UsersTab({
                       >
                         Delete Account
                       </button>
+                    )}
+                    {u.email?.toLowerCase() === 'admin@gmail.com' && (
+                      <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>
+                        🔒 Protected
+                      </span>
                     )}
                   </div>
                 </td>

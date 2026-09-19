@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 
 // GET /api/admin/upi-info?slot_id=<UUID>
 export async function GET(request: Request) {
@@ -19,13 +20,14 @@ export async function GET(request: Request) {
     }
 
     const admin = await createAdminClient()
+    const isPermAdmin = isSuperAdminEmail(user.email)
     const { data: userProfile } = await admin
       .from('users')
       .select('role')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
+    if (!isPermAdmin && userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
