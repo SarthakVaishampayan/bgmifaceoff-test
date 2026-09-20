@@ -92,65 +92,65 @@ export default function LoginPage() {
 
 
         {/* ── FORM 1: STANDARD ID & PASSWORD ── */}
-          <form onSubmit={handlePasswordSignIn} className={styles.form}>
-            <div className={styles.fieldGroup}>
-              <label className={styles.label} htmlFor="login-email">EMAIL ADDRESS</label>
+        <form onSubmit={handlePasswordSignIn} className={styles.form}>
+          <div className={styles.fieldGroup}>
+            <label className={styles.label} htmlFor="login-email">EMAIL ADDRESS</label>
+            <input
+              id="login-email"
+              type="email"
+              className={styles.input}
+              placeholder="player@bgfsesports.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className={styles.fieldGroup}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label className={styles.label} htmlFor="login-password">PASSWORD</label>
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', color: '#facc15', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
+                onClick={() => setShowForgotModal(true)}
+              >
+                Forgot Password?
+              </button>
+            </div>
+
+            <div className={styles.passwordWrapper}>
               <input
-                id="login-email"
-                type="email"
-                className={styles.input}
-                placeholder="player@bgfsesports.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                className={`${styles.input} ${styles.passwordInput}`}
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
                 required
-                autoFocus
               />
+              <button
+                type="button"
+                className={styles.eyeBtn}
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
+          </div>
 
-            <div className={styles.fieldGroup}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className={styles.label} htmlFor="login-password">PASSWORD</label>
-                <button
-                  type="button"
-                  style={{ background: 'none', border: 'none', color: '#facc15', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
-                  onClick={() => setShowForgotModal(true)}
-                >
-                  Forgot Password?
-                </button>
-              </div>
+          {error && <p className={styles.errorMsg}>{error}</p>}
 
-              <div className={styles.passwordWrapper}>
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  className={`${styles.input} ${styles.passwordInput}`}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                />
-                <button
-                  type="button"
-                  className={styles.eyeBtn}
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {error && <p className={styles.errorMsg}>{error}</p>}
-
-            <button
-              id="password-signin-btn"
-              type="submit"
-              className={styles.submitBtn}
-              disabled={loading}
-            >
-              {loading ? <><span className="spinner" /> SIGNING IN...</> : 'SIGN IN →'}
-            </button>
-          </form>
+          <button
+            id="password-signin-btn"
+            type="submit"
+            className={styles.submitBtn}
+            disabled={loading}
+          >
+            {loading ? <><span className="spinner" /> SIGNING IN...</> : 'SIGN IN →'}
+          </button>
+        </form>
 
         {/* New User Option Section */}
         <div className={styles.signupFooter}>
@@ -266,7 +266,7 @@ export default function LoginPage() {
               }}
             >
               <MessageCircle size={18} />
-              Message Admin on WhatsApp →
+              Message Admin on WhatsApp  →
             </a>
 
             <button
