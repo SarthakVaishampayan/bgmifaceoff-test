@@ -53,11 +53,11 @@ export default async function SlotsPage() {
     third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? '100% Free Slot Pass',
   }))
 
-  // Ensure slots are strictly ordered: date asc, then morning to night asc (earliest start time to latest)
+  // Ensure slots are strictly ordered: latest date first (descending), then morning to night asc within each day
   slots.sort((a, b) => {
     const aDate = String(a.date || '').split('T')[0]
     const bDate = String(b.date || '').split('T')[0]
-    const dateComp = aDate.localeCompare(bDate)
+    const dateComp = bDate.localeCompare(aDate)
     if (dateComp !== 0) return dateComp
 
     const aMins = getSlotStartMinutes(a.time_label)

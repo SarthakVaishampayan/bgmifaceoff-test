@@ -3,12 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, MessageCircle, ShieldCheck, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import styles from './page.module.css'
-
-type LoginMode = 'password' | 'otp' | 'reset'
-type OtpStep = 'email' | 'otp'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,16 +20,12 @@ export default function LoginPage() {
     })
   }, [router, supabase])
 
-  const [loginMode, setLoginMode] = useState<LoginMode>('password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [otpStep, setOtpStep] = useState<OtpStep>('email')
-  const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [resetSent, setResetSent] = useState(false)
-  const [resendCooldown, setResendCooldown] = useState(0)
+  const [showForgotModal, setShowForgotModal] = useState(false)
 
   function getRedirectUrl() {
     if (typeof window !== 'undefined') {
@@ -74,117 +67,8 @@ export default function LoginPage() {
     }
   }
 
-  // Request Password Reset Link
-  async function handleRequestPasswordReset(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    setResetSent(false)
 
-    const cleanEmail = email.trim().toLowerCase()
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
 
-    setLoading(false)
-
-    if (error) {
-      setError(error.message)
-      return
-    }
-
-    setResetSent(true)
-  }
-
-  // OTP Request
-  async function handleSendOtp(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    const cleanEmail = email.trim().toLowerCase()
-    const { error } = await supabase.auth.signInWithOtp({
-      email: cleanEmail,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/api/auth/callback?next=/dashboard`,
-      },
-    })
-
-    setLoading(false)
-
-    if (error) {
-      setError(error.message)
-      return
-    }
-
-    setOtpStep('otp')
-    setResendCooldown(60)
-    const interval = setInterval(() => {
-      setResendCooldown(prev => {
-        if (prev <= 1) { clearInterval(interval); return 0 }
-        return prev - 1
-      })
-    }, 1000)
-  }
-
-  // OTP Verification (Tries email, signup, or recovery token types for 100% reliability)
-  async function handleVerifyOtp(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    const cleanEmail = email.trim().toLowerCase()
-    const cleanToken = otp.trim()
-
-    // 1. Try default email OTP type
-    let { data, error } = await supabase.auth.verifyOtp({
-      email: cleanEmail,
-      token: cleanToken,
-      type: 'email',
-    })
-
-    // 2. Fallback to signup type
-    if (error) {
-      const retrySignup = await supabase.auth.verifyOtp({
-        email: cleanEmail,
-        token: cleanToken,
-        type: 'signup',
-      })
-      if (!retrySignup.error) {
-        data = retrySignup.data
-        error = null
-      }
-    }
-
-    // 3. Fallback to recovery type
-    if (error) {
-      const retryRecovery = await supabase.auth.verifyOtp({
-        email: cleanEmail,
-        token: cleanToken,
-        type: 'recovery',
-      })
-      if (!retryRecovery.error) {
-        data = retryRecovery.data
-        error = null
-      }
-    }
-
-    if (error) {
-      setLoading(false)
-      setError(error.message || 'Invalid or expired OTP code. Please check your email and try again.')
-      return
-    }
-
-    const userId = data?.user?.id
-    if (userId) {
-      setLoading(false)
-      window.dispatchEvent(new Event('app:showLoader'))
-      window.location.href = getRedirectUrl()
-    } else {
-      setLoading(false)
-    }
-  }
 
   return (
     <div className={styles.page}>
@@ -205,26 +89,9 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Segmented Tab Switcher */}
-        <div className={styles.modeTabs}>
-          <button
-            type="button"
-            className={`${styles.modeBtn} ${loginMode === 'password' ? styles.modeBtnActive : ''}`}
-            onClick={() => { setLoginMode('password'); setError('') }}
-          >
-            PASSWORD
-          </button>
-          <button
-            type="button"
-            className={`${styles.modeBtn} ${loginMode === 'otp' ? styles.modeBtnActive : ''}`}
-            onClick={() => { setLoginMode('otp'); setError('') }}
-          >
-            OTP CODE
-          </button>
-        </div>
+
 
         {/* ── FORM 1: STANDARD ID & PASSWORD ── */}
-        {loginMode === 'password' && (
           <form onSubmit={handlePasswordSignIn} className={styles.form}>
             <div className={styles.fieldGroup}>
               <label className={styles.label} htmlFor="login-email">EMAIL ADDRESS</label>
@@ -246,7 +113,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   style={{ background: 'none', border: 'none', color: '#facc15', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
-                  onClick={() => { setLoginMode('reset'); setError(''); setResetSent(false) }}
+                  onClick={() => setShowForgotModal(true)}
                 >
                   Forgot Password?
                 </button>
@@ -284,146 +151,6 @@ export default function LoginPage() {
               {loading ? <><span className="spinner" /> SIGNING IN...</> : 'SIGN IN →'}
             </button>
           </form>
-        )}
-
-        {/* ── FORM 3: RESET PASSWORD REQUEST ── */}
-        {loginMode === 'reset' && (
-          <div className={styles.form}>
-            {resetSent ? (
-              <div style={{
-                background: 'rgba(74, 222, 128, 0.1)',
-                border: '1px solid #4ade80',
-                borderRadius: '8px',
-                padding: '1rem',
-                color: '#4ade80',
-                fontSize: '0.85rem',
-                textAlign: 'center'
-              }}>
-                <p style={{ margin: '0 0 0.5rem', fontWeight: 800 }}>Reset Link Sent! ✉️</p>
-                <p style={{ margin: 0, color: '#cccccc', fontSize: '0.8rem' }}>
-                  Check your email ({email}) for instructions to set your new password.
-                </p>
-                <button
-                  type="button"
-                  style={{ marginTop: '1rem', background: 'transparent', border: '1px solid #4ade80', color: '#4ade80', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
-                  onClick={() => { setLoginMode('password'); setResetSent(false) }}
-                >
-                  Return to Sign In
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleRequestPasswordReset} className={styles.form}>
-                <div className={styles.fieldGroup}>
-                  <label className={styles.label} htmlFor="reset-email">YOUR ACCOUNT EMAIL</label>
-                  <input
-                    id="reset-email"
-                    type="email"
-                    className={styles.input}
-                    placeholder="player@bgfsesports.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    autoFocus
-                  />
-                </div>
-                {error && <p className={styles.errorMsg}>{error}</p>}
-                <button
-                  type="submit"
-                  className={styles.submitBtn}
-                  disabled={loading}
-                >
-                  {loading ? <><span className="spinner" /> SENDING RESET LINK...</> : 'SEND RESET LINK →'}
-                </button>
-                <button
-                  type="button"
-                  style={{ background: 'none', border: 'none', color: '#888888', fontSize: '0.8rem', cursor: 'pointer', width: '100%', textAlign: 'center', marginTop: '0.5rem' }}
-                  onClick={() => { setLoginMode('password'); setError('') }}
-                >
-                  ← Back to Password Sign In
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* ── FORM 2: OTP SIGN IN ── */}
-        {loginMode === 'otp' && (
-          <>
-            {otpStep === 'email' && (
-              <form onSubmit={handleSendOtp} className={styles.form}>
-                <div className={styles.fieldGroup}>
-                  <label className={styles.label} htmlFor="otp-email">EMAIL ADDRESS</label>
-                  <input
-                    id="otp-email"
-                    type="email"
-                    className={styles.input}
-                    placeholder="player@bgfsesports.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    autoFocus
-                  />
-                </div>
-                {error && <p className={styles.errorMsg}>{error}</p>}
-                <button
-                  id="send-otp-btn"
-                  type="submit"
-                  className={styles.submitBtn}
-                  disabled={loading}
-                >
-                  {loading ? <><span className="spinner" /> SENDING CODE...</> : 'SEND OTP CODE →'}
-                </button>
-              </form>
-            )}
-
-            {otpStep === 'otp' && (
-              <form onSubmit={handleVerifyOtp} className={styles.form}>
-                <div className={styles.fieldGroup}>
-                  <label className={styles.label} htmlFor="otp-input">6-DIGIT VERIFICATION CODE</label>
-                  <input
-                    id="otp-input"
-                    type="text"
-                    className={`${styles.input} ${styles.otpInput}`}
-                    placeholder="000000"
-                    value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                    autoFocus
-                  />
-                </div>
-                {error && <p className={styles.errorMsg}>{error}</p>}
-                <button
-                  id="verify-otp-btn"
-                  type="submit"
-                  className={styles.submitBtn}
-                  disabled={loading || otp.length < 6}
-                >
-                  {loading ? <><span className="spinner" /> VERIFYING...</> : 'VERIFY & SIGN IN'}
-                </button>
-
-                <div className={styles.resendRow}>
-                  <button
-                    type="button"
-                    className={styles.resendBtn}
-                    onClick={() => { setOtpStep('email'); setOtp(''); setError('') }}
-                  >
-                    ← CHANGE EMAIL
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.resendBtn} ${styles.resendBtnGold}`}
-                    disabled={resendCooldown > 0}
-                    onClick={handleSendOtp as any}
-                  >
-                    {resendCooldown > 0 ? `RESEND IN ${resendCooldown}S` : 'RESEND OTP'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </>
-        )}
 
         {/* New User Option Section */}
         <div className={styles.signupFooter}>
@@ -433,6 +160,132 @@ export default function LoginPage() {
           </Link>
         </div>
       </div>
+
+      {/* ── FORGOT PASSWORD WHATSAPP OVERLAY MODAL ── */}
+      {showForgotModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setShowForgotModal(false)}
+        >
+          <div
+            style={{
+              background: '#141416',
+              border: '1px solid #27272a',
+              borderRadius: '16px',
+              padding: '1.75rem',
+              maxWidth: '460px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.9)',
+              textAlign: 'center',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowForgotModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '14px',
+              background: 'rgba(245, 158, 11, 0.15)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.25rem',
+              color: '#f59e0b',
+            }}>
+              <ShieldCheck size={28} />
+            </div>
+
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.25rem', fontWeight: 900, color: '#ffffff', letterSpacing: '0.02em' }}>
+              RESET ACCOUNT PASSWORD
+            </h3>
+
+            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: '#a1a1aa', lineHeight: '1.5' }}>
+              To protect your tournament registrations and prevent unauthorized account takeover, password resets are verified directly by our admin team on WhatsApp.
+            </p>
+
+            <div style={{
+              background: 'rgba(34, 197, 94, 0.08)',
+              border: '1px solid rgba(34, 197, 94, 0.25)',
+              borderRadius: '10px',
+              padding: '0.85rem 1rem',
+              textAlign: 'left',
+              fontSize: '0.8rem',
+              color: '#bbf7d0',
+              marginBottom: '1.5rem',
+              lineHeight: '1.45',
+            }}>
+              <div style={{ fontWeight: 800, color: '#4ade80', marginBottom: '4px' }}>
+                How it works:
+              </div>
+              <ol style={{ margin: 0, paddingLeft: '1.2rem' }}>
+                <li>Tap the WhatsApp button below to message admin.</li>
+                <li>Provide your <strong>Registered Email</strong> &amp; <strong>Team Name</strong>.</li>
+                <li>Admin will verify your identity &amp; issue an instant temporary password.</li>
+              </ol>
+            </div>
+
+            <a
+              href={`https://wa.me/919425340813?text=${encodeURIComponent(email.trim() ? `Hi Admin, I forgot my BGFS password. My registered email is: ${email.trim()}` : `Hi Admin, I forgot my BGFS account password. Please help me reset it.`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '0.85rem 1rem',
+                background: '#22c55e',
+                color: '#000000',
+                borderRadius: '8px',
+                fontWeight: 800,
+                fontSize: '0.9rem',
+                textDecoration: 'none',
+                boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)',
+                marginBottom: '0.85rem',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <MessageCircle size={18} />
+              Message Admin on WhatsApp →
+            </a>
+
+            <button
+              type="button"
+              onClick={() => setShowForgotModal(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#a1a1aa',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                padding: '0.5rem',
+              }}
+            >
+              ← Back to Sign In
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

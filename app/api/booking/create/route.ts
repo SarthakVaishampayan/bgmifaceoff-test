@@ -2,6 +2,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
+import { getNextAvailableRoomSlot } from '@/lib/utils/roomSlot'
 
 // POST /api/booking/create
 export async function POST(request: Request) {
@@ -156,15 +157,8 @@ export async function POST(request: Request) {
     // Only enabled for flagged test accounts (with test_mode active) or if Razorpay keys are not yet configured.
     const isTestMode = (isTestAccount && test_mode !== false) || !hasRazorpayKeys
     if (isTestMode) {
-      // Calculate FCFS room slot number starting from Slot 5 for this specific slot
-      const { count: otherPaidCount } = await admin
-        .from('bookings')
-        .select('booking_id', { count: 'exact', head: true })
-        .eq('slot_id', slot_id)
-        .eq('payment_status', 'paid')
-        .neq('team_id', team_id)
-
-      const room_slot_number = 5 + (otherPaidCount || 0)
+      // Calculate collision-free room slot number starting from Slot 5 (fills gaps from migrations)
+      const room_slot_number = await getNextAvailableRoomSlot(admin, slot_id, team_id)
 
       let { data: booking, error: bookErr } = await admin
         .from('bookings')

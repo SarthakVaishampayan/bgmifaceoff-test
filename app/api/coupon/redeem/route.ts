@@ -2,6 +2,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
+import { getNextAvailableRoomSlot } from '@/lib/utils/roomSlot'
 
 // POST /api/coupon/redeem
 export async function POST(request: Request) {
@@ -126,15 +127,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This coupon has already been redeemed or is no longer valid.' }, { status: 409 })
     }
 
-    // Compute room_slot_number
-    const { count: otherPaidCount } = await admin
-      .from('bookings')
-      .select('booking_id', { count: 'exact', head: true })
-      .eq('slot_id', slot_id)
-      .eq('payment_status', 'paid')
-      .neq('team_id', team_id)
-
-    const room_slot_number = existingBooking?.room_slot_number || (5 + (otherPaidCount || 0))
+    // Compute collision-free room_slot_number starting from Slot 5 (fills gaps from migrations)
+    const room_slot_number = existingBooking?.room_slot_number || (await getNextAvailableRoomSlot(admin, slot_id, team_id))
 
     // Create or update booking as paid
     let bookingId: string

@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate } from '@/lib/utils/formatDate'
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
-import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown } from 'lucide-react'
+import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound } from 'lucide-react'
 import styles from './page.module.css'
 
 type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'coupons' | 'config' | 'users'
@@ -64,7 +64,12 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   const [tab, setTab] = useState<AdminTab>(initialTab || 'scores')
   const [slots, setSlots] = useState(initialSlots)
   const [payouts, setPayouts] = useState(initialPayouts)
+  const [bookingsList, setBookingsList] = useState(bookings)
   const [users, setUsers] = useState(usersList)
+
+  useEffect(() => {
+    setBookingsList(bookings)
+  }, [bookings])
   const [configState, setConfigState] = useState<Record<string, string>>(config || {})
   const [savingUserRole, setSavingUserRole] = useState<string | null>(null)
   const todayStr = getTodayStr()
@@ -125,7 +130,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
     { id: 'bookings', label: 'Bookings', superOnly: true },
     { id: 'coupons', label: 'Coupons', superOnly: true },
     { id: 'config', label: 'Config', superOnly: true },
-    { id: 'users', label: 'Admin Roles', superOnly: true },
+    { id: 'users', label: 'Users & Passwords', superOnly: true },
   ]
 
   const visibleTabs = isSuperAdmin ? allTabs : allTabs.filter(t => !t.superOnly)
@@ -339,7 +344,14 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               onPayoutSettled={(newPayout) => setPayouts(prev => [newPayout, ...prev.filter(p => p.payout_id !== newPayout.payout_id)])}
             />
           )}
-          {isSuperAdmin && tab === 'bookings' && <BookingsTab bookings={bookings} />}
+          {isSuperAdmin && tab === 'bookings' && (
+            <BookingsTab
+              bookings={bookingsList}
+              setBookings={setBookingsList}
+              slots={slots}
+              setSlots={setSlots}
+            />
+          )}
           {isSuperAdmin && tab === 'coupons' && <CouponsTab coupons={coupons} teams={teams} supabase={supabase} />}
           {isSuperAdmin && tab === 'config' && <ConfigTab config={configState} setConfig={setConfigState} supabase={supabase} />}
           {isSuperAdmin && tab === 'users' && (
@@ -4344,16 +4356,445 @@ function UpiInfoTab({
   )
 }
 
+// ── MIGRATE SLOT MODAL ───────────────────────────────────────────
+function MigrateSlotModal({
+  booking,
+  slots,
+  onClose,
+  onSuccess,
+}: {
+  booking: any
+  slots: any[]
+  onClose: () => void
+  onSuccess: (data: any) => void
+}) {
+  const teamName = booking.teams?.team_name || 'Selected Team'
+  const currentSlotDate = booking.slots?.date ? formatNumericDate(booking.slots.date) : '—'
+  const currentSlotTime = booking.slots?.time_label || '—'
+  const currentRoomSlot = booking.room_slot_number || 5
+
+  // Filter valid upcoming target slots:
+  // - Exclude current slot
+  // - Exclude completed slots
+  // - Sort chronologically by date and time
+  const availableSlots = useMemo(() => {
+    return [...slots]
+      .filter(s => s.slot_id !== booking.slot_id && s.status !== 'completed')
+      .sort((a, b) => {
+        const comp = String(a.date).localeCompare(String(b.date))
+        if (comp !== 0) return comp
+        return getSlotStartMinutes(a.time_label) - getSlotStartMinutes(b.time_label)
+      })
+  }, [slots, booking.slot_id])
+
+  // Pick first open slot by default
+  const defaultTargetSlot = availableSlots.find(s => {
+    const spots = (s.capacity || 20) - (s.teams_booked_count || 0)
+    return s.status !== 'full' && spots > 0
+  })
+
+  const [selectedSlotId, setSelectedSlotId] = useState(defaultTargetSlot?.slot_id || (availableSlots[0]?.slot_id || ''))
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const selectedSlot = useMemo(() => {
+    return availableSlots.find(s => s.slot_id === selectedSlotId)
+  }, [availableSlots, selectedSlotId])
+
+  const spotsLeft = selectedSlot ? Math.max(0, (selectedSlot.capacity || 20) - (selectedSlot.teams_booked_count || 0)) : 0
+  const isFull = !selectedSlot || selectedSlot.status === 'full' || spotsLeft <= 0
+
+  async function handleConfirm() {
+    if (!selectedSlotId) {
+      setErrorMsg('Please select a valid target slot')
+      return
+    }
+    if (isFull) {
+      setErrorMsg('Selected slot is full. Please select an open slot.')
+      return
+    }
+    setLoading(true)
+    setErrorMsg('')
+    try {
+      const res = await fetch('/api/admin/bookings/migrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booking_id: booking.booking_id,
+          new_slot_id: selectedSlotId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to migrate slot')
+      }
+      onSuccess(data)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'An error occurred during slot migration')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.82)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#121214',
+          border: '1px solid #27272a',
+          borderRadius: '14px',
+          padding: '1.5rem',
+          maxWidth: '520px',
+          width: '100%',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.85)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #27272a', paddingBottom: '0.85rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: 'rgba(245, 158, 11, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#f59e0b',
+            }}>
+              <Repeat size={18} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#fff' }}>
+                Migrate Team Slot
+              </h3>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Transfer registration safely with zero downtime
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Current Booking Info Card */}
+        <div style={{
+          background: '#18181b',
+          border: '1px solid #27272a',
+          borderRadius: '10px',
+          padding: '1rem',
+          marginBottom: '1.25rem',
+        }}>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+            Target Team
+          </div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.75rem' }}>
+            {teamName}
+            {booking.is_test_booking && (
+              <span style={{
+                background: '#a855f7',
+                color: '#fff',
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                padding: '2px 6px',
+                borderRadius: '4px',
+                marginLeft: '8px',
+              }}>
+                TEST
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', background: '#202024', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem' }}>
+            <div>
+              <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>CURRENT SLOT</span>
+              <strong style={{ color: '#e4e4e7' }}>{currentSlotDate}</strong>
+              <div style={{ color: '#a1a1aa', fontSize: '0.75rem' }}>{currentSlotTime}</div>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>ROOM SLOT NUMBER</span>
+              <strong style={{ color: '#facc15' }}>Slot #{currentRoomSlot}</strong>
+              <div style={{ color: '#a1a1aa', fontSize: '0.75rem' }}>Status: {booking.payment_status}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Target Slot Selection */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#e4e4e7', marginBottom: '0.5rem' }}>
+            Select New Slot
+          </label>
+          <select
+            value={selectedSlotId}
+            onChange={e => setSelectedSlotId(e.target.value)}
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              background: '#18181b',
+              border: '1px solid #3f3f46',
+              borderRadius: '8px',
+              color: '#ffffff',
+              fontSize: '0.875rem',
+              outline: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            {availableSlots.map(s => {
+              const cap = s.capacity || 20
+              const booked = s.teams_booked_count || 0
+              const freeSpots = Math.max(0, cap - booked)
+              const isSlotFull = s.status === 'full' || freeSpots <= 0
+              return (
+                <option key={s.slot_id} value={s.slot_id} disabled={isSlotFull}>
+                  {formatNumericDate(s.date)} · {s.time_label} {isSlotFull ? '(FULL - 0 spots)' : `(${freeSpots} spots left)`}
+                </option>
+              )
+            })}
+          </select>
+          {availableSlots.length === 0 && (
+            <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '4px' }}>
+              No other active slots found.
+            </div>
+          )}
+        </div>
+
+        {/* Safeguard Assurance Box */}
+        <div style={{
+          background: 'rgba(59, 130, 246, 0.08)',
+          border: '1px solid rgba(59, 130, 246, 0.25)',
+          borderRadius: '8px',
+          padding: '0.85rem',
+          fontSize: '0.75rem',
+          color: '#93c5fd',
+          lineHeight: '1.4',
+          marginBottom: '1.25rem',
+        }}>
+          <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <CheckCircle size={14} /> Safe Migration Active
+          </div>
+          <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#bfdbfe' }}>
+            <li>Frees 1 spot in old slot ({currentSlotDate})</li>
+            <li>Reserves 1 spot in new slot and assigns new Room Slot #</li>
+            <li>Team dashboard &amp; WhatsApp link update automatically</li>
+            <li>Original payment details stay completely safe</li>
+          </ul>
+        </div>
+
+        {errorMsg && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid #ef4444',
+            borderRadius: '8px',
+            padding: '0.75rem',
+            color: '#fca5a5',
+            fontSize: '0.8rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Modal Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            style={{
+              padding: '0.65rem 1.25rem',
+              background: '#27272a',
+              border: 'none',
+              borderRadius: '8px',
+              color: '#a1a1aa',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={loading || !selectedSlotId || isFull}
+            style={{
+              padding: '0.65rem 1.4rem',
+              background: loading || isFull ? '#3f3f46' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              border: 'none',
+              borderRadius: '8px',
+              color: '#000',
+              fontSize: '0.85rem',
+              fontWeight: 800,
+              cursor: loading || isFull ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            {loading ? (
+              <>
+                <RefreshCw size={14} className="spin" /> Migrating...
+              </>
+            ) : (
+              <>
+                <Repeat size={14} /> Confirm Migration
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── BOOKINGS TAB ─────────────────────────────────────────────────
-function BookingsTab({ bookings }: { bookings: any[] }) {
+function BookingsTab({
+  bookings,
+  setBookings,
+  slots,
+  setSlots,
+}: {
+  bookings: any[]
+  setBookings: React.Dispatch<React.SetStateAction<any[]>>
+  slots: any[]
+  setSlots: React.Dispatch<React.SetStateAction<any[]>>
+}) {
+  const router = useRouter()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterDate, setFilterDate] = useState('all')
+  const [migrationTarget, setMigrationTarget] = useState<any | null>(null)
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
   const realBookings = bookings.filter(b => !b.is_test_booking)
   const testBookings = bookings.filter(b => b.is_test_booking)
   const realRevenue = realBookings.reduce((sum, b) => sum + (b.coupon_used ? 0 : (b.amount_paid || 50)), 0)
 
+  // Get unique slot dates present in bookings for filter dropdown
+  const uniqueDates = useMemo(() => {
+    const dates = new Set<string>()
+    bookings.forEach(b => {
+      if (b.slots?.date) dates.add(b.slots.date)
+    })
+    return Array.from(dates).sort()
+  }, [bookings])
+
+  // Filter bookings by search and date
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(b => {
+      if (filterDate !== 'all' && b.slots?.date !== filterDate) return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim()
+        const teamName = (b.teams?.team_name || '').toLowerCase()
+        const timeLabel = (b.slots?.time_label || '').toLowerCase()
+        const dateStr = (b.slots?.date || '').toLowerCase()
+        if (!teamName.includes(q) && !timeLabel.includes(q) && !dateStr.includes(q)) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [bookings, filterDate, searchQuery])
+
+  function handleMigrationSuccess(data: any) {
+    // 1. Update bookings in state
+    setBookings(prev => prev.map(b => {
+      if (b.booking_id === data.booking_id) {
+        return {
+          ...b,
+          slot_id: data.new_slot_id,
+          room_slot_number: data.new_room_slot_number,
+          slots: {
+            ...b.slots,
+            date: data.new_slot.date,
+            time_label: data.new_slot.time_label,
+            whatsapp_link: data.new_slot.whatsapp_link,
+          }
+        }
+      }
+      return b
+    }))
+
+    // 2. Update slots in state (decrement old, increment new)
+    setSlots(prev => prev.map(s => {
+      if (s.slot_id === data.old_slot_id) {
+        const newCount = Math.max(0, (s.teams_booked_count || 1) - 1)
+        return {
+          ...s,
+          teams_booked_count: newCount,
+          status: s.status === 'full' ? 'open' : s.status,
+        }
+      }
+      if (s.slot_id === data.new_slot_id) {
+        const newCount = (s.teams_booked_count || 0) + 1
+        const isFull = newCount >= (s.capacity || 20)
+        return {
+          ...s,
+          teams_booked_count: newCount,
+          status: isFull ? 'full' : s.status,
+        }
+      }
+      return s
+    }))
+
+    setFeedbackMsg({ text: data.message, type: 'success' })
+    setMigrationTarget(null)
+    router.refresh()
+
+    setTimeout(() => {
+      setFeedbackMsg(null)
+    }, 5000)
+  }
+
   return (
     <div>
-      <h2 className={styles.tabTitle}>Bookings</h2>
-      <p className={styles.tabDesc}>All slot bookings. Test account bookings are isolated and excluded from revenue metrics.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h2 className={styles.tabTitle}>Bookings</h2>
+          <p className={styles.tabDesc}>All slot bookings with 1-click safe slot migration. Test account bookings are isolated.</p>
+        </div>
+      </div>
+
+      {feedbackMsg && (
+        <div style={{
+          marginTop: '1rem',
+          padding: '0.85rem 1.25rem',
+          borderRadius: '8px',
+          background: feedbackMsg.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+          border: `1px solid ${feedbackMsg.type === 'success' ? '#22c55e' : '#ef4444'}`,
+          color: feedbackMsg.type === 'success' ? '#86efac' : '#fca5a5',
+          fontSize: '0.85rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <CheckCircle size={16} />
+          <span>{feedbackMsg.text}</span>
+        </div>
+      )}
 
       {/* Financial & Count Summary */}
       <div style={{
@@ -4403,20 +4844,84 @@ function BookingsTab({ bookings }: { bookings: any[] }) {
         </div>
       </div>
 
-      <div className="table-wrapper" style={{ marginTop: '1rem' }}>
+      {/* Filter & Search Bar */}
+      <div style={{
+        display: 'flex',
+        gap: '0.75rem',
+        marginBottom: '1rem',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        background: '#18181b',
+        border: '1px solid #27272a',
+        borderRadius: '8px',
+        padding: '0.75rem 1rem',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1', minWidth: '220px' }}>
+          <Search size={16} color="var(--text-muted)" />
+          <input
+            type="text"
+            placeholder="Search by team name or slot..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: '#ffffff',
+              fontSize: '0.85rem',
+              width: '100%',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '2px' }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Calendar size={15} color="var(--text-muted)" />
+          <select
+            value={filterDate}
+            onChange={e => setFilterDate(e.target.value)}
+            style={{
+              background: '#202024',
+              border: '1px solid #3f3f46',
+              borderRadius: '6px',
+              color: '#ffffff',
+              fontSize: '0.8rem',
+              padding: '0.4rem 0.75rem',
+              outline: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="all">All Dates ({bookings.length})</option>
+            {uniqueDates.map(d => (
+              <option key={d} value={d}>{formatNumericDate(d)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="table-wrapper" style={{ marginTop: '0.5rem' }}>
         <table>
           <thead>
             <tr>
               <th>Team</th>
               <th>Slot Date</th>
               <th>Slot Time</th>
+              <th>Room Slot</th>
               <th>Status / Mode</th>
               <th>Coupon Used</th>
               <th>Booked At</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {bookings.map(b => (
+            {filteredBookings.map(b => (
               <tr key={b.booking_id} style={b.is_test_booking ? { background: 'rgba(168, 85, 247, 0.05)' } : undefined}>
                 <td>
                   <strong>{b.teams?.team_name}</strong>
@@ -4439,6 +4944,19 @@ function BookingsTab({ bookings }: { bookings: any[] }) {
                 <td>{b.slots?.date ? formatNumericDate(b.slots.date) : '—'}</td>
                 <td style={{ fontSize: '0.85rem' }}>{b.slots?.time_label || '—'}</td>
                 <td>
+                  <span style={{
+                    background: '#27272a',
+                    border: '1px solid #3f3f46',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: '#facc15',
+                  }}>
+                    Slot #{b.room_slot_number || 5}
+                  </span>
+                </td>
+                <td>
                   <span className="badge badge-success">{b.payment_status}</span>
                   {b.is_test_booking && (
                     <span style={{ color: '#c084fc', fontSize: '0.75rem', marginLeft: '6px', fontWeight: 600 }}>
@@ -4454,14 +4972,58 @@ function BookingsTab({ bookings }: { bookings: any[] }) {
                 <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                   {formatNumericDate(b.created_at)}
                 </td>
+                <td style={{ textAlign: 'right' }}>
+                  <button
+                    type="button"
+                    onClick={() => setMigrationTarget(b)}
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      color: '#fbbf24',
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'rgba(245, 158, 11, 0.25)'
+                      e.currentTarget.style.borderColor = '#f59e0b'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'
+                      e.currentTarget.style.borderColor = 'rgba(245, 158, 11, 0.4)'
+                    }}
+                  >
+                    <Repeat size={13} /> Migrate
+                  </button>
+                </td>
               </tr>
             ))}
-            {bookings.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No bookings yet</td></tr>
+            {filteredBookings.length === 0 && (
+              <tr>
+                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                  {searchQuery || filterDate !== 'all' ? 'No matching bookings found' : 'No bookings yet'}
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Migration Modal */}
+      {migrationTarget && (
+        <MigrateSlotModal
+          booking={migrationTarget}
+          slots={slots}
+          onClose={() => setMigrationTarget(null)}
+          onSuccess={handleMigrationSuccess}
+        />
+      )}
     </div>
   )
 }
@@ -4710,10 +5272,10 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
   }, [config])
 
   const fields = [
-    { key: 'grand_finals_date', label: 'Grand Finals Date (ISO)', placeholder: '2025-09-14T18:00:00+05:30', type: 'text' },
+    { key: 'grand_finals_date', label: 'Grand Finals Date (ISO)', placeholder: '2026-10-17T18:00:00+05:30', type: 'text' },
     { key: 'whatsapp_invite_link', label: 'WhatsApp Community Link', placeholder: 'https://chat.whatsapp.com/...', type: 'text' },
-    { key: 'cycle_start_date', label: 'Cycle Start Date', placeholder: '2025-09-01', type: 'date' },
-    { key: 'cycle_end_date', label: 'Cycle End Date', placeholder: '2025-09-14', type: 'date' },
+    { key: 'cycle_start_date', label: 'Cycle Start Date', placeholder: '2026-09-21', type: 'date' },
+    { key: 'cycle_end_date', label: 'Cycle End Date', placeholder: '2026-10-16', type: 'date' },
     { key: 'slot_entry_fee', label: 'Default Slot Entry Fee (₹)', placeholder: '50', type: 'number' },
     { key: 'slot_first_prize', label: 'Default 1st Place Cash Prize (₹)', placeholder: '200', type: 'number' },
     { key: 'slot_second_prize', label: 'Default 2nd Place Cash Prize (₹)', placeholder: '150', type: 'number' },
@@ -4862,87 +5424,622 @@ function UsersTab({
   onDeleteUser?: (id: string) => void
   onToggleTestMode?: (id: string, currentStatus: boolean) => void
 }) {
+  const [lookupQuery, setLookupQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [lookupResults, setLookupResults] = useState<any[] | null>(null)
+  const [lookupError, setLookupError] = useState('')
+  const [selectedUserForReset, setSelectedUserForReset] = useState<any | null>(null)
+  const [tempPassword, setTempPassword] = useState('user12345')
+  const [resetting, setResetting] = useState(false)
+  const [resetSuccess, setResetSuccess] = useState<any | null>(null)
+  const [copiedWhatsapp, setCopiedWhatsapp] = useState(false)
+
+  const [tableSearch, setTableSearch] = useState('')
+  const filteredUsers = useMemo(() => {
+    if (!tableSearch.trim()) return users
+    const q = tableSearch.toLowerCase().trim()
+    return users.filter(u =>
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.display_name && u.display_name.toLowerCase().includes(q)) ||
+      (u.role && u.role.toLowerCase().includes(q))
+    )
+  }, [users, tableSearch])
+
+  // Handle Team Lookup
+  async function handleLookup(e?: React.FormEvent) {
+    if (e) e.preventDefault()
+    if (!lookupQuery.trim()) return
+    setSearching(true)
+    setLookupError('')
+    setLookupResults(null)
+    setResetSuccess(null)
+    setSelectedUserForReset(null)
+
+    try {
+      const res = await fetch('/api/admin/users/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: lookupQuery.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to find user')
+      }
+      if (!data.users || data.users.length === 0) {
+        setLookupError('No account found matching that email or team name. Please check spelling.')
+      } else {
+        setLookupResults(data.users)
+        if (data.users.length === 1) {
+          setSelectedUserForReset(data.users[0])
+        }
+      }
+    } catch (err: any) {
+      setLookupError(err.message || 'Lookup failed')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  // Pre-fill lookup from table row click
+  function selectUserFromTable(u: any) {
+    setLookupQuery(u.email || '')
+    setLookupResults(null)
+    setResetSuccess(null)
+    setLookupError('')
+
+    fetch('/api/admin/users/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: u.email }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.users && data.users.length > 0) {
+          setSelectedUserForReset(data.users[0])
+        } else {
+          setSelectedUserForReset({
+            user_id: u.user_id,
+            email: u.email,
+            display_name: u.display_name,
+            role: u.role,
+            team_name: u.display_name || 'Team',
+            bookings: [],
+          })
+        }
+      })
+      .catch(() => {
+        setSelectedUserForReset({
+          user_id: u.user_id,
+          email: u.email,
+          display_name: u.display_name,
+          role: u.role,
+          team_name: u.display_name || 'Team',
+          bookings: [],
+        })
+      })
+
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Handle Password Reset
+  async function handleResetPassword() {
+    if (!selectedUserForReset) return
+    const teamLabel = selectedUserForReset.team_name || selectedUserForReset.email
+    const pass = tempPassword.trim() || 'user12345'
+
+    if (!confirm(`CONFIRM PASSWORD RESET:\n\nAre you 100% sure you want to reset password for:\n"${teamLabel}" (${selectedUserForReset.email})\n\nNew Temporary Password: ${pass}\n\nOnly the login password will change. Team bookings, points, and all other data will remain untouched.`)) {
+      return
+    }
+
+    setResetting(true)
+    setLookupError('')
+    try {
+      const res = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_user_id: selectedUserForReset.user_id,
+          target_email: selectedUserForReset.email,
+          new_password: pass,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to reset password')
+      }
+      setResetSuccess(data)
+    } catch (err: any) {
+      setLookupError(err.message || 'Password reset failed')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  function copyWhatsAppMessage(data: any) {
+    const text = `Hey captain! Your account password for ${data.team_name} has been reset to:\n👉 ${data.temp_password}\n\nYou can now sign in at:\nhttps://battlegroundsfaceoffseries.com/login\n\nOnce logged in, please head to your Profile & Settings to set your own permanent password.`
+    navigator.clipboard.writeText(text)
+    setCopiedWhatsapp(true)
+    setTimeout(() => setCopiedWhatsapp(false), 3500)
+  }
+
   return (
     <div>
       <h2 className={styles.tabTitle}>User &amp; Role Management</h2>
-      <p className={styles.tabDesc}>Assign admin roles, toggle test account mode, or delete unwanted accounts from database.</p>
-      <div className="table-wrapper" style={{ marginTop: '1rem' }}>
-        <table>
+      <p className={styles.tabDesc}>Assign admin roles, toggle test accounts, or securely verify teams and reset passwords.</p>
+
+      {/* ── MANUAL PASSWORD RESET & TEAM LOOKUP TOOL ── */}
+      <div style={{
+        background: 'linear-gradient(180deg, #18181b 0%, #121214 100%)',
+        border: '1px solid #3f3f46',
+        borderRadius: '12px',
+        padding: '1.5rem',
+        marginTop: '1.25rem',
+        marginBottom: '2rem',
+        boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.75rem' }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '8px',
+            background: 'rgba(245, 158, 11, 0.15)',
+            color: '#f59e0b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <KeyRound size={20} />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>
+              Manual Team Password Reset &amp; Identity Verification
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Search by player email or team name $\rightarrow$ verify booked matches $\rightarrow$ safely reset password without email delivery delays.
+            </p>
+          </div>
+        </div>
+
+        {/* Search Input Bar */}
+        <form onSubmit={handleLookup} style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1', minWidth: '260px', background: '#202024', border: '1px solid #3f3f46', borderRadius: '8px', padding: '0.65rem 1rem' }}>
+            <Search size={16} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Enter team email (e.g. captain@gmail.com) or team name..."
+              value={lookupQuery}
+              onChange={e => setLookupQuery(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: '#ffffff',
+                fontSize: '0.85rem',
+                width: '100%',
+              }}
+            />
+            {lookupQuery && (
+              <button
+                type="button"
+                onClick={() => { setLookupQuery(''); setLookupResults(null); setSelectedUserForReset(null); setResetSuccess(null) }}
+                style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '2px' }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={searching || !lookupQuery.trim()}
+            style={{
+              padding: '0.65rem 1.5rem',
+              background: searching ? '#3f3f46' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              border: 'none',
+              borderRadius: '8px',
+              color: '#000',
+              fontWeight: 800,
+              fontSize: '0.85rem',
+              cursor: searching ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            {searching ? <><RefreshCw size={14} className="spin" /> Searching...</> : <><Search size={14} /> Find Team</>}
+          </button>
+        </form>
+
+        {lookupError && (
+          <div style={{
+            marginTop: '1rem',
+            padding: '0.75rem 1rem',
+            borderRadius: '8px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid #ef4444',
+            color: '#fca5a5',
+            fontSize: '0.8rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0 }} />
+            <span>{lookupError}</span>
+          </div>
+        )}
+
+        {/* Multi-result selector */}
+        {lookupResults && lookupResults.length > 1 && !selectedUserForReset && (
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600 }}>
+              Multiple matching accounts found ({lookupResults.length}). Select the exact team:
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
+              {lookupResults.map(r => (
+                <div
+                  key={r.user_id}
+                  onClick={() => setSelectedUserForReset(r)}
+                  style={{
+                    background: '#202024',
+                    border: '1px solid #3f3f46',
+                    borderRadius: '8px',
+                    padding: '0.85rem 1rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#f59e0b'; e.currentTarget.style.background = '#27272a' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#3f3f46'; e.currentTarget.style.background = '#202024' }}
+                >
+                  <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '0.95rem' }}>{r.team_name}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#e4e4e7' }}>{r.email}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Role: {r.role} · Bookings: {r.bookings?.length || 0}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Identity Verification Card & Reset Action */}
+        {selectedUserForReset && (
+          <div style={{
+            marginTop: '1.25rem',
+            background: '#202024',
+            border: '1px solid #f59e0b',
+            borderRadius: '10px',
+            padding: '1.25rem',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #2e2e34', paddingBottom: '0.5rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f59e0b', letterSpacing: '0.05em' }}>
+                🛡️ IDENTITY VERIFICATION CARD
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForReset(null)}
+                style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '0.75rem', cursor: 'pointer' }}
+              >
+                Clear Selection
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>TEAM NAME</span>
+                <strong style={{ color: '#fbbf24', fontSize: '1.1rem' }}>{selectedUserForReset.team_name}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>REGISTERED EMAIL</span>
+                <strong style={{ color: '#ffffff', fontSize: '0.9rem' }}>{selectedUserForReset.email}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>ACCOUNT ROLE</span>
+                <span className={`badge ${selectedUserForReset.role === 'admin' ? 'badge-gold' : 'badge-neutral'}`}>
+                  {selectedUserForReset.role || 'player'}
+                </span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>REGISTERED ON</span>
+                <span style={{ color: '#a1a1aa', fontSize: '0.8rem' }}>
+                  {selectedUserForReset.created_at ? formatNumericDate(selectedUserForReset.created_at) : '—'}
+                </span>
+              </div>
+            </div>
+
+            {/* Bookings cross-verification box */}
+            <div style={{
+              background: '#18181b',
+              border: '1px solid #2e2e34',
+              borderRadius: '8px',
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem',
+              fontSize: '0.8rem',
+            }}>
+              <div style={{ color: '#93c5fd', fontWeight: 700, fontSize: '0.75rem', marginBottom: '4px' }}>
+                MATCH BOOKINGS CHECK (Cross-verify with player on WhatsApp):
+              </div>
+              {selectedUserForReset.bookings && selectedUserForReset.bookings.length > 0 ? (
+                <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#e4e4e7' }}>
+                  {selectedUserForReset.bookings.map((b: any, idx: number) => (
+                    <li key={idx} style={{ marginBottom: '2px' }}>
+                      <strong>{formatNumericDate(b.slot_date)} ({b.slot_time})</strong> — Room Slot #{b.room_slot_number || 5} ({b.payment_status})
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  No tournament match slots booked yet by this team.
+                </div>
+              )}
+            </div>
+
+            {/* Password Reset Action Area */}
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              alignItems: 'flex-end',
+              flexWrap: 'wrap',
+              borderTop: '1px solid #2e2e34',
+              paddingTop: '1rem',
+            }}>
+              <div style={{ flex: '1', minWidth: '200px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#e4e4e7', marginBottom: '4px' }}>
+                  NEW TEMPORARY PASSWORD
+                </label>
+                <input
+                  type="text"
+                  value={tempPassword}
+                  onChange={e => setTempPassword(e.target.value)}
+                  disabled={resetting}
+                  placeholder="user12345"
+                  style={{
+                    width: '100%',
+                    padding: '0.6rem 0.85rem',
+                    background: '#18181b',
+                    border: '1px solid #3f3f46',
+                    borderRadius: '6px',
+                    color: '#facc15',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                disabled={resetting || selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com'}
+                style={{
+                  padding: '0.65rem 1.5rem',
+                  background: resetting || selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com' ? '#3f3f46' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.85rem',
+                  cursor: resetting || selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com' ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {resetting ? (
+                  <><RefreshCw size={14} className="spin" /> Resetting Password...</>
+                ) : (
+                  <><KeyRound size={14} /> Reset Password for {selectedUserForReset.team_name}</>
+                )}
+              </button>
+            </div>
+
+            {selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com' && (
+              <div style={{ color: '#fbbf24', fontSize: '0.75rem', marginTop: '6px', fontWeight: 600 }}>
+                🔒 Super Admin account is protected from manual password resets.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Success Confirmation & Copy WhatsApp Reply Card */}
+        {resetSuccess && (
+          <div style={{
+            marginTop: '1.25rem',
+            background: 'rgba(34, 197, 94, 0.12)',
+            border: '1px solid #22c55e',
+            borderRadius: '10px',
+            padding: '1.25rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4ade80', fontWeight: 800, fontSize: '1rem', marginBottom: '0.5rem' }}>
+              <CheckCircle size={20} />
+              Password Successfully Reset!
+            </div>
+            <p style={{ margin: '0 0 1rem', color: '#bbf7d0', fontSize: '0.85rem' }}>
+              The account for <strong>{resetSuccess.team_name}</strong> ({resetSuccess.email}) was updated. Temporary login password is:
+              <span style={{ background: '#000', color: '#facc15', padding: '2px 8px', borderRadius: '4px', fontWeight: 800, marginLeft: '6px', fontSize: '0.95rem' }}>
+                {resetSuccess.temp_password}
+              </span>
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => copyWhatsAppMessage(resetSuccess)}
+                style={{
+                  padding: '0.65rem 1.25rem',
+                  background: copiedWhatsapp ? '#16a34a' : '#22c55e',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#000',
+                  fontWeight: 800,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                }}
+              >
+                {copiedWhatsapp ? <><Check size={16} /> Copied to Clipboard!</> : <><Copy size={16} /> Copy WhatsApp Reply Message</>}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── ALL USERS TABLE ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.75rem', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '8px' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#ffffff' }}>
+            All Registered Accounts ({filteredUsers.length}{tableSearch ? ` of ${users.length}` : ''})
+          </h3>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            Quick lookup &amp; account controls
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#18181b', border: '1px solid #3f3f46', borderRadius: '6px', padding: '0.3rem 0.65rem' }}>
+          <Search size={13} color="var(--text-muted)" />
+          <input
+            type="text"
+            placeholder="Filter table rows..."
+            value={tableSearch}
+            onChange={e => setTableSearch(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: '#ffffff',
+              fontSize: '0.75rem',
+              width: '180px',
+            }}
+          />
+          {tableSearch && (
+            <button
+              type="button"
+              onClick={() => setTableSearch('')}
+              style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: 0 }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="table-wrapper">
+        <table style={{ width: '100%', minWidth: '820px', tableLayout: 'fixed', fontSize: '0.8rem' }}>
+          <colgroup>
+            <col style={{ width: '26%' }} />
+            <col style={{ width: '16%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '23%' }} />
+          </colgroup>
           <thead>
             <tr>
-              <th>Email</th>
-              <th>Display Name</th>
-              <th>Current Role</th>
-              <th>Test Account</th>
-              <th>Change Role</th>
-              <th>Actions</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem' }}>Email</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem' }}>Display Name</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Current Role</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Test Account</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Change Role</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {users.map(u => (
+            {filteredUsers.map(u => (
               <tr key={u.user_id}>
-                <td><strong>{u.email}</strong></td>
-                <td>{u.display_name || '—'}</td>
-                <td>
-                  <span className={`badge ${u.role === 'admin' ? 'badge-gold' : u.role === 'admin_scores' ? 'badge-info' : 'badge-neutral'}`}>
+                <td style={{ padding: '0.4rem 0.65rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.email}>
+                  <strong style={{ fontSize: '0.82rem', color: '#fff' }}>{u.email}</strong>
+                </td>
+                <td style={{ padding: '0.4rem 0.65rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem', color: '#e4e4e7' }} title={u.display_name || ''}>
+                  {u.display_name || '—'}
+                </td>
+                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
+                  <span className={`badge ${u.role === 'admin' ? 'badge-gold' : u.role === 'admin_scores' ? 'badge-info' : 'badge-neutral'}`} style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
                     {u.role || 'player'}
                   </span>
                 </td>
-                <td>
+                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
                   {u.is_test_account ? (
-                    <span className="badge badge-warning" style={{ background: '#f59e0b', color: '#000', fontWeight: 800 }}>
-                      🧪 Test Mode ON
+                    <span className="badge badge-warning" style={{ background: '#f59e0b', color: '#000', fontWeight: 800, fontSize: '0.7rem', padding: '2px 6px' }}>
+                      🧪 Test ON
                     </span>
                   ) : (
-                    <span className="badge badge-neutral" style={{ color: '#888' }}>
-                      Real Account
+                    <span className="badge badge-neutral" style={{ color: '#888', fontSize: '0.7rem', padding: '2px 6px' }}>
+                      Real
                     </span>
                   )}
                 </td>
-                <td>
+                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
                   <select
                     className="form-input"
-                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem', width: 'auto', opacity: u.email?.toLowerCase() === 'admin@gmail.com' ? 0.6 : 1 }}
+                    style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem', width: 'auto', minWidth: '95px', height: '26px', opacity: u.email?.toLowerCase() === 'admin@gmail.com' ? 0.6 : 1 }}
                     value={u.role || 'player'}
                     disabled={u.email?.toLowerCase() === 'admin@gmail.com'}
                     onChange={e => onUpdateRole(u.user_id, e.target.value)}
                   >
                     <option value="player">Player</option>
                     <option value="captain">Captain</option>
-                    <option value="admin_scores">Score Admin (Leaderboard only)</option>
-                    <option value="admin">Super Admin (Full Access)</option>
+                    <option value="admin_scores">Score Admin</option>
+                    <option value="admin">Super Admin</option>
                   </select>
                 </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+                    {/* Reset Password Action Button */}
+                    {u.email?.toLowerCase() !== 'admin@gmail.com' && (
+                      <button
+                        className="btn"
+                        style={{
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          border: '1px solid rgba(245, 158, 11, 0.4)',
+                          color: '#fbbf24',
+                          padding: '0.2rem 0.45rem',
+                          fontSize: '0.7rem',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontWeight: 700,
+                          height: '26px',
+                          whiteSpace: 'nowrap',
+                        }}
+                        onClick={() => selectUserFromTable(u)}
+                        title="Reset this user's password"
+                      >
+                        <KeyRound size={11} /> Reset Pass
+                      </button>
+                    )}
+
                     {onToggleTestMode && (
                       <button
                         className="btn"
                         style={{
                           background: u.is_test_account ? '#374151' : '#d97706',
                           color: '#fff',
-                          padding: '0.3rem 0.6rem',
-                          fontSize: '0.75rem',
+                          padding: '0.2rem 0.45rem',
+                          fontSize: '0.7rem',
                           borderRadius: '4px',
                           border: 'none',
                           cursor: 'pointer',
+                          height: '26px',
+                          whiteSpace: 'nowrap',
                         }}
                         onClick={() => onToggleTestMode(u.user_id, u.is_test_account)}
                       >
-                        {u.is_test_account ? 'Turn Test Mode OFF' : 'Turn Test Mode ON'}
+                        {u.is_test_account ? 'Test OFF' : 'Test ON'}
                       </button>
                     )}
                     {onDeleteUser && u.email?.toLowerCase() !== 'admin@gmail.com' && (
                       <button
                         className="btn"
-                        style={{ background: '#ef4444', color: '#fff', padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', border: 'none', cursor: 'pointer' }}
+                        style={{ background: '#ef4444', color: '#fff', padding: '0.2rem 0.45rem', fontSize: '0.7rem', borderRadius: '4px', border: 'none', cursor: 'pointer', height: '26px', whiteSpace: 'nowrap' }}
                         onClick={() => onDeleteUser(u.user_id)}
                       >
-                        Delete Account
+                        Delete
                       </button>
                     )}
                     {u.email?.toLowerCase() === 'admin@gmail.com' && (
-                      <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>
+                      <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700 }}>
                         🔒 Protected
                       </span>
                     )}
@@ -4950,8 +6047,8 @@ function UsersTab({
                 </td>
               </tr>
             ))}
-            {users.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No users found</td></tr>
+            {filteredUsers.length === 0 && (
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>No matching accounts found</td></tr>
             )}
           </tbody>
         </table>

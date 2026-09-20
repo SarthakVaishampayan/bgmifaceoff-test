@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { getNextAvailableRoomSlot } from '@/lib/utils/roomSlot'
 
 export async function POST(request: Request) {
   const body = await request.text()
@@ -64,15 +65,8 @@ export async function POST(request: Request) {
 
   const slot = booking.slots as any
 
-  // Calculate FCFS room slot number starting from Slot 5
-  const { count: otherPaidCount } = await supabase
-    .from('bookings')
-    .select('booking_id', { count: 'exact', head: true })
-    .eq('slot_id', booking.slot_id)
-    .eq('payment_status', 'paid')
-    .neq('team_id', booking.team_id)
-
-  const room_slot_number = 5 + (otherPaidCount || 0)
+  // Calculate collision-free room slot number starting from Slot 5 (fills gaps from migrations)
+  const room_slot_number = await getNextAvailableRoomSlot(supabase, booking.slot_id, booking.team_id)
 
   // Update booking to paid
   const { error } = await supabase
