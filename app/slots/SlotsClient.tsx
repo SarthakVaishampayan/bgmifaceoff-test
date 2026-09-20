@@ -71,8 +71,8 @@ function getMatchTimes(timeLabel: string): MatchTimeItem[] {
 
   return [
     { name: 'MATCH 1', time: formatMinutesToTimeString(startMinutes), map: 'Erangel' },
-    { name: 'MATCH 2', time: formatMinutesToTimeString(startMinutes + 42), map: 'Rondo' },
-    { name: 'MATCH 3', time: formatMinutesToTimeString(startMinutes + 78), map: 'Miramar' },
+    { name: 'MATCH 2', time: formatMinutesToTimeString(startMinutes + 40), map: 'Rondo' },
+    { name: 'MATCH 3', time: formatMinutesToTimeString(startMinutes + 80), map: 'Miramar' },
   ]
 }
 

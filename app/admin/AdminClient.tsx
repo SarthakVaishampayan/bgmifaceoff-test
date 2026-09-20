@@ -2407,7 +2407,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                   style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
                                   value={currentM2}
                                   onChange={e => updatePresetFormField(preset.id, 'm2_time', e.target.value)}
-                                  placeholder="1:54 PM"
+                                  placeholder="1:52 PM"
                                 />
                               </div>
 
@@ -2421,7 +2421,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                   style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
                                   value={currentM3}
                                   onChange={e => updatePresetFormField(preset.id, 'm3_time', e.target.value)}
-                                  placeholder="2:30 PM"
+                                  placeholder="2:32 PM"
                                 />
                               </div>
                             </div>
