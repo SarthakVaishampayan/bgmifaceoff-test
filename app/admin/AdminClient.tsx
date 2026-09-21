@@ -799,6 +799,147 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
     }
   }
 
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [copyTemplateToast, setCopyTemplateToast] = useState(false)
+
+  function handleCopyJsonTemplate() {
+    if (!selectedSlot) {
+      setMsg('❌ Please select a slot first to copy its AI JSON template.')
+      return
+    }
+
+    const slotObj = sortedSlots.find((s: any) => s.slot_id === selectedSlot)
+    const slotTitle = slotObj ? `${formatShortDate(slotObj.date)} • ${slotObj.time_label}` : 'Selected Slot'
+    const sortedBooked = [...bookedTeams].sort((a, b) => (a.room_slot_number || 5) - (b.room_slot_number || 5))
+
+    const templateObj = {
+      _instructions: "Extract match scores from the screenshot for the 3 matches in this slot. Calculate total Position Points (pos_points) and total Eliminations (elims) per team across all 3 matches. Enter the room slot numbers (5-24) of the 3 match winners in match_winners.",
+      slot_info: slotTitle,
+      match_winners: [
+        sortedBooked[0]?.room_slot_number || 5,
+        sortedBooked[1]?.room_slot_number || 6,
+        sortedBooked[2]?.room_slot_number || 7,
+      ],
+      scores: sortedBooked.map((t: any) => ({
+        slot: t.room_slot_number || 5,
+        team_name: t.team_name,
+        pos_points: 0,
+        elims: 0,
+      })),
+    }
+
+    const promptText = `Convert the match score screenshot into the following JSON format. Match each team by their room slot number (5-24) or team name. Calculate total position points and total eliminations across all 3 matches:
+
+\`\`\`json
+${JSON.stringify(templateObj, null, 2)}
+\`\`\`
+
+Return ONLY the raw JSON block without markdown wrap.`
+
+    navigator.clipboard.writeText(promptText)
+    setBackupMsg('📋 AI Prompt & JSON Template copied to clipboard! Paste it with your screenshot into ChatGPT / Claude / Gemini.')
+    setCopyTemplateToast(true)
+    setTimeout(() => setCopyTemplateToast(false), 3000)
+  }
+
+  async function handleApplyJsonScores(rawJsonText: string) {
+    if (!selectedSlot) {
+      throw new Error('Please select a slot first.')
+    }
+    const cleanText = rawJsonText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+    let parsed: any
+    try {
+      parsed = JSON.parse(cleanText)
+    } catch (e: any) {
+      throw new Error('Invalid JSON format: ' + e.message)
+    }
+
+    const scoresList: any[] = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.scores) ? parsed.scores : [])
+    if (scoresList.length === 0) {
+      throw new Error('No scores array found in JSON. Expected an array of team scores or { "scores": [...] }')
+    }
+
+    const rawWinners: any[] = Array.isArray(parsed.match_winners)
+      ? parsed.match_winners
+      : Array.isArray(parsed.winners)
+      ? parsed.winners
+      : []
+
+    const resolveTeamId = (val: any): string | null => {
+      if (val === undefined || val === null || val === '') return null
+      const strVal = String(val).trim().toLowerCase()
+      const numVal = parseInt(strVal)
+      
+      if (!isNaN(numVal)) {
+        const found = bookedTeams.find((t: any) => (t.room_slot_number || 5) === numVal)
+        if (found) return found.team_id
+      }
+      const foundByName = bookedTeams.find((t: any) => 
+        t.team_name.toLowerCase() === strVal ||
+        t.team_name.toLowerCase().includes(strVal) ||
+        strVal.includes(t.team_name.toLowerCase())
+      )
+      if (foundByName) return foundByName.team_id
+      const foundById = bookedTeams.find((t: any) => t.team_id === strVal)
+      if (foundById) return foundById.team_id
+
+      return null
+    }
+
+    const w1Id = rawWinners[0] !== undefined ? resolveTeamId(rawWinners[0]) : ''
+    const w2Id = rawWinners[1] !== undefined ? resolveTeamId(rawWinners[1]) : ''
+    const w3Id = rawWinners[2] !== undefined ? resolveTeamId(rawWinners[2]) : ''
+
+    if (w1Id || w2Id || w3Id) {
+      if (w1Id) setMatch1Winner(w1Id)
+      if (w2Id) setMatch2Winner(w2Id)
+      if (w3Id) setMatch3Winner(w3Id)
+
+      await supabase.from('config').upsert({
+        key: `slot_winners_${selectedSlot}`,
+        value: JSON.stringify({ m1: w1Id || '', m2: w2Id || '', m3: w3Id || '' }),
+      })
+    }
+
+    let importedCount = 0
+    const errors: string[] = []
+
+    for (const item of scoresList) {
+      const teamId = resolveTeamId(item.slot ?? item.room_slot ?? item.room_slot_number ?? item.team_name ?? item.team ?? item.team_id)
+      if (!teamId) {
+        errors.push(`Could not match team: ${item.team_name || item.slot || JSON.stringify(item)}`)
+        continue
+      }
+
+      const pos = parseInt(item.pos_points ?? item.position_points ?? item.placement_points ?? item.pos ?? 0) || 0
+      const k = parseInt(item.elims ?? item.kills ?? item.eliminations ?? item.kill_points ?? 0) || 0
+      const total = pos + k
+      const isWinner = (teamId === w1Id || teamId === w2Id || teamId === w3Id)
+
+      const { error } = await supabase.from('matches').upsert({
+        slot_id: selectedSlot,
+        match_number: 1,
+        team_id: teamId,
+        placement: isWinner ? 1 : null,
+        kills: k,
+        placement_points: pos,
+        kill_points: k,
+        total_points: total,
+      }, { onConflict: 'slot_id,match_number,team_id' })
+
+      if (!error) {
+        importedCount++
+      } else {
+        errors.push(`DB Error for ${teamId}: ${error.message}`)
+      }
+    }
+
+    await loadSlotData(selectedSlot)
+    if (onSyncPayouts) onSyncPayouts()
+
+    return { importedCount, totalInFile: scoresList.length, errors }
+  }
+
   const selectedTeamData = selectedTeam ? teamSlotTotals[selectedTeam] : null
 
   return (
@@ -808,7 +949,7 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
           <h2 className={styles.tabTitle}>Points Table Score Entry</h2>
         </div>
 
-        {/* 💾 Actions: Update The Table, Export, Restore */}
+        {/* 💾 Actions: Update The Table, Copy AI Template, Import AI/JSON, Export, Restore */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button
             type="button"
@@ -837,7 +978,47 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            style={{ fontSize: '0.78rem', background: '#1e1e1e', borderColor: '#333333', color: '#fbbf24', fontWeight: 700 }}
+            style={{
+              fontSize: '0.78rem',
+              background: copyTemplateToast ? 'rgba(251, 191, 36, 0.2)' : '#1e1e1e',
+              borderColor: '#fbbf24',
+              color: '#fbbf24',
+              fontWeight: 800,
+              padding: '0.45rem 0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+            onClick={handleCopyJsonTemplate}
+            disabled={!selectedSlot || sortedSlots.length === 0}
+          >
+            {copyTemplateToast ? '✅ Copied!' : '📋 Copy AI Template'}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{
+              fontSize: '0.78rem',
+              background: '#1e1e1e',
+              borderColor: '#38bdf8',
+              color: '#38bdf8',
+              fontWeight: 800,
+              padding: '0.45rem 0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+            onClick={() => setShowImportModal(true)}
+            disabled={!selectedSlot || sortedSlots.length === 0}
+          >
+            🤖 Import AI / JSON
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: '0.78rem', background: '#1e1e1e', borderColor: '#333333', color: '#aaaaaa', fontWeight: 700 }}
             onClick={handleExportBackup}
             disabled={isExporting}
           >
@@ -1408,6 +1589,237 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
           </div>
         </div>
       )}
+
+      {/* ── IMPORT AI / JSON MODAL ── */}
+      {showImportModal && (
+        <ImportSlotJsonModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          selectedSlot={selectedSlot}
+          slotTitle={(() => {
+            const slotObj = sortedSlots.find((s: any) => s.slot_id === selectedSlot)
+            return slotObj ? `${formatShortDate(slotObj.date)} • ${slotObj.time_label}` : 'Selected Slot'
+          })()}
+          bookedTeams={bookedTeams}
+          onApplyScores={handleApplyJsonScores}
+        />
+      )}
+    </div>
+  )
+}
+
+function ImportSlotJsonModal({
+  isOpen,
+  onClose,
+  selectedSlot,
+  slotTitle,
+  bookedTeams,
+  onApplyScores,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  selectedSlot: string
+  slotTitle: string
+  bookedTeams: any[]
+  onApplyScores: (jsonText: string) => Promise<{ importedCount: number; totalInFile: number; errors: string[] }>
+}) {
+  const [jsonInput, setJsonInput] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [statusMsg, setStatusMsg] = useState('')
+  const [statusType, setStatusType] = useState<'success' | 'error' | ''>('')
+
+  if (!isOpen) return null
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      setJsonInput(text)
+      setStatusMsg(`Loaded ${file.name}`)
+      setStatusType('')
+    } catch (err: any) {
+      setStatusMsg('Failed to read file: ' + err.message)
+      setStatusType('error')
+    }
+  }
+
+  async function handleSubmit() {
+    if (!jsonInput.trim()) {
+      setStatusMsg('Please paste JSON or upload a file first.')
+      setStatusType('error')
+      return
+    }
+
+    setIsProcessing(true)
+    setStatusMsg('')
+    setStatusType('')
+
+    try {
+      const res = await onApplyScores(jsonInput)
+      if (res.importedCount > 0) {
+        setStatusMsg(`✅ Successfully imported scores for ${res.importedCount} teams into Draft!`)
+        setStatusType('success')
+        setTimeout(() => {
+          onClose()
+          setJsonInput('')
+          setStatusMsg('')
+        }, 1200)
+      } else {
+        setStatusMsg('❌ No team scores could be imported. Please check JSON format.')
+        setStatusType('error')
+      }
+    } catch (err: any) {
+      setStatusMsg('❌ ' + err.message)
+      setStatusType('error')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.85)',
+        zIndex: 100000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+        backdropFilter: 'blur(4px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#121212',
+          border: '1px solid #333333',
+          borderRadius: '14px',
+          padding: '1.5rem',
+          maxWidth: '560px',
+          width: '100%',
+          boxShadow: '0 25px 50px rgba(0,0,0,0.9)',
+          position: 'relative',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #282828', paddingBottom: '0.85rem', marginBottom: '1rem' }}>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '2px' }}>
+              🤖 AI & JSON Score Importer
+            </div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f3f4f6', margin: 0 }}>
+              Import Slot Scores
+            </h3>
+            <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>
+              {slotTitle} • {bookedTeams.length} Registered Teams
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ color: '#888888', fontSize: '1.1rem', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Instructions */}
+        <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '8px', padding: '0.65rem 0.85rem', marginBottom: '0.85rem', fontSize: '0.75rem', color: '#bae6fd' }}>
+          Paste the JSON generated by ChatGPT / Claude / Gemini from your match screenshot, or upload a <code>.json</code> file.
+        </div>
+
+        {/* File upload shortcut */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e5e7eb' }}>
+            Paste Raw JSON or AI Output:
+          </label>
+          <label
+            style={{
+              fontSize: '0.72rem',
+              color: '#38bdf8',
+              cursor: 'pointer',
+              fontWeight: 700,
+              textDecoration: 'underline',
+            }}
+          >
+            📁 Or Upload .json file
+            <input type="file" accept=".json" onChange={handleFileUpload} style={{ display: 'none' }} />
+          </label>
+        </div>
+
+        {/* Text Area */}
+        <textarea
+          className="form-input"
+          style={{
+            width: '100%',
+            height: '220px',
+            fontFamily: 'monospace',
+            fontSize: '0.75rem',
+            padding: '0.6rem',
+            background: '#0a0a0a',
+            border: '1px solid #333333',
+            borderRadius: '6px',
+            resize: 'vertical',
+            lineHeight: 1.4,
+            marginBottom: '0.85rem',
+          }}
+          placeholder={`{\n  "match_winners": [17, 8, 13],\n  "scores": [\n    { "slot": 5, "pos_points": 0, "elims": 5 },\n    { "slot": 6, "pos_points": 0, "elims": 0 },\n    { "slot": 7, "pos_points": 10, "elims": 7 }\n  ]\n}`}
+          value={jsonInput}
+          onChange={e => setJsonInput(e.target.value)}
+        />
+
+        {/* Status Message */}
+        {statusMsg && (
+          <div
+            style={{
+              fontSize: '0.75rem',
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              marginBottom: '0.85rem',
+              fontWeight: 600,
+              background: statusType === 'success' ? 'rgba(34, 197, 94, 0.15)' : statusType === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+              color: statusType === 'success' ? '#4ade80' : statusType === 'error' ? '#ef4444' : '#d1d5db',
+              border: statusType === 'success' ? '1px solid #22c55e' : statusType === 'error' ? '1px solid #ef4444' : '1px solid #444',
+            }}
+          >
+            {statusMsg}
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', borderColor: '#444' }}
+            onClick={onClose}
+            disabled={isProcessing}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            style={{
+              padding: '0.5rem 1.25rem',
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              background: '#38bdf8',
+              borderColor: '#38bdf8',
+              color: '#000000',
+            }}
+            onClick={handleSubmit}
+            disabled={isProcessing || !jsonInput.trim()}
+          >
+            {isProcessing ? 'Importing Scores...' : '⚡ Apply Scores to Draft'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
