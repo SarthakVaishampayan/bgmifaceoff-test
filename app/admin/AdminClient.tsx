@@ -1058,43 +1058,63 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
               </div>
 
               <div>
-                <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>
-                  Select Team {bookedTeams.length > 0 && <span style={{ color: '#22c55e', fontWeight: 600 }}>({bookedTeams.length} registered)</span>}
-                </label>
-                <select
-                  className="form-input"
-                  style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
-                  value={selectedTeam}
-                  onChange={e => {
-                    setSelectedTeam(e.target.value)
-                    const existing = teamSlotTotals[e.target.value]
-                    if (existing && existing.is_scored) {
-                      setPosPoints(String(existing.total_pos_points))
-                      setKills(String(existing.total_kills))
-                    } else {
-                      setPosPoints('')
-                      setKills('')
-                    }
-                  }}
-                  required
-                >
-                  <option value="">
-                    {!selectedSlot
-                      ? 'Select a slot first'
-                      : bookedTeams.length === 0
-                      ? 'No registered teams in slot'
-                      : 'Select registered team...'}
-                  </option>
-                  {bookedTeams.map((t: any) => {
+                {(() => {
+                  const totalRegistered = bookedTeams.length
+                  const scoredCount = bookedTeams.filter((t: any) => teamSlotTotals[t.team_id]?.is_scored).length
+                  const pendingCount = totalRegistered - scoredCount
+                  const pendingTeams = bookedTeams.filter((t: any) => {
+                    if (selectedTeam === t.team_id) return true
                     const existing = teamSlotTotals[t.team_id]
-                    const statusText = existing?.is_scored ? ` • [Scored: ${existing.total_points} pts]` : ' • [Pending]'
-                    return (
-                      <option key={t.team_id} value={t.team_id}>
-                        {t.team_name} [Slot {t.room_slot_number || 5}]{statusText}
-                      </option>
-                    )
-                  })}
-                </select>
+                    return !existing || !existing.is_scored
+                  })
+
+                  return (
+                    <>
+                      <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>
+                        Select Team {totalRegistered > 0 && (
+                          <span style={{ color: pendingCount === 0 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>
+                            ({pendingCount === 0 ? `All ${totalRegistered} Scored` : `${pendingCount} pending / ${totalRegistered} registered`})
+                          </span>
+                        )}
+                      </label>
+                      <select
+                        className="form-input"
+                        style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
+                        value={selectedTeam}
+                        onChange={e => {
+                          setSelectedTeam(e.target.value)
+                          const existing = teamSlotTotals[e.target.value]
+                          if (existing && existing.is_scored) {
+                            setPosPoints(String(existing.total_pos_points))
+                            setKills(String(existing.total_kills))
+                          } else {
+                            setPosPoints('')
+                            setKills('')
+                          }
+                        }}
+                        required
+                      >
+                        <option value="">
+                          {!selectedSlot
+                            ? 'Select a slot first'
+                            : totalRegistered === 0
+                            ? 'No registered teams in slot'
+                            : pendingCount === 0 && !editingMatchId
+                            ? `✅ All teams scored (${totalRegistered}/${totalRegistered})`
+                            : 'Select registered team...'}
+                        </option>
+                        {pendingTeams.map((t: any) => {
+                          const isCurrentlyEditing = selectedTeam === t.team_id && editingMatchId
+                          return (
+                            <option key={t.team_id} value={t.team_id}>
+                              {t.team_name} [Slot {t.room_slot_number || 5}]{isCurrentlyEditing ? ' • [Editing]' : ''}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </>
+                  )
+                })()}
               </div>
             </div>
 
