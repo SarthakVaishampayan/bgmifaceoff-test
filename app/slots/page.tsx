@@ -48,6 +48,7 @@ export default async function SlotsPage() {
 
   slots = slots.map(s => ({
     ...s,
+    entry_fee: s.entry_fee === 50 ? 40 : (s.entry_fee || 40),
     first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
     second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
     third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? '100% Free Slot Pass',

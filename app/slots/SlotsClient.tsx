@@ -84,13 +84,14 @@ export default function SlotsClient({
   userBookedSlotIds = [],
   userBookedSlotsMap = {},
   whatsappLink,
-  entryFee,
+  entryFee = 40,
   firstPrize = 200,
   secondPrize = 150,
   isLoggedIn,
   isTestAccount = false,
 }: Props) {
   const router = useRouter()
+  const effectiveEntryFee = (entryFee === 50 || !entryFee) ? 40 : entryFee
 
   const [slotsList, setSlotsList] = useState<Slot[]>(slots)
   useEffect(() => {
@@ -525,13 +526,13 @@ function loadRazorpayScript(): Promise<boolean> {
           <div>
             <h1 className={styles.title}>MATCH SLOTS</h1>
             <p className={styles.subtitle}>
-              3 Matches per Slot · {entryFee === 1 ? (
+              3 Matches per Slot · {effectiveEntryFee === 1 ? (
                 <span>
                   <span style={{ textDecoration: 'line-through', color: '#71717a', marginRight: '4px' }}>₹40</span>
                   <span style={{ color: '#fbbf24', fontWeight: 800 }}>₹1</span>
                 </span>
               ) : (
-                `₹${entryFee}`
+                `₹${effectiveEntryFee}`
               )} Entry · Max 20 Teams
             </p>
           </div>
@@ -612,7 +613,7 @@ function loadRazorpayScript(): Promise<boolean> {
                 const isUrgent = !isFull && !isCompleted && !isAlreadyBooked && spotsLeft < 5
 
                 const showFreeOption = Boolean(remainingCoupons.length > 0 && !isFull && !isCompleted && !isAlreadyBooked)
-                const currentFee = slot.entry_fee || entryFee
+                const currentFee = (slot.entry_fee === 50 || !slot.entry_fee) ? effectiveEntryFee : slot.entry_fee
 
                 if (isAlreadyBooked) {
                   const matchTimes = getMatchTimes(slot.time_label)
