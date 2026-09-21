@@ -235,6 +235,13 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     return ''
   }
 
+  function getSlotRowRankClass(rank: number) {
+    if (rank === 1) return styles.rank1
+    if (rank === 2) return styles.rank2
+    if (rank === 3) return styles.rank3
+    return ''
+  }
+
   return (
     <main className={styles.page}>
       <div className="container">
@@ -516,7 +523,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                   </thead>
                   <tbody>
                     {slotLeaderboard.items.map(row => (
-                      <tr key={row.team_id} className={`${styles.teamRow} ${getRowRankClass(row.rank)}`}>
+                      <tr key={row.team_id} className={`${styles.teamRow} ${getSlotRowRankClass(row.rank)}`}>
                         <td>
                           <span className={`badge ${getRankBadgeClass(row.rank)}`}>
                             #{row.rank}
@@ -591,7 +598,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
             {/* Per-Slot Mobile View */}
             <div className={styles.mobileList}>
               {slotLeaderboard.items.map(row => (
-                <div key={row.team_id} className={`${styles.mobileCard} ${getRowRankClass(row.rank)}`} style={{ padding: '1.25rem' }}>
+                <div key={row.team_id} className={`${styles.mobileCard} ${getSlotRowRankClass(row.rank)}`} style={{ padding: '1.25rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className={`badge ${getRankBadgeClass(row.rank)}`}>#{row.rank}</span>
