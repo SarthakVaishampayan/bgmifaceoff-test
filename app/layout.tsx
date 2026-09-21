@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'BGFS | Battlegrounds Faceoff Series',
-    description: 'India\'s premier BGMI mobile tournament. Weekly league slots, ₹50 entry, cash prizes every slot.',
+    description: 'India\'s premier BGMI mobile tournament. Weekly league slots, ₹40 entry, cash prizes every slot.',
     url: 'https://battlegroundsfaceoffseries.in',
     type: 'website',
   },

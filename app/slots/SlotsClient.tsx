@@ -298,7 +298,7 @@ function loadRazorpayScript(): Promise<boolean> {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               bookingId: createData.booking_id,
-              amount: slot.entry_fee || 50,
+              amount: slot.entry_fee || 40,
             }),
           })
 

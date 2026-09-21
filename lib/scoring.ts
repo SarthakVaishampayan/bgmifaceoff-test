@@ -53,7 +53,7 @@ export const SLOT_PRIZES = {
   third: 'free_slot', // 1 Free Slot Reward
 } as const
 
-export const ENTRY_FEE = 50 // ₹50 per slot
+export const ENTRY_FEE = 40 // ₹40 per slot
 export const MAX_TEAMS_PER_SLOT = 24
 export const TARGET_TEAMS_PER_SLOT = 18
 export const BEST_N_SLOTS = 6

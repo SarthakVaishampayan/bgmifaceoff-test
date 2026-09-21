@@ -32,10 +32,10 @@ export default function AboutPage() {
   ]
 
   const stats = [
-    { value: '18', label: 'Teams Per Slot' },
+    { value: '20', label: 'Teams Per Slot' },
     { value: '3', label: 'Matches Per Slot' },
     { value: '16', label: 'Grand Finals Qualifiers' },
-    { value: '₹50', label: 'Entry Fee Per Slot' },
+    { value: '₹40', label: 'Entry Fee Per Slot' },
   ]
 
   return (

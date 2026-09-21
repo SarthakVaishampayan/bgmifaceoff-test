@@ -193,7 +193,7 @@ export default async function SlotsPage() {
       userBookedSlotIds={userBookedSlotIds}
       userBookedSlotsMap={userBookedSlotsMap}
       whatsappLink={config.whatsapp_invite_link || ''}
-      entryFee={parseInt(config.slot_entry_fee || '50')}
+      entryFee={parseInt(config.slot_entry_fee || '40')}
       firstPrize={parseInt(config.slot_first_prize || '200')}
       secondPrize={parseInt(config.slot_second_prize || '150')}
       isLoggedIn={!!user}

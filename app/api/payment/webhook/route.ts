@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     .update({
       payment_status: 'paid',
       payment_id: paymentId,
-      amount_paid: slot?.entry_fee ?? 50,
+      amount_paid: slot?.entry_fee ?? 40,
       room_slot_number,
     })
     .eq('booking_id', bookingId)

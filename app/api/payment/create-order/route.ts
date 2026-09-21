@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       key_secret: keySecret,
     })
 
-    // Amount in paise (₹50 = 5000 paise)
+    // Amount in paise (₹40 = 4000 paise)
     const options = {
       amount: Math.round(amount * 100),
       currency: 'INR',
