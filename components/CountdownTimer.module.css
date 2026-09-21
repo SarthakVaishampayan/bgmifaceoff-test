@@ -18,6 +18,19 @@
   text-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
 }
 
+.liveLabelWrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #ef4444;
+  text-shadow: 0 0 14px rgba(239, 68, 68, 0.6);
+}
+
 .liveDot {
   width: 7px;
   height: 7px;
@@ -25,6 +38,15 @@
   background: #fbbf24;
   box-shadow: 0 0 8px #fbbf24;
   animation: pulse 1.8s infinite ease-in-out;
+}
+
+.liveDotRed {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444, 0 0 16px rgba(239, 68, 68, 0.8);
+  animation: pulse 1.5s infinite ease-in-out;
 }
 
 @keyframes pulse {
@@ -89,7 +111,8 @@
   .unitLabel {
     font-size: 0.65rem;
   }
-  .labelWrapper {
+  .labelWrapper,
+  .liveLabelWrapper {
     font-size: 0.72rem;
   }
 }

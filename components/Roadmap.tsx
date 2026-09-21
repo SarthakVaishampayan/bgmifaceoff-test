@@ -26,7 +26,7 @@ export default function Roadmap() {
       details: 'Play unlimited slots • Best 6 Slots count • Instant UPI match rewards',
       sideBadgeLabel: '21 SEP – 16 OCT',
       sideBadgeSub: 'DAILY 3-MATCH SLOTS',
-      isActive: false,
+      isActive: true,
     },
     {
       dateMonth: '16 OCT',

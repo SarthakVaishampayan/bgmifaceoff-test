@@ -15,27 +15,25 @@ interface CountdownTimerProps {
   label?: string
 }
 
-function getValidTargetTime(targetDateProp?: string): number {
-  const now = Date.now()
-  let target = targetDateProp ? new Date(targetDateProp).getTime() : NaN
-
-  // If target date is invalid or in the past, fallback to upcoming September 21 at 1:00 PM IST (Slot 1 start)
-  if (isNaN(target) || target <= now) {
-    const currentYear = new Date().getFullYear()
-    let sep21 = new Date(`${currentYear}-09-21T13:00:00+05:30`).getTime()
-    if (sep21 <= now) {
-      sep21 = new Date(`${currentYear + 1}-09-21T13:00:00+05:30`).getTime()
-    }
-    return sep21
+function parseTargetTime(targetDateProp?: string): number {
+  if (targetDateProp) {
+    const parsed = new Date(targetDateProp).getTime()
+    if (!isNaN(parsed)) return parsed
   }
-
-  return target
+  // Default: Season 01 Slot 1 start (September 21, 2026 at 1:00 PM IST)
+  return new Date('2026-09-21T13:00:00+05:30').getTime()
 }
 
 export default function CountdownTimer({
   targetDate,
   label = 'LEAGUE STAGE STARTS IN',
 }: CountdownTimerProps) {
+  const targetTime = parseTargetTime(targetDate)
+
+  const [isLive, setIsLive] = useState<boolean>(() => {
+    return Date.now() >= targetTime
+  })
+
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     days: 0,
     hours: 0,
@@ -46,12 +44,19 @@ export default function CountdownTimer({
 
   useEffect(() => {
     setMounted(true)
-    const targetTime = getValidTargetTime(targetDate)
+    const validTargetTime = parseTargetTime(targetDate)
 
     function updateTimer() {
       const now = Date.now()
-      const diff = Math.max(0, targetTime - now)
+      const diff = validTargetTime - now
 
+      if (diff <= 0) {
+        setIsLive(true)
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+        return
+      }
+
+      setIsLive(false)
       const days = Math.floor(diff / (1000 * 60 * 60 * 24))
       const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
@@ -66,6 +71,19 @@ export default function CountdownTimer({
     return () => clearInterval(timerId)
   }, [targetDate])
 
+  // If tournament has started / is live
+  if (isLive) {
+    return (
+      <div className={styles.wrapper}>
+        <div className={styles.liveLabelWrapper}>
+          <span className={styles.liveDotRed} />
+          <span>TOURNAMENT IS LIVE</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Pre-tournament countdown state
   const units = [
     { label: 'DAYS', value: timeLeft.days },
     { label: 'HOURS', value: timeLeft.hours },
@@ -94,3 +112,5 @@ export default function CountdownTimer({
     </div>
   )
 }
+
+
