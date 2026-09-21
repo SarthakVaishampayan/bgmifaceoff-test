@@ -153,7 +153,7 @@ export default function SlotsClient({
     return [...list].sort((a, b) => {
       const aDate = String(a.date || '').split('T')[0]
       const bDate = String(b.date || '').split('T')[0]
-      const dateComp = bDate.localeCompare(aDate)
+      const dateComp = aDate.localeCompare(bDate)
       if (dateComp !== 0) return dateComp
 
       const aMins = getSlotStartMinutes(a.time_label)
@@ -593,8 +593,8 @@ function loadRazorpayScript(): Promise<boolean> {
           </div>
         )}
 
-        {/* Date groups with Square Card Grid (Latest dates first) */}
-        {Object.keys(slotsByDate).sort((a, b) => b.localeCompare(a)).map(date => {
+        {/* Date groups with Square Card Grid (Earliest/upcoming dates first) */}
+        {Object.keys(slotsByDate).sort((a, b) => a.localeCompare(b)).map(date => {
           const dateSlots = slotsByDate[date]
           return (
             <div key={date} className={styles.daySection}>
