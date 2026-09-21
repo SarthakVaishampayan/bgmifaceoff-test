@@ -38,8 +38,22 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     // 2. Fetch all matches for these slots
     const { data: matches } = await admin
       .from('matches')
-      .select('slot_id, team_id, total_points, kills, teams(team_id, team_name, captain_user_id)')
+      .select('slot_id, team_id, total_points, placement_points, kills, placement, teams(team_id, team_name, captain_user_id)')
       .in('slot_id', slotIds)
+
+    // Fetch slot winners from config
+    const { data: winConfigs } = await admin
+      .from('config')
+      .select('key, value')
+      .like('key', 'slot_winners_%')
+
+    const slotWinnersMap = new Map<string, { m1?: string; m2?: string; m3?: string }>()
+    winConfigs?.forEach(c => {
+      const sId = c.key.replace('slot_winners_', '')
+      try {
+        slotWinnersMap.set(sId, JSON.parse(c.value))
+      } catch {}
+    })
 
     // 3. Fetch bookings for these slots (fallback when no matches were entered)
     const { data: bookings } = await admin
@@ -108,23 +122,37 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       })
     }
 
-    // 6. Group matches by slot
-    const slotMatchesMap = new Map<string, Map<string, { team_id: string; total_points: number; total_kills: number; captain_user_id?: string }>>()
+    // 6. Group matches by slot with WWCD and Position Points tracking
+    const slotMatchesMap = new Map<string, Map<string, { team_id: string; total_points: number; total_pos_points: number; total_kills: number; wwcd: number; captain_user_id?: string }>>()
     matches?.forEach((m: any) => {
       if (!slotMatchesMap.has(m.slot_id)) {
         slotMatchesMap.set(m.slot_id, new Map())
       }
       const teamsMap = slotMatchesMap.get(m.slot_id)!
       if (!teamsMap.has(m.team_id)) {
+        const winners = slotWinnersMap.get(m.slot_id)
+        let wwcdCount = 0
+        if (winners) {
+          if (winners.m1 === m.team_id) wwcdCount++
+          if (winners.m2 === m.team_id) wwcdCount++
+          if (winners.m3 === m.team_id) wwcdCount++
+        } else if (Number(m.placement) === 1) {
+          wwcdCount = 1
+        }
+
         teamsMap.set(m.team_id, {
           team_id: m.team_id,
           total_points: 0,
+          total_pos_points: 0,
           total_kills: 0,
+          wwcd: wwcdCount,
           captain_user_id: m.teams?.captain_user_id,
         })
       }
       const t = teamsMap.get(m.team_id)!
       t.total_points += (m.total_points || 0)
+      const posPts = m.placement_points !== undefined && m.placement_points !== null ? m.placement_points : Math.max(0, (m.total_points || 0) - (m.kills || 0))
+      t.total_pos_points += posPts
       t.total_kills += (m.kills || 0)
     })
 
@@ -144,6 +172,7 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     })
 
     // 8. For each completed slot, determine top 2 candidates
+    // Priority: 1. Total Points -> 2. Position Points -> 3. Chicken Dinners (#1 / WWCD)
     const payoutsToInsert: any[] = []
 
     for (const slot of completedSlots) {
@@ -153,8 +182,13 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       if (slotMatchesMap.has(slotId) && slotMatchesMap.get(slotId)!.size > 0) {
         const teamsMap = slotMatchesMap.get(slotId)!
         const sorted = Array.from(teamsMap.values()).sort((a, b) => {
+          // 1st Priority: Total Points
           if (b.total_points !== a.total_points) return b.total_points - a.total_points
-          return b.total_kills - a.total_kills
+          // 2nd Priority: Position Points
+          if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
+          // 3rd Priority: Chicken Dinners (#1 / WWCD)
+          if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+          return 0
         })
         top2 = sorted.slice(0, 2)
       } else if (slotBookingsMap.has(slotId) && slotBookingsMap.get(slotId)!.length > 0) {
@@ -210,7 +244,9 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
         const teamsMap = slotMatchesMap.get(slotId)!
         const sorted = Array.from(teamsMap.values()).sort((a, b) => {
           if (b.total_points !== a.total_points) return b.total_points - a.total_points
-          return b.total_kills - a.total_kills
+          if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
+          if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+          return 0
         })
 
         const thirdTeam = sorted[2]

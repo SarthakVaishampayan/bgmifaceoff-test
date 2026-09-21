@@ -306,7 +306,7 @@
 /* Score Entry Layout */
 .scoreEntryLayout {
   display: grid;
-  grid-template-columns: 1fr 270px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
   width: 100%;

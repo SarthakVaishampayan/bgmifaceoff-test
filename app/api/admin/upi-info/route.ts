@@ -56,22 +56,30 @@ export async function GET(request: Request) {
       .eq('slot_id', slotId)
       .eq('payment_status', 'paid')
 
-    // 4. Fetch all UPI config records for teams
-    const { data: upiConfigs } = await admin
+    // 4. Fetch all UPI config records for teams & slot winners
+    const { data: configs } = await admin
       .from('config')
       .select('key, value')
-      .like('key', 'upi_team_%')
+      .or(`key.like.upi_team_%,key.eq.slot_winners_${slotId}`)
 
     const upiMap = new Map<string, { upi_id: string; upi_holder_name: string }>()
-    upiConfigs?.forEach(c => {
-      const tId = c.key.replace('upi_team_', '')
-      try {
-        const parsed = JSON.parse(c.value)
-        upiMap.set(tId, {
-          upi_id: parsed.upi_id || '',
-          upi_holder_name: parsed.upi_holder_name || '',
-        })
-      } catch (e) {}
+    let slotWinners: { m1?: string; m2?: string; m3?: string } = {}
+
+    configs?.forEach(c => {
+      if (c.key === `slot_winners_${slotId}`) {
+        try {
+          slotWinners = JSON.parse(c.value)
+        } catch {}
+      } else if (c.key.startsWith('upi_team_')) {
+        const tId = c.key.replace('upi_team_', '')
+        try {
+          const parsed = JSON.parse(c.value)
+          upiMap.set(tId, {
+            upi_id: parsed.upi_id || '',
+            upi_holder_name: parsed.upi_holder_name || '',
+          })
+        } catch (e) {}
+      }
     })
 
     // 5. Fetch captain users for fallback upi_id
@@ -100,11 +108,14 @@ export async function GET(request: Request) {
       matches: Array<{
         match_number: number
         placement: number
+        placement_points: number
         kills: number
         total_points: number
       }>
       total_points: number
+      total_pos_points: number
       total_kills: number
+      wwcd: number
       upi_id: string
       upi_holder_name: string
     }>()
@@ -120,7 +131,9 @@ export async function GET(request: Request) {
         room_slot_number: b.room_slot_number || null,
         matches: [],
         total_points: 0,
+        total_pos_points: 0,
         total_kills: 0,
+        wwcd: 0,
         upi_id: '',
         upi_holder_name: '',
       })
@@ -139,16 +152,23 @@ export async function GET(request: Request) {
           room_slot_number: null,
           matches: [],
           total_points: 0,
+          total_pos_points: 0,
           total_kills: 0,
+          wwcd: 0,
           upi_id: '',
           upi_holder_name: '',
         }
         teamAggregation.set(m.team_id, entry)
       }
 
+      const posPts = m.placement_points !== undefined && m.placement_points !== null
+        ? Number(m.placement_points)
+        : Math.max(0, (Number(m.total_points) || 0) - (Number(m.kills) || 0))
+
       entry.matches.push({
         match_number: m.match_number,
         placement: m.placement || 0,
+        placement_points: posPts,
         kills: Number(m.kills) || 0,
         total_points: Number(m.total_points) || 0,
       })
@@ -158,7 +178,14 @@ export async function GET(request: Request) {
     const rankedList = Array.from(teamAggregation.values()).map(t => {
       t.matches.sort((a, b) => a.match_number - b.match_number)
       t.total_points = t.matches.reduce((sum, m) => sum + m.total_points, 0)
+      t.total_pos_points = t.matches.reduce((sum, m) => sum + m.placement_points, 0)
       t.total_kills = t.matches.reduce((sum, m) => sum + m.kills, 0)
+
+      let wonCount = 0
+      if (slotWinners.m1 === t.team_id) wonCount++
+      if (slotWinners.m2 === t.team_id) wonCount++
+      if (slotWinners.m3 === t.team_id) wonCount++
+      t.wwcd = wonCount
 
       // Look up UPI info
       const savedUpi = upiMap.get(t.team_id)
@@ -172,12 +199,21 @@ export async function GET(request: Request) {
       return t
     })
 
-    // Sort by total points descending (tie-breaker: kills)
+    // Exact Tie-Breaker Ordering:
+    // 1. Total Points
+    // 2. Position Points
+    // 3. Chicken Dinners (#1 / WWCD)
     rankedList.sort((a, b) => {
       if (b.total_points !== a.total_points) {
         return b.total_points - a.total_points
       }
-      return b.total_kills - a.total_kills
+      if (b.total_pos_points !== a.total_pos_points) {
+        return b.total_pos_points - a.total_pos_points
+      }
+      if (b.wwcd !== a.wwcd) {
+        return b.wwcd - a.wwcd
+      }
+      return 0
     })
 
     const teamsWithRank = rankedList.map((t, idx) => ({

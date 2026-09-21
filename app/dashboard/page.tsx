@@ -101,6 +101,7 @@ export default async function DashboardPage() {
     payoutsResult,
     couponsResult,
     publishedSlotsResult,
+    slotWinnersConfigsResult,
   ] = await Promise.all([
     // Bookings
     allUserTeamIds.length > 0
@@ -141,7 +142,7 @@ export default async function DashboardPage() {
     // All matches for leaderboard ranking
     admin
       .from('matches')
-      .select('team_id, slot_id, total_points, kills'),
+      .select('team_id, slot_id, total_points, placement_points, placement, kills'),
 
     // Payouts
     admin
@@ -162,6 +163,12 @@ export default async function DashboardPage() {
       .select('value')
       .eq('key', 'scores_published_slots')
       .maybeSingle(),
+
+    // Slot winners configs
+    admin
+      .from('config')
+      .select('key, value')
+      .like('key', 'slot_winners_%'),
   ])
 
   let bookings: any[] = bookingsResult.data || []
@@ -223,16 +230,40 @@ export default async function DashboardPage() {
     }
   }
 
+  const slotWinnersMap: Record<string, { m1?: string; m2?: string; m3?: string }> = {}
+  if (slotWinnersConfigsResult?.data) {
+    slotWinnersConfigsResult.data.forEach((c: any) => {
+      const sId = c.key.replace('slot_winners_', '')
+      try {
+        slotWinnersMap[sId] = JSON.parse(c.value)
+      } catch {}
+    })
+  }
+
   const allMatchesData = leaderboardResult.data || []
   const completedMatches = allMatchesData.filter((m: any) => publishedSlotIds.has(m.slot_id))
-  const teamSlotTotals: Record<string, Record<string, { total_points: number; kills: number; matches_count: number }>> = {}
+  const teamSlotTotals: Record<string, Record<string, { total_points: number; position_points: number; kills: number; wwcd: number; matches_count: number }>> = {}
   
   completedMatches.forEach((m: any) => {
     if (!teamSlotTotals[m.team_id]) teamSlotTotals[m.team_id] = {}
     if (!teamSlotTotals[m.team_id][m.slot_id]) {
-      teamSlotTotals[m.team_id][m.slot_id] = { total_points: 0, kills: 0, matches_count: 0 }
+      let wwcdCount = 0
+      const winners = slotWinnersMap[m.slot_id]
+      if (winners) {
+        if (winners.m1 === m.team_id) wwcdCount++
+        if (winners.m2 === m.team_id) wwcdCount++
+        if (winners.m3 === m.team_id) wwcdCount++
+      } else if (Number(m.placement) === 1) {
+        wwcdCount = 1
+      }
+      teamSlotTotals[m.team_id][m.slot_id] = { total_points: 0, position_points: 0, kills: 0, wwcd: wwcdCount, matches_count: 0 }
     }
+    const posPts = m.placement_points !== undefined && m.placement_points !== null
+      ? Number(m.placement_points)
+      : Math.max(0, (Number(m.total_points) || 0) - (Number(m.kills) || 0))
+
     teamSlotTotals[m.team_id][m.slot_id].total_points += Number(m.total_points) || 0
+    teamSlotTotals[m.team_id][m.slot_id].position_points += posPts
     teamSlotTotals[m.team_id][m.slot_id].kills += Number(m.kills) || 0
     teamSlotTotals[m.team_id][m.slot_id].matches_count += 1
   })
@@ -244,14 +275,23 @@ export default async function DashboardPage() {
 
   const computedRankedList = Object.entries(teamSlotTotals).map(([tId, slotMap]) => {
     const slotsPlayed = Object.values(slotMap)
-    slotsPlayed.sort((a, b) => b.total_points - a.total_points)
+    slotsPlayed.sort((a, b) => {
+      if (b.total_points !== a.total_points) return b.total_points - a.total_points
+      if (b.position_points !== a.position_points) return b.position_points - a.position_points
+      if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+      return 0
+    })
     const top6 = slotsPlayed.slice(0, 6)
     const best_16_total = top6.reduce((sum, s) => sum + s.total_points, 0)
+    const best_16_pos_points = top6.reduce((sum, s) => sum + s.position_points, 0)
+    const best_16_wwcd = top6.reduce((sum, s) => sum + s.wwcd, 0)
     const total_kills = slotsPlayed.reduce((sum, s) => sum + s.kills, 0)
     const matches_played = slotsPlayed.reduce((sum, s) => sum + s.matches_count, 0)
     return {
       team_id: tId,
       best_16_total,
+      best_16_pos_points,
+      best_16_wwcd,
       total_kills,
       matches_played,
     }
@@ -259,7 +299,9 @@ export default async function DashboardPage() {
 
   computedRankedList.sort((a, b) => {
     if (b.best_16_total !== a.best_16_total) return b.best_16_total - a.best_16_total
-    return b.total_kills - a.total_kills
+    if (b.best_16_pos_points !== a.best_16_pos_points) return b.best_16_pos_points - a.best_16_pos_points
+    if (b.best_16_wwcd !== a.best_16_wwcd) return b.best_16_wwcd - a.best_16_wwcd
+    return 0
   })
 
   const teamIndex = computedRankedList.findIndex(r => r.team_id === safeTeam.team_id)

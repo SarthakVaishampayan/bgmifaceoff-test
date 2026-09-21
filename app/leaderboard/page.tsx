@@ -22,6 +22,7 @@ export default async function LeaderboardPage() {
     testTeamsResult,
     bookingsResult,
     publishedSlotsResult,
+    slotWinnersResult,
   ] = await Promise.all([
     // Overall leaderboard
     supabase
@@ -62,12 +63,27 @@ export default async function LeaderboardPage() {
       .from('config')
       .select('key, value')
       .in('key', ['scores_published_slots', 'slot_first_prize', 'slot_second_prize', 'slot_prizes_map']),
+
+    // Config: Slot Chicken Dinner Winners
+    supabase
+      .from('config')
+      .select('key, value')
+      .like('key', 'slot_winners_%'),
   ])
 
   const testTeamIds = new Set(testTeamsResult.data?.map(t => t.team_id) || [])
 
   const configMap: Record<string, string> = {}
   publishedSlotsResult.data?.forEach((r: any) => { configMap[r.key] = r.value })
+
+  // Parse slot winners map: { [slot_id]: { m1, m2, m3 } }
+  const slotWinnersMap: Record<string, { m1?: string; m2?: string; m3?: string }> = {}
+  slotWinnersResult.data?.forEach((r: any) => {
+    const slotId = r.key.replace('slot_winners_', '')
+    try {
+      slotWinnersMap[slotId] = JSON.parse(r.value)
+    } catch {}
+  })
 
   // Parse published slot IDs
   let publishedSlotIds = new Set<string>()
@@ -127,7 +143,7 @@ export default async function LeaderboardPage() {
     }
   })
 
-  // Include teams with completed matches
+  // Include teams with completed matches and calculate WWCD
   completedMatches.forEach((m: any) => {
     if (!teamMetaMap[m.team_id]) {
       teamMetaMap[m.team_id] = {
@@ -137,26 +153,40 @@ export default async function LeaderboardPage() {
     }
     if (!teamSlotMap[m.team_id]) teamSlotMap[m.team_id] = {}
     if (!teamSlotMap[m.team_id][m.slot_id]) {
+      const winners = slotWinnersMap[m.slot_id]
+      let wwcdCount = 0
+      if (winners) {
+        if (winners.m1 === m.team_id) wwcdCount++
+        if (winners.m2 === m.team_id) wwcdCount++
+        if (winners.m3 === m.team_id) wwcdCount++
+      } else if (Number(m.placement) === 1 || Number(m.position) === 1) {
+        wwcdCount = 1
+      }
+
       teamSlotMap[m.team_id][m.slot_id] = {
         total_points: 0,
         position_points: 0,
         kills: 0,
-        wwcd: 0,
+        wwcd: wwcdCount,
         matches_count: 0,
       }
     }
     const posPts = m.placement_points != null ? Number(m.placement_points) : getPlacementPoints(Number(m.placement))
-    const isWWCD = Number(m.placement) === 1 || Number(m.position) === 1
     teamSlotMap[m.team_id][m.slot_id].total_points += Number(m.total_points) || 0
     teamSlotMap[m.team_id][m.slot_id].position_points += posPts || 0
     teamSlotMap[m.team_id][m.slot_id].kills += Number(m.kills) || 0
-    if (isWWCD) teamSlotMap[m.team_id][m.slot_id].wwcd += 1
     teamSlotMap[m.team_id][m.slot_id].matches_count += 1
   })
 
   const computedStandings = Object.values(teamMetaMap).map(team => {
     const slotsPlayed = Object.values(teamSlotMap[team.team_id] || {})
-    slotsPlayed.sort((a, b) => b.total_points - a.total_points)
+    // Sort team slots by: 1. Total Points -> 2. Position Points -> 3. WWCD
+    slotsPlayed.sort((a, b) => {
+      if (b.total_points !== a.total_points) return b.total_points - a.total_points
+      if (b.position_points !== a.position_points) return b.position_points - a.position_points
+      if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+      return 0
+    })
     const top6Slots = slotsPlayed.slice(0, 6)
     const best_6_total = top6Slots.reduce((sum, s) => sum + s.total_points, 0)
     const best_6_position_points = top6Slots.reduce((sum, s) => sum + s.position_points, 0)
@@ -176,11 +206,15 @@ export default async function LeaderboardPage() {
     }
   })
 
+  // Exact Tie-Breaker Ordering:
+  // 1. Total Points (best_6_total)
+  // 2. Position Points (if Total Points are equal)
+  // 3. Chicken Dinners (if Total Points & Position Points are equal)
   computedStandings.sort((a, b) => {
     if (b.best_16_total !== a.best_16_total) return b.best_16_total - a.best_16_total
-    if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
     if (b.position_points !== a.position_points) return b.position_points - a.position_points
-    return b.finishes - a.finishes
+    if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+    return 0
   })
 
   const ranked = computedStandings.map((row, idx) => ({ ...row, rank: idx + 1 }))
@@ -207,6 +241,7 @@ export default async function LeaderboardPage() {
         allMatches={completedMatches}
         slots={enrichedSlots}
         bookings={filteredBookings as any[]}
+        slotWinnersMap={slotWinnersMap}
         userTeamId={userTeamId}
       />
     </Suspense>

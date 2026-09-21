@@ -55,10 +55,11 @@ interface Props {
   allMatches: MatchEntry[]
   slots: SlotItem[]
   bookings?: BookingEntry[]
+  slotWinnersMap?: Record<string, { m1?: string; m2?: string; m3?: string }>
   userTeamId?: string | null
 }
 
-export default function LeaderboardClient({ rows, allMatches, slots, bookings = [], userTeamId = null }: Props) {
+export default function LeaderboardClient({ rows, allMatches, slots, bookings = [], slotWinnersMap = {}, userTeamId = null }: Props) {
   const searchParams = useSearchParams()
   const urlSlotId = searchParams ? searchParams.get('slot_id') : null
   const urlTab = searchParams ? searchParams.get('tab') : null
@@ -137,13 +138,22 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
 
     // First, populate all paid bookings for this slot
     const slotBookings = bookings.filter(b => b.slot_id === selectedSlotId)
+    const winners = slotWinnersMap?.[selectedSlotId]
+
     slotBookings.forEach((b, index) => {
       const roomSlot = b.room_slot_number || (5 + index)
+      let wwcdCount = 0
+      if (winners) {
+        if (winners.m1 === b.team_id) wwcdCount++
+        if (winners.m2 === b.team_id) wwcdCount++
+        if (winners.m3 === b.team_id) wwcdCount++
+      }
+
       teamMap[b.team_id] = {
         team_id: b.team_id,
         team_name: b.teams?.team_name || 'Team #' + b.team_id.slice(0, 5),
         room_slot_number: roomSlot,
-        wwcd: 0,
+        wwcd: wwcdCount,
         total_points: 0,
         total_kills: 0,
         total_position_points: 0,
@@ -154,41 +164,56 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     const matchesForSlot = allMatches.filter(m => m.slot_id === selectedSlotId)
     matchesForSlot.forEach(m => {
       if (!teamMap[m.team_id]) {
+        let wwcdCount = 0
+        if (winners) {
+          if (winners.m1 === m.team_id) wwcdCount++
+          if (winners.m2 === m.team_id) wwcdCount++
+          if (winners.m3 === m.team_id) wwcdCount++
+        } else if (Number(m.placement) === 1) {
+          wwcdCount = 1
+        }
+
         teamMap[m.team_id] = {
           team_id: m.team_id,
           team_name: m.teams?.team_name || 'Team #' + m.team_id.slice(0, 5),
           room_slot_number: 5,
-          wwcd: 0,
+          wwcd: wwcdCount,
           total_points: 0,
           total_kills: 0,
           total_position_points: 0,
         }
       }
       const entry = teamMap[m.team_id]
-      if (m.placement === 1) entry.wwcd += 1
+      if (!winners && Number(m.placement) === 1) {
+        entry.wwcd = Math.max(entry.wwcd, 1)
+      }
       if (m.match_number === 1) entry.m1 = m
       if (m.match_number === 2) entry.m2 = m
       if (m.match_number === 3) entry.m3 = m
       entry.total_points += m.total_points || 0
       entry.total_kills += m.kills || 0
-      const posPts = m.placement_points !== undefined ? m.placement_points : Math.max(0, (m.total_points || 0) - (m.kills || 0))
+      const posPts = m.placement_points !== undefined && m.placement_points !== null ? m.placement_points : Math.max(0, (m.total_points || 0) - (m.kills || 0))
       entry.total_position_points += posPts
     })
 
     const hasMatches = matchesForSlot.length > 0
 
+    // Exact Tie-Breaker Ordering:
+    // 1. Total Points
+    // 2. Position Points (if Total Points are equal)
+    // 3. Chicken Dinners (#1 / WWCD) (if Total Points & Position Points are equal)
     const list = Object.values(teamMap).sort((a, b) => {
       if (b.total_points !== a.total_points) return b.total_points - a.total_points
+      if (b.total_position_points !== a.total_position_points) return b.total_position_points - a.total_position_points
       if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
-      if (b.total_kills !== a.total_kills) return b.total_kills - a.total_kills
-      return a.room_slot_number - b.room_slot_number
+      return 0
     })
 
     return {
       items: list.map((item, idx) => ({ ...item, rank: idx + 1 })),
       hasMatches,
     }
-  }, [selectedSlotId, allMatches, bookings])
+  }, [selectedSlotId, allMatches, bookings, slotWinnersMap])
 
   const selectedSlot = useMemo(() =>
     filteredSlots.find(s => s.slot_id === selectedSlotId),
