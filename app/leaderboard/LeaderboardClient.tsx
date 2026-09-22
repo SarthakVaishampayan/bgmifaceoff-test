@@ -208,7 +208,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
       if (b.total_points !== a.total_points) return b.total_points - a.total_points
       if (b.total_position_points !== a.total_position_points) return b.total_position_points - a.total_position_points
       if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
-      return 0
+      return (a.room_slot_number || 99) - (b.room_slot_number || 99)
     })
 
     return {
@@ -568,7 +568,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                                 <>
                                   {row.rank === 1 && (
                                     <span className={styles.prizeTagGold}>
-                                      <Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 160} REWARD
+                                      <Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 120} REWARD
                                     </span>
                                   )}
                                   {row.rank === 2 && (
