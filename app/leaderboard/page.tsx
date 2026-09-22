@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: 'Live BGFS Battlegrounds Faceoff Series standings. Best-16 match system, updated after every slot.',
 }
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 30 // Cache for 30 seconds — reduces 7-query DB load on every visit
 
 export default async function LeaderboardPage() {
   const supabase = await createAdminClient()
@@ -62,7 +62,7 @@ export default async function LeaderboardPage() {
     supabase
       .from('config')
       .select('key, value')
-      .in('key', ['scores_published_slots', 'slot_first_prize', 'slot_second_prize', 'slot_prizes_map']),
+      .in('key', ['scores_published_slots', 'slot_first_prize', 'slot_second_prize', 'slot_third_prize', 'slot_prizes_map']),
 
     // Config: Slot Chicken Dinner Winners
     supabase
@@ -94,20 +94,24 @@ export default async function LeaderboardPage() {
     } catch {}
   }
 
-  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize_text?: string }> = {}
+  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize?: number; third_prize_text?: string }> = {}
   if (configMap.slot_prizes_map) {
     try { slotPrizesMap = JSON.parse(configMap.slot_prizes_map) } catch {}
   }
 
-  const defaultFirst = parseInt(configMap.slot_first_prize || '200', 10)
-  const defaultSecond = parseInt(configMap.slot_second_prize || '150', 10)
+  const defaultFirst = parseInt(configMap.slot_first_prize || '160', 10)
+  const defaultSecond = parseInt(configMap.slot_second_prize || '80', 10)
+  const defaultThird = parseInt(configMap.slot_third_prize || '60', 10)
 
-  const enrichedSlots = (slotsResult.data || []).map((s: any) => ({
-    ...s,
-    first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
-    second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
-    third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? '100% Free Slot Pass',
-  }))
+  const enrichedSlots = (slotsResult.data || []).map((s: any) => {
+    return {
+      ...s,
+      first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
+      second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
+      third_prize: s.third_prize ?? slotPrizesMap[s.slot_id]?.third_prize ?? defaultThird,
+      third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? 'Free Slot Pass',
+    }
+  })
 
   // Handle room_slot_number column missing gracefully
   let filteredBookings: any[] = bookingsResult.data || []
@@ -193,11 +197,13 @@ export default async function LeaderboardPage() {
     const best_6_kills = top6Slots.reduce((sum, s) => sum + s.kills, 0)
     const best_6_wwcd = top6Slots.reduce((sum, s) => sum + s.wwcd, 0)
     const matches_played = slotsPlayed.reduce((sum, s) => sum + s.matches_count, 0)
+    const slots_played = slotsPlayed.length
 
     return {
       team_id: team.team_id,
       team_name: team.team_name,
       matches_played,
+      slots_played,
       wwcd: best_6_wwcd,
       position_points: best_6_position_points,
       finishes: best_6_kills,

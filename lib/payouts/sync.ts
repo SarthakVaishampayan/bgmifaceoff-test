@@ -25,11 +25,12 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     const { data: prizeConfigs } = await admin
       .from('config')
       .select('key, value')
-      .in('key', ['slot_first_prize', 'slot_second_prize', 'slot_prizes_map'])
+      .in('key', ['slot_first_prize', 'slot_second_prize', 'slot_third_prize', 'slot_prizes_map'])
 
-    const defaultFirstPrize = parseInt(prizeConfigs?.find(c => c.key === 'slot_first_prize')?.value || '200', 10)
-    const defaultSecondPrize = parseInt(prizeConfigs?.find(c => c.key === 'slot_second_prize')?.value || '150', 10)
-    let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number }> = {}
+    const defaultFirstPrize = parseInt(prizeConfigs?.find(c => c.key === 'slot_first_prize')?.value || '160', 10)
+    const defaultSecondPrize = parseInt(prizeConfigs?.find(c => c.key === 'slot_second_prize')?.value || '80', 10)
+    const defaultThirdPrize = parseInt(prizeConfigs?.find(c => c.key === 'slot_third_prize')?.value || '60', 10)
+    let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize?: number }> = {}
     try {
       const rawMap = prizeConfigs?.find(c => c.key === 'slot_prizes_map')?.value
       if (rawMap) slotPrizesMap = JSON.parse(rawMap)
@@ -171,13 +172,14 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       }
     })
 
-    // 8. For each completed slot, determine top 2 candidates
+    // 8. For each completed slot, determine winning candidates for cash payouts
     // Priority: 1. Total Points -> 2. Position Points -> 3. Chicken Dinners (#1 / WWCD)
     const payoutsToInsert: any[] = []
 
     for (const slot of completedSlots) {
       const slotId = slot.slot_id
-      let top2: Array<{ team_id: string; captain_user_id?: string }> = []
+      const isPastSlot = slot.date && slot.date < '2026-09-22'
+      let candidates: Array<{ team_id: string; captain_user_id?: string }> = []
 
       if (slotMatchesMap.has(slotId) && slotMatchesMap.get(slotId)!.size > 0) {
         const teamsMap = slotMatchesMap.get(slotId)!
@@ -190,18 +192,29 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
           if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
           return 0
         })
-        top2 = sorted.slice(0, 2)
+        // Yesterday (21 Sep): top 2 get cash payouts. Today onwards: top 3 get cash payouts.
+        candidates = sorted.slice(0, isPastSlot ? 2 : 3)
       } else if (slotBookingsMap.has(slotId) && slotBookingsMap.get(slotId)!.length > 0) {
-        top2 = slotBookingsMap.get(slotId)!.slice(0, 2)
+        candidates = slotBookingsMap.get(slotId)!.slice(0, isPastSlot ? 2 : 3)
       }
 
-      top2.forEach((team, index) => {
+      candidates.forEach((team, index) => {
         const key = `${slotId}_${team.team_id}`
         if (!existingPayoutMap.has(key)) {
-          const place = index === 0 ? '1st' : '2nd'
-          const prizeAmount = index === 0 
-            ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? defaultFirstPrize) 
-            : (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? defaultSecondPrize)
+          const place = index === 0 ? '1st' : index === 1 ? '2nd' : '3rd'
+          let prizeAmount = 0
+          if (isPastSlot) {
+            prizeAmount = index === 0
+              ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? 160)
+              : (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? 80)
+          } else {
+            prizeAmount = index === 0
+              ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? defaultFirstPrize)
+              : index === 1
+                ? (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? defaultSecondPrize)
+                : (slot.third_prize ?? slotPrizesMap[slotId]?.third_prize ?? defaultThirdPrize)
+          }
+
           const upiId = teamUpiMap.get(team.team_id) || (team.captain_user_id ? captainUpiMap.get(team.captain_user_id) : null)
 
           payoutsToInsert.push({
@@ -222,7 +235,7 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       await admin.from('payouts').insert(payoutsToInsert)
     }
 
-    // 9. For each completed slot, issue a free slot coupon to the 3rd position team if not already issued
+    // 9. For each completed slot, issue free slot coupon (3rd place for yesterday's 21 Sep slots, 4th place for 22 Sep onwards)
     const { data: existingSlotCoupons } = await admin
       .from('coupons')
       .select('coupon_id, issued_from_slot, team_id')
@@ -240,6 +253,8 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       const slotId = slot.slot_id
       if (issuedSlotIds.has(slotId)) continue
 
+      const isPastSlot = slot.date && slot.date < '2026-09-22'
+
       if (slotMatchesMap.has(slotId) && slotMatchesMap.get(slotId)!.size > 0) {
         const teamsMap = slotMatchesMap.get(slotId)!
         const sorted = Array.from(teamsMap.values()).sort((a, b) => {
@@ -249,11 +264,13 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
           return 0
         })
 
-        const thirdTeam = sorted[2]
-        if (thirdTeam && thirdTeam.team_id) {
-          const code = `FREE3RD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
+        // 3rd place for yesterday's slots, 4th place for today onwards
+        const couponTeam = isPastSlot ? sorted[2] : sorted[3]
+        if (couponTeam && couponTeam.team_id) {
+          const prefix = isPastSlot ? 'FREE3RD' : 'FREE4TH'
+          const code = `${prefix}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
           couponsToInsert.push({
-            team_id: thirdTeam.team_id,
+            team_id: couponTeam.team_id,
             type: 'free_slot',
             status: 'unused',
             issued_from_slot: slotId,

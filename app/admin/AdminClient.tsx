@@ -1884,20 +1884,21 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
 
-  const defaultFirstPrize = parseInt(config?.slot_first_prize || '200', 10)
-  const defaultSecondPrize = parseInt(config?.slot_second_prize || '150', 10)
+  const defaultFirstPrize = parseInt(config?.slot_first_prize || '160', 10)
+  const defaultSecondPrize = parseInt(config?.slot_second_prize || '80', 10)
+  const defaultThirdPrize = parseInt(config?.slot_third_prize || '60', 10)
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'not_open' | 'completed'>('all')
   const [msg, setMsg] = useState('')
   const [loadingPresetId, setLoadingPresetId] = useState<number | null>(null)
 
-  async function persistSlotPrizeOverride(slotId: string, p1: number, p2: number) {
+  async function persistSlotPrizeOverride(slotId: string, p1: number, p2: number, p3?: number) {
     try {
       let currentMap: Record<string, any> = {}
       if (config?.slot_prizes_map) {
         try { currentMap = JSON.parse(config.slot_prizes_map) } catch {}
       }
-      currentMap[slotId] = { first_prize: p1, second_prize: p2 }
+      currentMap[slotId] = { first_prize: p1, second_prize: p2, third_prize: p3 ?? defaultThirdPrize }
       const mapJson = JSON.stringify(currentMap)
       await supabase.from('config').upsert([{ key: 'slot_prizes_map', value: mapJson }], { onConflict: 'key' })
       if (setConfig) {
@@ -1944,6 +1945,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     capacity?: number
     first_prize?: any
     second_prize?: any
+    third_prize?: any
   }>>({})
 
   // Local state to track which slot tiles are expanded (default: all collapsed)
@@ -2027,6 +2029,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     const capacity = form.capacity || existing?.capacity || 20
     const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
     const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
+    const thirdPrize = (form.third_prize !== undefined && form.third_prize !== '') ? Number(form.third_prize) : (existing?.third_prize ?? defaultThirdPrize)
 
     if (existing) {
       let updatePayload: any = {
@@ -2057,13 +2060,15 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
         data = fallback.data
         error = fallback.error
         if (!error && data) {
-          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
         }
+      } else if (!error && data) {
+        await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
       }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
         setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? enriched : s))
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
@@ -2087,13 +2092,15 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
         data = fallback.data
         error = fallback.error
         if (!error && data) {
-          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
         }
+      } else if (!error && data) {
+        await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
       }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
         setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
@@ -2155,6 +2162,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       const capacity = form.capacity || 20
       const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : defaultFirstPrize
       const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : defaultSecondPrize
+      const thirdPrize = (form.third_prize !== undefined && form.third_prize !== '') ? Number(form.third_prize) : defaultThirdPrize
 
       let insertPayload: any = {
         date: selectedDate,
@@ -2176,13 +2184,15 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
         data = fallback.data
         error = fallback.error
         if (!error && data) {
-          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
         }
+      } else if (!error && data) {
+        await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
       }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
         setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) marked CLOSED to registrations`)
@@ -2223,6 +2233,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     const capacity = form.capacity || existing?.capacity || 20
     const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
     const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
+    const thirdPrize = (form.third_prize !== undefined && form.third_prize !== '') ? Number(form.third_prize) : (existing?.third_prize ?? defaultThirdPrize)
 
     if (existing) {
       let updatePayload: any = {
@@ -2252,13 +2263,15 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
         data = fallback.data
         error = fallback.error
         if (!error && data) {
-          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
         }
+      } else if (!error && data) {
+        await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
       }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
         setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? enriched : s))
       }
       setMsg(`✅ Details saved for ${preset.name}!`)
@@ -2282,13 +2295,15 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
         data = fallback.data
         error = fallback.error
         if (!error && data) {
-          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
         }
+      } else if (!error && data) {
+        await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
       }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
         setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ Created and saved details for ${preset.name}!`)
@@ -2306,6 +2321,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
     const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
     const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
+    const thirdPrize = (form.third_prize !== undefined && form.third_prize !== '') ? Number(form.third_prize) : (existing?.third_prize ?? defaultThirdPrize)
 
     if (!existing) {
       const baseLabel = form.time_label ?? preset.defaultLabel
@@ -2337,16 +2353,18 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
         data = fallback.data
         error = fallback.error
         if (!error && data) {
-          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize)
+          await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
         }
+      } else if (!error && data) {
+        await persistSlotPrizeOverride(data.slot_id, firstPrize, secondPrize, thirdPrize)
       }
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize }
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
         setSlots((prev: any[]) => [...prev, enriched])
       }
-      setMsg(`✅ ${preset.name} (${selectedDate}) marked as DONE! Payout slips (top 2) & 3rd-place coupon generated.`)
+      setMsg(`✅ ${preset.name} (${selectedDate}) marked as DONE! Payout slips (top 3) & 4th-place coupon generated.`)
       if (onSyncPayouts) onSyncPayouts()
     } else {
       const nextStatus = existing.status === 'completed' ? 'open' : 'completed'
@@ -2604,6 +2622,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                   const currentCap = form.capacity ?? existingSlot?.capacity ?? 20
                   const currentFirstPrize = form.first_prize ?? existingSlot?.first_prize ?? defaultFirstPrize
                   const currentSecondPrize = form.second_prize ?? existingSlot?.second_prize ?? defaultSecondPrize
+                  const currentThirdPrize = form.third_prize ?? existingSlot?.third_prize ?? defaultThirdPrize
 
                   return (
                     <div
@@ -3000,7 +3019,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                             </div>
                           </div>
 
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: '0.45rem', background: '#18181b', padding: '0.5rem', borderRadius: '8px', border: '1px solid #27272a' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.1fr', gap: '0.45rem', background: '#18181b', padding: '0.5rem', borderRadius: '8px', border: '1px solid #27272a' }}>
                             <div>
                               <label style={{ fontSize: '0.7rem', color: '#facc15', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
                                 🥇 1st Prize (₹):
@@ -3029,15 +3048,28 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                             </div>
                             <div>
                               <label style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
-                                🥉 3rd Prize:
+                                🥉 3rd Prize (₹):
+                              </label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderColor: '#b45309', background: '#09090b' }}
+                                value={currentThirdPrize}
+                                onChange={e => updatePresetFormField(preset.id, 'third_prize', e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 0))}
+                                placeholder={String(defaultThirdPrize)}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#4ade80', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                🎟️ 4th Prize:
                               </label>
                               <div
                                 style={{
                                   padding: '0.35rem 0.5rem',
                                   fontSize: '0.74rem',
-                                  background: 'rgba(245, 158, 11, 0.1)',
-                                  color: '#fbbf24',
-                                  border: '1px dashed #d97706',
+                                  background: 'rgba(74, 222, 128, 0.1)',
+                                  color: '#4ade80',
+                                  border: '1px dashed #16a34a',
                                   borderRadius: '6px',
                                   fontWeight: 700,
                                   whiteSpace: 'nowrap',
@@ -3045,7 +3077,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                   textOverflow: 'ellipsis',
                                   textAlign: 'center'
                                 }}
-                                title="3rd Prize is always an automated Free Slot Pass coupon"
+                                title="4th Prize is an automated Free Slot Pass coupon"
                               >
                                 🎟️ Free Slot
                               </div>
@@ -3550,7 +3582,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: '0.45rem', background: '#18181b', padding: '0.5rem', borderRadius: '8px', border: '1px solid #27272a' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.1fr', gap: '0.45rem', background: '#18181b', padding: '0.5rem', borderRadius: '8px', border: '1px solid #27272a' }}>
                           <div>
                             <label style={{ fontSize: '0.7rem', color: '#facc15', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
                               🥇 1st Prize (₹):
@@ -3589,15 +3621,33 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           </div>
                           <div>
                             <label style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
-                              🥉 3rd Prize:
+                              🥉 3rd Prize (₹):
+                            </label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', borderColor: '#b45309', background: '#09090b' }}
+                              defaultValue={extraSlot.third_prize ?? defaultThirdPrize}
+                              onBlur={async (e) => {
+                                const newPrize = parseInt(e.target.value) || 0
+                                await persistSlotPrizeOverride(extraSlot.slot_id, extraSlot.first_prize ?? defaultFirstPrize, extraSlot.second_prize ?? defaultSecondPrize, newPrize)
+                                if (setSlots) {
+                                  setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === extraSlot.slot_id ? { ...s, third_prize: newPrize } : s))
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#4ade80', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              🎟️ 4th Prize:
                             </label>
                             <div
                               style={{
                                 padding: '0.35rem 0.5rem',
                                 fontSize: '0.74rem',
-                                background: 'rgba(245, 158, 11, 0.1)',
-                                color: '#fbbf24',
-                                border: '1px dashed #d97706',
+                                background: 'rgba(74, 222, 128, 0.1)',
+                                color: '#4ade80',
+                                border: '1px dashed #16a34a',
                                 borderRadius: '6px',
                                 fontWeight: 700,
                                 whiteSpace: 'nowrap',
@@ -3605,7 +3655,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                 textOverflow: 'ellipsis',
                                 textAlign: 'center'
                               }}
-                              title="3rd Prize is always an automated Free Slot Pass coupon"
+                              title="4th Prize is an automated Free Slot Pass coupon"
                             >
                               🎟️ Free Slot
                             </div>
@@ -5809,8 +5859,9 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
     { key: 'cycle_start_date', label: 'Cycle Start Date', placeholder: '2026-09-21', type: 'date' },
     { key: 'cycle_end_date', label: 'Cycle End Date', placeholder: '2026-10-16', type: 'date' },
     { key: 'slot_entry_fee', label: 'Default Slot Entry Fee (₹)', placeholder: '40', type: 'number' },
-    { key: 'slot_first_prize', label: 'Default 1st Place Cash Prize (₹)', placeholder: '200', type: 'number' },
-    { key: 'slot_second_prize', label: 'Default 2nd Place Cash Prize (₹)', placeholder: '150', type: 'number' },
+    { key: 'slot_first_prize', label: 'Default 1st Place Cash Prize (₹)', placeholder: '160', type: 'number' },
+    { key: 'slot_second_prize', label: 'Default 2nd Place Cash Prize (₹)', placeholder: '80', type: 'number' },
+    { key: 'slot_third_prize', label: 'Default 3rd Place Cash Prize (₹)', placeholder: '60', type: 'number' },
   ]
 
   const isMaintenanceOn = values['maintenance_mode'] === 'true'
@@ -5913,7 +5964,7 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
           </div>
         ))}
 
-        {/* 3rd Place Prize Policy Box */}
+        {/* 4th Place Prize Policy Box */}
         <div style={{
           background: 'rgba(245, 158, 11, 0.08)',
           border: '1px solid rgba(245, 158, 11, 0.3)',
@@ -5927,10 +5978,10 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
           <span style={{ fontSize: '1.4rem' }}>🎟️</span>
           <div>
             <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '0.85rem' }}>
-              3rd Place Prize Policy: 100% Free Slot Pass
+              4th Place Prize Policy: 100% Free Slot Pass
             </div>
             <div style={{ color: '#aaa', fontSize: '0.76rem', marginTop: '2px' }}>
-              3rd place winners automatically receive a single-use free slot coupon code (<code style={{ color: '#fbbf24' }}>FREE3RD-...</code>) upon slot completion.
+              4th place winners automatically receive a single-use free slot coupon code (<code style={{ color: '#fbbf24' }}>FREE4TH-...</code>) upon slot completion.
             </div>
           </div>
         </div>

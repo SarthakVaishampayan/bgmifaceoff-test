@@ -30,7 +30,7 @@ export default async function SlotsPage() {
     supabase
       .from('config')
       .select('key, value')
-      .in('key', ['whatsapp_invite_link', 'slot_entry_fee', 'slot_first_prize', 'slot_second_prize', 'slot_prizes_map']),
+      .in('key', ['whatsapp_invite_link', 'slot_entry_fee', 'slot_first_prize', 'slot_second_prize', 'slot_third_prize', 'slot_prizes_map']),
   ])
 
   let slots = slotsResult.data || []
@@ -38,21 +38,25 @@ export default async function SlotsPage() {
   const configObj: Record<string, string> = {}
   configResult.data?.forEach(r => { configObj[r.key] = r.value })
 
-  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize_text?: string }> = {}
+  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize?: number; third_prize_text?: string }> = {}
   if (configObj.slot_prizes_map) {
     try { slotPrizesMap = JSON.parse(configObj.slot_prizes_map) } catch {}
   }
 
-  const defaultFirst = parseInt(configObj.slot_first_prize || '200', 10)
-  const defaultSecond = parseInt(configObj.slot_second_prize || '150', 10)
+  const defaultFirst = parseInt(configObj.slot_first_prize || '160', 10)
+  const defaultSecond = parseInt(configObj.slot_second_prize || '80', 10)
+  const defaultThird = parseInt(configObj.slot_third_prize || '60', 10)
 
-  slots = slots.map(s => ({
-    ...s,
-    entry_fee: s.entry_fee === 50 ? 40 : (s.entry_fee || 40),
-    first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
-    second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
-    third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? '100% Free Slot Pass',
-  }))
+  slots = slots.map(s => {
+    return {
+      ...s,
+      entry_fee: s.entry_fee === 50 ? 40 : (s.entry_fee || 40),
+      first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
+      second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
+      third_prize: s.third_prize ?? slotPrizesMap[s.slot_id]?.third_prize ?? defaultThird,
+      third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? 'Free Slot Pass',
+    }
+  })
 
   // Ensure slots are strictly ordered: upcoming dates first (ascending e.g. 22nd before 23rd), then morning to night asc within each day
   slots.sort((a, b) => {
@@ -195,8 +199,9 @@ export default async function SlotsPage() {
       userBookedSlotsMap={userBookedSlotsMap}
       whatsappLink={config.whatsapp_invite_link || ''}
       entryFee={parseInt(config.slot_entry_fee || '40')}
-      firstPrize={parseInt(config.slot_first_prize || '200')}
-      secondPrize={parseInt(config.slot_second_prize || '150')}
+      firstPrize={config.slot_first_prize === '120' ? 160 : parseInt(config.slot_first_prize || '160')}
+      secondPrize={parseInt(config.slot_second_prize || '80')}
+      thirdPrize={parseInt(config.slot_third_prize || '60')}
       isLoggedIn={!!user}
       isTestAccount={isTestAccount}
     />

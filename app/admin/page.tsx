@@ -105,20 +105,24 @@ export default async function AdminPage({
   const config: Record<string, string> = {}
   configRows?.forEach(row => { config[row.key] = row.value })
 
-  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize_text?: string }> = {}
+  let slotPrizesMap: Record<string, { first_prize?: number; second_prize?: number; third_prize?: number; third_prize_text?: string }> = {}
   if (config.slot_prizes_map) {
     try { slotPrizesMap = JSON.parse(config.slot_prizes_map) } catch {}
   }
 
-  const defaultFirst = parseInt(config.slot_first_prize || '200', 10)
-  const defaultSecond = parseInt(config.slot_second_prize || '150', 10)
+  const defaultFirst = parseInt(config.slot_first_prize || '160', 10)
+  const defaultSecond = parseInt(config.slot_second_prize || '80', 10)
+  const defaultThird = parseInt(config.slot_third_prize || '60', 10)
 
-  const enrichedSlots = (slots || []).map((s: any) => ({
-    ...s,
-    first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
-    second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
-    third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? '100% Free Slot Pass',
-  }))
+  const enrichedSlots = (slots || []).map((s: any) => {
+    return {
+      ...s,
+      first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
+      second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
+      third_prize: s.third_prize ?? slotPrizesMap[s.slot_id]?.third_prize ?? defaultThird,
+      third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? 'Free Slot Pass',
+    }
+  })
 
   return (
     <AdminClient

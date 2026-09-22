@@ -37,6 +37,7 @@ interface Props {
   entryFee: number
   firstPrize?: number
   secondPrize?: number
+  thirdPrize?: number
   isLoggedIn: boolean
   isTestAccount?: boolean
 }
@@ -85,8 +86,9 @@ export default function SlotsClient({
   userBookedSlotsMap = {},
   whatsappLink,
   entryFee = 40,
-  firstPrize = 200,
-  secondPrize = 150,
+  firstPrize = 160,
+  secondPrize = 80,
+  thirdPrize = 60,
   isLoggedIn,
   isTestAccount = false,
 }: Props) {
@@ -106,7 +108,6 @@ export default function SlotsClient({
   const [confirmFreeSlot, setConfirmFreeSlot] = useState<Slot | null>(null)
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false)
   const [showPrizeModal, setShowPrizeModal] = useState<boolean>(false)
-  const [prizeModalTab, setPrizeModalTab] = useState<'offer' | 'standard'>('offer')
 
   const [remainingCoupons, setRemainingCoupons] = useState<FreeCoupon[]>(() => {
     if (unusedCoupons && unusedCoupons.length > 0) return unusedCoupons
@@ -868,7 +869,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
             <h2 className={styles.modalTitle}>Redeem Free Slot Pass?</h2>
             <p className={styles.modalBody}>
-              You are using 1 of your 3rd-place Free Slot Pass Rewards for:
+              You are using 1 of your Free Slot Pass Rewards for:
             </p>
 
             <div className={styles.modalSlotPreview}>
@@ -921,105 +922,101 @@ function loadRazorpayScript(): Promise<boolean> {
               </button>
             </div>
 
-            <p className={styles.rulesModalSubtitle} style={{ marginBottom: '0.9rem' }}>
-              Every match slot awards instant cash prizes via UPI and 100% Free Slot passes for 3rd place.
-            </p>
-
-            {/* Date / Prize Tier Switcher */}
-            <div className={styles.prizeTabContainer}>
-              <button
-                type="button"
-                className={`${styles.prizeTabBtn} ${prizeModalTab === 'offer' ? styles.prizeTabBtnActiveOffer : ''}`}
-                onClick={() => setPrizeModalTab('offer')}
-              >
-                <Flame size={15} color={prizeModalTab === 'offer' ? '#fbbf24' : '#a1a1aa'} />
-                <span>21 Sep (₹1 Offer)</span>
-                <span className={styles.prizeTabBadge} style={{ background: '#f59e0b', color: '#000' }}>
-                  🔥 OFFER
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`${styles.prizeTabBtn} ${prizeModalTab === 'standard' ? styles.prizeTabBtnActiveStandard : ''}`}
-                onClick={() => setPrizeModalTab('standard')}
-              >
-                <Trophy size={15} color={prizeModalTab === 'standard' ? '#60a5fa' : '#a1a1aa'} />
-                <span>22 Sep Onwards (₹40)</span>
-                <span className={styles.prizeTabBadge} style={{ background: '#2563eb', color: '#fff' }}>
-                  STANDARD
-                </span>
-              </button>
-            </div>
-
-            {/* Date-Specific Context Banner */}
-            {prizeModalTab === 'offer' ? (
-              <div className={`${styles.prizeBanner} ${styles.prizeBannerOffer}`}>
-                <div className={styles.prizeBannerLeft}>
-                  <span>⚡</span>
-                  <span><strong>Monday, 21 Sep Matchday</strong> · Special Launch Offer</span>
-                </div>
-                <div className={styles.prizeBannerRight}>
-                  <span style={{ color: '#a1a1aa' }}>Entry Fee:</span>
-                  <span style={{ textDecoration: 'line-through', color: '#71717a', margin: '0 2px' }}>₹40</span>
-                  <strong style={{ color: '#fbbf24' }}>₹1</strong>
-                  <span style={{ color: '#a1a1aa', fontSize: '0.7rem' }}>/ squad</span>
-                </div>
-              </div>
-            ) : (
-              <div className={`${styles.prizeBanner} ${styles.prizeBannerStandard}`}>
-                <div className={styles.prizeBannerLeft}>
-                  <span>🏆</span>
-                  <span><strong>Starting 22 Sep Onwards</strong> · Standard Rewards</span>
-                </div>
-                <div className={styles.prizeBannerRight}>
-                  <span style={{ color: '#a1a1aa' }}>Entry Fee:</span>
-                  <strong style={{ color: '#60a5fa' }}>₹40</strong>
-                  <span style={{ color: '#a1a1aa', fontSize: '0.7rem' }}>/ squad</span>
-                </div>
-              </div>
-            )}
-
-            {/* Podium Cards Grid */}
-            <div className={styles.prizeModalGrid}>
-              {/* 1st Place */}
-              <div className={`${styles.prizeMiniCard} ${styles.prizeMiniCardGold}`}>
-                <div className={styles.prizeMiniRank}>🥇 1ST PLACE</div>
-                <div className={styles.prizeMiniAmount} style={{ color: prizeModalTab === 'offer' ? '#fbbf24' : '#60a5fa' }}>
-                  ₹{prizeModalTab === 'offer' ? 120 : 200}
-                </div>
-                <div className={styles.prizeMiniType}>Instant UPI Cash</div>
-                <div className={styles.prizeMiniNote}>Transferred directly to captain&apos;s verified UPI</div>
-              </div>
-
-              {/* 2nd Place */}
-              <div className={`${styles.prizeMiniCard} ${styles.prizeMiniCardSilver}`}>
-                <div className={styles.prizeMiniRank}>🥈 2ND PLACE</div>
-                <div className={styles.prizeMiniAmount}>
-                  ₹{prizeModalTab === 'offer' ? 80 : 100}
-                </div>
-                <div className={styles.prizeMiniType}>Instant UPI Cash</div>
-                <div className={styles.prizeMiniNote}>Transferred directly to captain&apos;s verified UPI</div>
-              </div>
-
-              {/* 3rd Place */}
-              <div className={`${styles.prizeMiniCard} ${styles.prizeMiniCardBronze}`}>
-                <div className={styles.prizeMiniRank}>🥉 3RD PLACE</div>
-                <div className={styles.prizeMiniAmount} style={{ color: '#4ade80' }}>
-                  100% FREE
-                </div>
-                <div className={styles.prizeMiniType}>Free Slot Pass</div>
-                <div className={styles.prizeMiniNote}>Auto-issued coupon for ₹0 entry on any upcoming slot</div>
-              </div>
-            </div>
-
-            {/* Clarification Note */}
-            <div className={styles.prizeClarificationNote}>
-              <span className={styles.prizeClarificationIcon}>💡</span>
-              <span className={styles.prizeClarificationText}>
-                {prizeModalTab === 'offer'
-                  ? 'Note: 21 Sep features our ₹1 promotional launch fee with ₹120 (1st) & ₹80 (2nd) payouts + 100% Free Slot Pass (3rd).'
-                  : 'Note: Starting 22 Sep onwards, standard ₹40 slots unlock enhanced rewards: ₹200 (1st) & ₹100 (2nd) payouts + 100% Free Slot Pass (3rd).'}
+            {/* Top Prize Pool Banner */}
+            <div style={{
+              background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.16) 0%, rgba(234, 179, 8, 0.08) 100%)',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              borderRadius: '10px',
+              padding: '10px 16px',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '8px'
+            }}>
+              <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: '1.1rem', letterSpacing: '0.04em' }}>
+                Slot Prize Pool = ₹900
               </span>
+              <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 600 }}>
+                ₹40 entry · 3 matches · top 4 rewarded
+              </span>
+            </div>
+
+            {/* Prize rows */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(250,204,21,0.06)', border: '1px solid rgba(250,204,21,0.2)', borderRadius: '10px', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>🥇</span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#e5e5e5', fontSize: '0.9rem' }}>1st Place</div>
+                    <div style={{ fontSize: '0.72rem', color: '#71717a' }}>Instant UPI transfer after verification</div>
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#fbbf24' }}>
+                  ₹{firstPrize === 120 ? 160 : (firstPrize || 160)}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(148,163,184,0.06)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '10px', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>🥈</span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#e5e5e5', fontSize: '0.9rem' }}>2nd Place</div>
+                    <div style={{ fontSize: '0.72rem', color: '#71717a' }}>Instant UPI transfer after verification</div>
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#cbd5e1' }}>₹{secondPrize}</div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(180,120,60,0.06)', border: '1px solid rgba(180,120,60,0.2)', borderRadius: '10px', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>🥉</span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#e5e5e5', fontSize: '0.9rem' }}>3rd Place</div>
+                    <div style={{ fontSize: '0.72rem', color: '#71717a' }}>Instant UPI transfer after verification</div>
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#a78060' }}>₹{thirdPrize}</div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(74,222,128,0.04)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: '10px', padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>🎟️</span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#e5e5e5', fontSize: '0.9rem' }}>4th Place</div>
+                    <div style={{ fontSize: '0.72rem', color: '#71717a' }}>Auto-issued coupon · ₹0 entry on any slot</div>
+                  </div>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4ade80' }}>FREE SLOT</div>
+              </div>
+            </div>
+
+            {/* ── SPECIAL ACHIEVEMENT PRIZE ── */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.12) 0%, rgba(220, 38, 38, 0.08) 100%)',
+              border: '1px solid rgba(249, 115, 22, 0.4)',
+              borderRadius: '10px',
+              padding: '12px 16px',
+              marginBottom: '1.25rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.15rem' }}>🔥</span>
+                  <strong style={{ color: '#ffedd5', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 800 }}>
+                    Special Achievement Prize
+                  </strong>
+                </div>
+                <div style={{ background: '#ea580c', color: '#ffffff', fontSize: '0.82rem', fontWeight: 900, padding: '2px 8px', borderRadius: '6px' }}>
+                  ₹560
+                </div>
+              </div>
+              <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '0.95rem', marginTop: '4px' }}>
+                B2B 3 Chicken Dinners + 50 Kills = ₹560
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '3px' }}>
+                Squad bonus: Win all 3 matches of the slot back-to-back with 50+ total team finishes.
+              </div>
             </div>
 
             {/* Concise UPI Setup Instructions Box */}
@@ -1031,7 +1028,7 @@ function loadRazorpayScript(): Promise<boolean> {
               <ol style={{ margin: 0, paddingLeft: '1.1rem', color: '#a1a1aa', fontSize: '0.78rem', lineHeight: '1.55' }}>
                 <li>Go to Your Profile.</li>
                 <li>Enter your active <strong>UPI ID</strong> (e.g. <code style={{ color: '#4ade80' }}>yourname@oksbi</code>, <code style={{ color: '#4ade80' }}>mobile@paytm</code>) &amp; click <strong>Save</strong>.</li>
-                <li>When your squad finishes 1st or 2nd, cash rewards are sent straight to your UPI after score verification!</li>
+                <li>Finish top 3 and cash lands in your UPI within minutes of score verification.</li>
               </ol>
             </div>
 

@@ -10,6 +10,7 @@ interface LeaderboardRow {
   team_id: string
   team_name: string
   matches_played: number
+  slots_played?: number
   wwcd?: number
   position_points?: number
   finishes?: number
@@ -40,6 +41,7 @@ interface SlotItem {
   teams_booked_count: number
   first_prize?: number
   second_prize?: number
+  third_prize?: number
 }
 
 interface BookingEntry {
@@ -338,6 +340,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     <tr style={{ background: '#161616', borderBottom: '1px solid #2a2a2a' }}>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', width: '64px' }}>RANK</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a' }}>TEAM NAME</th>
+                      <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>SLOTS PLAYED</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>CHICKEN</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>POSITION POINTS</th>
                       <th style={{ background: '#161616', color: '#facc15', padding: '14px 16px', textTransform: 'uppercase', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', borderBottom: '1px solid #2a2a2a', textAlign: 'center' }}>FINISHES</th>
@@ -361,6 +364,9 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                               )}
                             </div>
                           </td>
+                          <td style={{ textAlign: 'center', color: '#a1a1aa', fontWeight: '600', fontSize: '0.9rem' }}>
+                            {row.slots_played ?? 0}
+                          </td>
                           <td style={{ textAlign: 'center', color: '#fbbf24', fontWeight: '700', fontSize: '0.95rem' }}>
                             {row.wwcd ?? 0}
                           </td>
@@ -380,7 +386,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                         {/* Grand Finals Qualification Cutoff Line after Rank 16 */}
                         {row.rank === 16 && idx < filteredOverall.length - 1 && (
                           <tr key="cutoff-row" className={styles.cutoffRow}>
-                            <td colSpan={6} style={{ padding: 0 }}>
+                            <td colSpan={7} style={{ padding: 0 }}>
                               <div className={styles.cutoffBanner}>
                                 🏆 TOP 16 GRAND FINALS QUALIFICATION CUTOFF 🏆
                               </div>
@@ -391,7 +397,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     ))}
                     {filteredOverall.length === 0 && (
                       <tr>
-                        <td colSpan={6} style={{ textAlign: 'center', color: '#888888', padding: '3rem 1.5rem', fontFamily: 'Inter, sans-serif' }}>
+                        <td colSpan={7} style={{ textAlign: 'center', color: '#888888', padding: '3rem 1.5rem', fontFamily: 'Inter, sans-serif' }}>
                           No registered teams found matching search query
                         </td>
                       </tr>
@@ -417,7 +423,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                             )}
                           </div>
                           <div className={styles.mobileTeamMeta}>
-                            {row.matches_played} MATCHES PLAYED
+                            {row.slots_played ?? 0} SLOTS PLAYED
                           </div>
                         </div>
                       </div>
@@ -558,23 +564,53 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                         <td style={{ textAlign: 'center' }}>
                           {selectedSlot?.status === 'completed' ? (
                             <>
-                              {row.rank === 1 && (
-                                <span className={styles.prizeTagGold}>
-                                  <Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 200} REWARD
-                                </span>
-                              )}
-                              {row.rank === 2 && (
-                                <span className={styles.prizeTagSilver}>
-                                  <Medal size={12} /> ₹{selectedSlot?.second_prize ?? 150} REWARD
-                                </span>
-                              )}
-                              {row.rank === 3 && (
-                                <span className={styles.prizeTagBronze}>
-                                  <Award size={12} /> FREE SLOT PASS
-                                </span>
-                              )}
-                              {row.rank > 3 && (
-                                <span style={{ color: '#555555', fontSize: '0.75rem' }}>—</span>
+                              {selectedSlot?.date && selectedSlot.date < '2026-09-22' ? (
+                                <>
+                                  {row.rank === 1 && (
+                                    <span className={styles.prizeTagGold}>
+                                      <Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 160} REWARD
+                                    </span>
+                                  )}
+                                  {row.rank === 2 && (
+                                    <span className={styles.prizeTagSilver}>
+                                      <Medal size={12} /> ₹{selectedSlot?.second_prize ?? 80} REWARD
+                                    </span>
+                                  )}
+                                  {row.rank === 3 && (
+                                    <span className={styles.prizeTagBronze}>
+                                      <Award size={12} /> FREE SLOT PASS
+                                    </span>
+                                  )}
+                                  {row.rank > 3 && (
+                                    <span style={{ color: '#555555', fontSize: '0.75rem' }}>—</span>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  {row.rank === 1 && (
+                                    <span className={styles.prizeTagGold}>
+                                      <Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 160} REWARD
+                                    </span>
+                                  )}
+                                  {row.rank === 2 && (
+                                    <span className={styles.prizeTagSilver}>
+                                      <Medal size={12} /> ₹{selectedSlot?.second_prize ?? 80} REWARD
+                                    </span>
+                                  )}
+                                  {row.rank === 3 && (
+                                    <span className={styles.prizeTagBronze} style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.1)' }}>
+                                      <Award size={12} /> ₹{selectedSlot?.third_prize ?? 60} REWARD
+                                    </span>
+                                  )}
+                                  {row.rank === 4 && (
+                                    <span className={styles.prizeTagBronze}>
+                                      <Award size={12} /> FREE SLOT PASS
+                                    </span>
+                                  )}
+                                  {row.rank > 4 && (
+                                    <span style={{ color: '#555555', fontSize: '0.75rem' }}>—</span>
+                                  )}
+                                </>
                               )}
                             </>
                           ) : (
@@ -625,11 +661,22 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                     <span>Elims: <strong style={{ color: '#e5e5e5' }}>{row.total_kills}</strong></span>
                   </div>
 
-                  {selectedSlot?.status === 'completed' && row.rank <= 3 && (
+                  {selectedSlot?.status === 'completed' && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-                      {row.rank === 1 && <span className={styles.prizeTagGold}><Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 200} REWARD</span>}
-                      {row.rank === 2 && <span className={styles.prizeTagSilver}><Medal size={12} /> ₹{selectedSlot?.second_prize ?? 150} REWARD</span>}
-                      {row.rank === 3 && <span className={styles.prizeTagBronze}><Award size={12} /> FREE SLOT PASS</span>}
+                      {selectedSlot?.date && selectedSlot.date < '2026-09-22' ? (
+                        <>
+                          {row.rank === 1 && <span className={styles.prizeTagGold}><Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 160} REWARD</span>}
+                          {row.rank === 2 && <span className={styles.prizeTagSilver}><Medal size={12} /> ₹{selectedSlot?.second_prize ?? 80} REWARD</span>}
+                          {row.rank === 3 && <span className={styles.prizeTagBronze}><Award size={12} /> FREE SLOT PASS</span>}
+                        </>
+                      ) : (
+                        <>
+                          {row.rank === 1 && <span className={styles.prizeTagGold}><Trophy size={12} /> ₹{selectedSlot?.first_prize ?? 160} REWARD</span>}
+                          {row.rank === 2 && <span className={styles.prizeTagSilver}><Medal size={12} /> ₹{selectedSlot?.second_prize ?? 80} REWARD</span>}
+                          {row.rank === 3 && <span className={styles.prizeTagBronze} style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.1)' }}><Award size={12} /> ₹{selectedSlot?.third_prize ?? 60} REWARD</span>}
+                          {row.rank === 4 && <span className={styles.prizeTagBronze}><Award size={12} /> FREE SLOT PASS</span>}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
