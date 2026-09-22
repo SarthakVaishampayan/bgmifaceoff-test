@@ -67,11 +67,11 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     // 4. Fetch existing payouts for these slots and auto-clean any duplicate records
     const { data: existingPayouts } = await admin
       .from('payouts')
-      .select('payout_id, slot_id, team_id, place, status, created_at')
+      .select('payout_id, slot_id, team_id, amount, place, status, upi_id, created_at')
       .in('slot_id', slotIds)
       .order('created_at', { ascending: true })
 
-    const seenMap = new Map<string, string>()
+    const seenMap = new Map<string, any>()
     const duplicateIdsToDelete: string[] = []
 
     for (const p of (existingPayouts || [])) {
@@ -81,7 +81,7 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
           duplicateIdsToDelete.push(p.payout_id)
         }
       } else {
-        seenMap.set(key, p.payout_id)
+        seenMap.set(key, p)
       }
     }
 
@@ -89,7 +89,7 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       await admin.from('payouts').delete().in('payout_id', duplicateIdsToDelete)
     }
 
-    const existingPayoutMap = new Set(seenMap.keys())
+    const existingPayoutMap = seenMap
 
     // 5. Fetch UPI configs
     const { data: upiConfigs } = await admin
@@ -175,6 +175,8 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     // 8. For each completed slot, determine winning candidates for cash payouts
     // Priority: 1. Total Points -> 2. Position Points -> 3. Chicken Dinners (#1 / WWCD)
     const payoutsToInsert: any[] = []
+    const payoutsToUpdate: Array<{ payout_id: string; amount: number; upi_id: string | null; place: string | null }> = []
+    const invalidPendingPayoutIdsToDelete: string[] = []
 
     for (const slot of completedSlots) {
       const slotId = slot.slot_id
@@ -184,55 +186,118 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
       if (slotMatchesMap.has(slotId) && slotMatchesMap.get(slotId)!.size > 0) {
         const teamsMap = slotMatchesMap.get(slotId)!
         const sorted = Array.from(teamsMap.values()).sort((a, b) => {
-          // 1st Priority: Total Points
           if (b.total_points !== a.total_points) return b.total_points - a.total_points
-          // 2nd Priority: Position Points
           if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
-          // 3rd Priority: Chicken Dinners (#1 / WWCD)
           if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
           return 0
         })
-        // Yesterday (21 Sep): top 2 get cash payouts. Today onwards: top 3 get cash payouts.
         candidates = sorted.slice(0, isPastSlot ? 2 : 3)
       } else if (slotBookingsMap.has(slotId) && slotBookingsMap.get(slotId)!.length > 0) {
         candidates = slotBookingsMap.get(slotId)!.slice(0, isPastSlot ? 2 : 3)
       }
 
+      const validCandidateTeamIds = new Set(candidates.map(c => c.team_id))
+
+      // Clean up any pending payout for this slot where team is no longer a valid candidate
+      for (const [key, existing] of existingPayoutMap.entries()) {
+        if (key.startsWith(`${slotId}_`)) {
+          if (existing.status === 'pending' && !validCandidateTeamIds.has(existing.team_id)) {
+            invalidPendingPayoutIdsToDelete.push(existing.payout_id)
+          }
+        }
+      }
+
       candidates.forEach((team, index) => {
         const key = `${slotId}_${team.team_id}`
-        if (!existingPayoutMap.has(key)) {
-          const place = index === 0 ? '1st' : index === 1 ? '2nd' : '3rd'
-          let prizeAmount = 0
-          if (isPastSlot) {
-            prizeAmount = index === 0
-              ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? 160)
-              : (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? 80)
-          } else {
-            prizeAmount = index === 0
-              ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? defaultFirstPrize)
-              : index === 1
-                ? (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? defaultSecondPrize)
-                : (slot.third_prize ?? slotPrizesMap[slotId]?.third_prize ?? defaultThirdPrize)
-          }
+        const place = index === 0 ? '1st' : index === 1 ? '2nd' : '3rd'
+        let prizeAmount = 0
+        if (isPastSlot) {
+          prizeAmount = index === 0
+            ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? 120)
+            : (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? 80)
+        } else {
+          prizeAmount = index === 0
+            ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? defaultFirstPrize)
+            : index === 1
+              ? (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? defaultSecondPrize)
+              : (slot.third_prize ?? slotPrizesMap[slotId]?.third_prize ?? defaultThirdPrize)
+        }
 
-          const upiId = teamUpiMap.get(team.team_id) || (team.captain_user_id ? captainUpiMap.get(team.captain_user_id) : null)
+        const upiId = teamUpiMap.get(team.team_id) || (team.captain_user_id ? captainUpiMap.get(team.captain_user_id) : null) || null
+        const existing = existingPayoutMap.get(key)
 
+        if (!existing) {
           payoutsToInsert.push({
             slot_id: slotId,
             team_id: team.team_id,
             amount: prizeAmount,
             place,
             status: 'pending',
-            upi_id: upiId || null,
+            upi_id: upiId,
           })
-          // Mark in local map so we don't duplicate
-          existingPayoutMap.add(key)
+          existingPayoutMap.set(key, { status: 'pending', amount: prizeAmount, upi_id: upiId, place })
+        } else if (existing.status === 'pending') {
+          // Check if UPI ID, amount, or place needs updating
+          const needsUpiUpdate = Boolean(upiId && (!existing.upi_id || existing.upi_id !== upiId))
+          const needsAmountUpdate = Boolean(prizeAmount && existing.amount !== prizeAmount)
+          const needsPlaceUpdate = Boolean(place && existing.place !== place)
+
+          if (needsUpiUpdate || needsAmountUpdate || needsPlaceUpdate) {
+            payoutsToUpdate.push({
+              payout_id: existing.payout_id,
+              amount: prizeAmount || existing.amount,
+              upi_id: upiId || existing.upi_id || null,
+              place,
+            })
+          }
         }
       })
     }
 
+    // Delete orphaned or invalid pending payouts (e.g., 3rd place in past slots)
+    if (invalidPendingPayoutIdsToDelete.length > 0) {
+      await admin.from('payouts').delete().in('payout_id', invalidPendingPayoutIdsToDelete)
+    }
+
+    // Execute pending payouts updates
+    for (const updateItem of payoutsToUpdate) {
+      try {
+        const { error: updateErr } = await admin
+          .from('payouts')
+          .update({
+            amount: updateItem.amount,
+            upi_id: updateItem.upi_id,
+            place: updateItem.place,
+          })
+          .eq('payout_id', updateItem.payout_id)
+
+        if (updateErr && updateErr.message?.includes('payouts_place_check')) {
+          // If check constraint allows only '1st' and '2nd', fallback to place: null for 3rd place
+          await admin
+            .from('payouts')
+            .update({
+              amount: updateItem.amount,
+              upi_id: updateItem.upi_id,
+              place: null,
+            })
+            .eq('payout_id', updateItem.payout_id)
+        }
+      } catch (e) {
+        console.error('Failed to update pending payout:', updateItem.payout_id, e)
+      }
+    }
+
+    // Execute pending payouts inserts
     if (payoutsToInsert.length > 0) {
-      await admin.from('payouts').insert(payoutsToInsert)
+      const { error: insertErr } = await admin.from('payouts').insert(payoutsToInsert)
+      if (insertErr && insertErr.message?.includes('payouts_place_check')) {
+        // Fallback for check constraint: insert 3rd place rows with place: null
+        const sanitizedInserts = payoutsToInsert.map(p => ({
+          ...p,
+          place: p.place === '3rd' ? null : p.place,
+        }))
+        await admin.from('payouts').insert(sanitizedInserts)
+      }
     }
 
     // 9. For each completed slot, issue free slot coupon (3rd place for yesterday's 21 Sep slots, 4th place for 22 Sep onwards)

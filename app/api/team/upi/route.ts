@@ -147,6 +147,19 @@ export async function POST(request: Request) {
       console.error('Failed to update auth metadata for UPI:', metaErr)
     }
 
+    // 5. Instantly update all pending payout slips for this team
+    if (teamId) {
+      try {
+        await admin
+          .from('payouts')
+          .update({ upi_id: trimmedUpi })
+          .eq('team_id', teamId)
+          .eq('status', 'pending')
+      } catch (payoutErr) {
+        console.error('Failed to update pending payouts with new UPI:', payoutErr)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       upi_id: trimmedUpi,

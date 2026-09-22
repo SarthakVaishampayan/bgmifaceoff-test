@@ -36,8 +36,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please enter a valid payout amount greater than 0' }, { status: 400 })
     }
 
-    // Only '1st' or '2nd' are allowed by the table check constraint
-    const sanitizedPlace = place === '1st' || place === '2nd' ? place : null
+    // Allow '1st', '2nd', or '3rd'
+    let sanitizedPlace = place === '1st' || place === '2nd' || place === '3rd' ? place : null
+
+    // Persist upi_id to config for this team if provided
+    if (upi_id && typeof upi_id === 'string' && upi_id.trim()) {
+      try {
+        await admin.from('config').upsert({
+          key: `upi_team_${team_id}`,
+          value: JSON.stringify({
+            upi_id: upi_id.trim(),
+            updated_at: new Date().toISOString(),
+            updated_by: user.id,
+          }),
+          updated_at: new Date().toISOString(),
+        })
+      } catch (e) {}
+    }
 
     // Check if a payout already exists for this team and slot
     const { data: existingPayout } = await admin
@@ -50,7 +65,7 @@ export async function POST(request: Request) {
     let payoutRecord: any = null
 
     if (existingPayout) {
-      const { data, error } = await admin
+      let { data, error } = await admin
         .from('payouts')
         .update({
           amount: parsedAmount,
@@ -64,12 +79,30 @@ export async function POST(request: Request) {
         .select('*, teams(team_name), slots(date, time_label)')
         .single()
 
+      if (error && error.message?.includes('payouts_place_check')) {
+        const retry = await admin
+          .from('payouts')
+          .update({
+            amount: parsedAmount,
+            status: 'paid',
+            place: null,
+            upi_id: upi_id || null,
+            paid_at: new Date().toISOString(),
+            paid_by: user.id,
+          })
+          .eq('payout_id', existingPayout.payout_id)
+          .select('*, teams(team_name), slots(date, time_label)')
+          .single()
+        data = retry.data
+        error = retry.error
+      }
+
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
       payoutRecord = data
     } else {
-      const { data, error } = await admin
+      let { data, error } = await admin
         .from('payouts')
         .insert({
           slot_id,
@@ -83,6 +116,25 @@ export async function POST(request: Request) {
         })
         .select('*, teams(team_name), slots(date, time_label)')
         .single()
+
+      if (error && error.message?.includes('payouts_place_check')) {
+        const retry = await admin
+          .from('payouts')
+          .insert({
+            slot_id,
+            team_id,
+            amount: parsedAmount,
+            place: null,
+            upi_id: upi_id || null,
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+            paid_by: user.id,
+          })
+          .select('*, teams(team_name), slots(date, time_label)')
+          .single()
+        data = retry.data
+        error = retry.error
+      }
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })

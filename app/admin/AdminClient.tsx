@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate } from '@/lib/utils/formatDate'
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
-import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound } from 'lucide-react'
+import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3 } from 'lucide-react'
 import styles from './page.module.css'
 
 type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'coupons' | 'config' | 'users'
@@ -342,6 +342,8 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
             <PayoutsTab
               payouts={payouts}
               onPayoutSettled={(newPayout) => setPayouts(prev => [newPayout, ...prev.filter(p => p.payout_id !== newPayout.payout_id)])}
+              onPayoutUpdated={(updated) => setPayouts(prev => prev.map(p => p.payout_id === updated.payout_id ? updated : p))}
+              onSyncPayouts={refreshPayouts}
             />
           )}
           {isSuperAdmin && tab === 'bookings' && (
@@ -3692,16 +3694,25 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 }
 
 // ── OFFICIAL PAYOUT SLIP MODAL ───────────────────────────────────────
-function PayoutSlipModal({ slip, onClose }: { slip: any; onClose: () => void }) {
+function PayoutSlipModal({
+  slip,
+  onClose,
+  onEdit,
+}: {
+  slip: any;
+  onClose: () => void;
+  onEdit?: (slip: any) => void;
+}) {
   const [copied, setCopied] = useState(false)
   if (!slip) return null
 
   const slipCode = `BGFS-PAY-${(slip.payout_id || '').slice(0, 8).toUpperCase()}`
   const dateFormatted = slip.paid_at ? formatNumericDate(slip.paid_at) : '—'
   const slotFormatted = slip.slots ? `${formatShortDate(slip.slots.date)} • ${slip.slots.time_label}` : '—'
+  const displayPlace = slip.place || (slip.amount === 60 ? '3rd' : null)
 
   function copySlipText() {
-    const text = `=== BGFS OFFICIAL PAYOUT SLIP ===\nSlip Reference: ${slipCode}\nTeam: ${slip.teams?.team_name || 'N/A'}\nSlot: ${slotFormatted}\nStanding: ${slip.place || 'Participant'}\nAmount: ₹${slip.amount}\nUPI ID: ${slip.upi_id || 'N/A'}\nStatus: PAID OUT\nPaid On: ${dateFormatted}\n=================================`
+    const text = `=== BGFS OFFICIAL PAYOUT SLIP ===\nSlip Reference: ${slipCode}\nTeam: ${slip.teams?.team_name || 'N/A'}\nSlot: ${slotFormatted}\nStanding: ${displayPlace || 'Participant'}\nAmount: ₹${slip.amount}\nUPI ID: ${slip.upi_id || 'N/A'}\nStatus: ${slip.status === 'paid' ? 'PAID OUT' : 'PENDING'}\nPaid On: ${dateFormatted}\n=================================`
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -3757,21 +3768,33 @@ function PayoutSlipModal({ slip, onClose }: { slip: any; onClose: () => void }) 
 
         {/* Amount Hero */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(34,197,94,0.15), rgba(21,128,61,0.25))',
-          border: '1px solid rgba(34,197,94,0.3)',
+          background: slip.status === 'paid'
+            ? 'linear-gradient(135deg, rgba(34,197,94,0.15), rgba(21,128,61,0.25))'
+            : 'linear-gradient(135deg, rgba(250,204,21,0.15), rgba(161,98,7,0.25))',
+          border: slip.status === 'paid' ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(250,204,21,0.3)',
           borderRadius: '10px',
           padding: '1.2rem',
           textAlign: 'center',
           marginBottom: '1.25rem',
         }}>
-          <div style={{ fontSize: '0.75rem', color: '#86efac', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            TOTAL AMOUNT DISBURSED
+          <div style={{ fontSize: '0.75rem', color: slip.status === 'paid' ? '#86efac' : '#fde047', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {slip.status === 'paid' ? 'TOTAL AMOUNT DISBURSED' : 'PENDING DISBURSEMENT'}
           </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#4ade80', margin: '4px 0' }}>
+          <div style={{ fontSize: '2.2rem', fontWeight: 900, color: slip.status === 'paid' ? '#4ade80' : '#facc15', margin: '4px 0' }}>
             ₹{slip.amount}
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(34,197,94,0.25)', color: '#22c55e', padding: '3px 10px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 800 }}>
-            ✓ STATUS: PAID OUT
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            background: slip.status === 'paid' ? 'rgba(34,197,94,0.25)' : 'rgba(250,204,21,0.25)',
+            color: slip.status === 'paid' ? '#22c55e' : '#facc15',
+            padding: '3px 10px',
+            borderRadius: '999px',
+            fontSize: '0.72rem',
+            fontWeight: 800
+          }}>
+            {slip.status === 'paid' ? '✓ STATUS: PAID OUT' : '⏳ STATUS: PENDING'}
           </div>
         </div>
 
@@ -3787,11 +3810,11 @@ function PayoutSlipModal({ slip, onClose }: { slip: any; onClose: () => void }) 
             <span style={{ color: '#ddd' }}>{slotFormatted}</span>
           </div>
 
-          {slip.place && (
+          {displayPlace && (
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #222', paddingBottom: '6px' }}>
               <span style={{ color: '#888' }}>Final Standing:</span>
-              <span className={`badge ${slip.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>
-                {slip.place} Place
+              <span className={`badge ${displayPlace === '1st' ? 'badge-gold' : displayPlace === '2nd' ? 'badge-silver' : 'badge-bronze'}`}>
+                {displayPlace} Place
               </span>
             </div>
           )}
@@ -3804,21 +3827,35 @@ function PayoutSlipModal({ slip, onClose }: { slip: any; onClose: () => void }) 
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#888' }}>Paid On:</span>
-            <span style={{ color: '#aaa' }}>{dateFormatted}</span>
+            <span style={{ color: '#888' }}>{slip.status === 'paid' ? 'Paid On:' : 'Created On:'}</span>
+            <span style={{ color: '#aaa' }}>{slip.status === 'paid' ? dateFormatted : (slip.created_at ? formatNumericDate(slip.created_at) : '—')}</span>
           </div>
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem' }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={copySlipText}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            {copied ? <Check size={14} color="#22c55e" /> : <Copy size={14} />}
-            {copied ? 'Copied Details!' : 'Copy Slip Details'}
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={copySlipText}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              {copied ? <Check size={14} color="#22c55e" /> : <Copy size={14} />}
+              {copied ? 'Copied Details!' : 'Copy Slip Details'}
+            </button>
+            {onEdit && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  onClose()
+                  onEdit(slip)
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#facc15' }}
+              >
+                <Edit3 size={14} /> Edit Slip
+              </button>
+            )}
+          </div>
           <button
             className="btn btn-secondary"
             onClick={onClose}
@@ -3834,16 +3871,34 @@ function PayoutSlipModal({ slip, onClose }: { slip: any; onClose: () => void }) 
 // ── PAYOUTS TAB ──────────────────────────────────────────────────
 function PayoutsTab({
   payouts,
-  onPayoutSettled
+  onPayoutSettled,
+  onPayoutUpdated,
+  onSyncPayouts,
 }: {
   payouts: any[];
-  onPayoutSettled: (payout: any) => void
+  onPayoutSettled: (payout: any) => void;
+  onPayoutUpdated?: (payout: any) => void;
+  onSyncPayouts?: () => Promise<void> | void;
 }) {
   const [selectedSlip, setSelectedSlip] = useState<any | null>(null)
   const [payoutTarget, setPayoutTarget] = useState<any | null>(null)
   const [payoutAmount, setPayoutAmount] = useState<string>('')
+  const [payoutUpiId, setPayoutUpiId] = useState<string>('')
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false)
   const [payoutError, setPayoutError] = useState('')
+
+  // Edit Slip State
+  const [editingSlip, setEditingSlip] = useState<any | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editUpiId, setEditUpiId] = useState('')
+  const [editPlace, setEditPlace] = useState('')
+  const [editStatus, setEditStatus] = useState('pending')
+  const [editLoading, setEditLoading] = useState(false)
+  const [editError, setEditError] = useState('')
+
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
 
   // Deduplicate by slot_id and team_id so duplicate records can never appear in UI
   const pendingMap = new Map<string, any>()
@@ -3869,15 +3924,26 @@ function PayoutsTab({
       payout_id: p.payout_id,
       team_id: p.team_id,
       team_name: p.teams?.team_name || 'Team',
-      rank: p.place === '1st' ? 1 : p.place === '2nd' ? 2 : 1,
+      rank: p.place === '1st' ? 1 : p.place === '2nd' ? 2 : 3,
       place: p.place,
       total_points: p.total_points,
+      amount: p.amount,
       upi_id: p.upi_id,
       slot_id: p.slot_id,
       slots: p.slots,
     })
-    setPayoutAmount('')
+    setPayoutAmount(p.amount ? String(p.amount) : (p.place === '1st' ? '160' : p.place === '2nd' ? '80' : '60'))
+    setPayoutUpiId(p.upi_id || '')
     setPayoutError('')
+  }
+
+  function openEditModal(p: any) {
+    setEditingSlip(p)
+    setEditAmount(String(p.amount ?? 0))
+    setEditUpiId(p.upi_id || '')
+    setEditPlace(p.place || (p.amount === 60 ? '3rd' : ''))
+    setEditStatus(p.status || 'pending')
+    setEditError('')
   }
 
   async function handleConfirmPayout() {
@@ -3899,8 +3965,8 @@ function PayoutsTab({
           slot_id: payoutTarget.slot_id,
           team_id: payoutTarget.team_id,
           amount: amt,
-          place: payoutTarget.place || (payoutTarget.rank === 1 ? '1st' : '2nd'),
-          upi_id: payoutTarget.upi_id || null,
+          place: payoutTarget.place || (payoutTarget.rank === 1 ? '1st' : payoutTarget.rank === 2 ? '2nd' : '3rd'),
+          upi_id: payoutUpiId.trim() || null,
         }),
       })
 
@@ -3912,6 +3978,7 @@ function PayoutsTab({
       onPayoutSettled(data.payout)
       setPayoutTarget(null)
       setPayoutAmount('')
+      setPayoutUpiId('')
       setSelectedSlip(data.payout)
     } catch (err: any) {
       setPayoutError(err.message || 'Error creating payout')
@@ -3920,12 +3987,95 @@ function PayoutsTab({
     }
   }
 
+  async function handleSaveEdit() {
+    if (!editingSlip) return
+    const amt = Number(editAmount)
+    if (isNaN(amt) || amt < 0) {
+      setEditError('Please enter a valid amount (>= 0)')
+      return
+    }
+
+    setEditLoading(true)
+    setEditError('')
+    try {
+      const res = await fetch('/api/admin/payout/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payout_id: editingSlip.payout_id,
+          amount: amt,
+          upi_id: editUpiId.trim() || null,
+          place: editPlace || null,
+          status: editStatus,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update payout slip')
+      }
+
+      if (onPayoutUpdated) {
+        onPayoutUpdated(data.payout)
+      } else {
+        onPayoutSettled(data.payout)
+      }
+
+      if (selectedSlip?.payout_id === data.payout.payout_id) {
+        setSelectedSlip(data.payout)
+      }
+      setEditingSlip(null)
+    } catch (err: any) {
+      setEditError(err.message || 'Error updating payout')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  async function handleTriggerSync() {
+    if (isSyncing) return
+    setIsSyncing(true)
+    setSyncMsg('')
+    try {
+      if (onSyncPayouts) {
+        await onSyncPayouts()
+      } else {
+        await fetch('/api/admin/payout/sync-pending', { method: 'POST' })
+      }
+      setSyncMsg('✅ Payout slips synchronized successfully with latest standings & UPI details!')
+      setTimeout(() => setSyncMsg(''), 4000)
+    } catch (err: any) {
+      setSyncMsg('❌ Failed to sync: ' + (err.message || 'Error'))
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   return (
     <div>
-      <h2 className={styles.tabTitle}>Payouts</h2>
-      <p className={styles.tabDesc}>
-        Track tournament prize disbursements, review settled payout slips, and disburse prizes to top 2 winners.
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.5rem' }}>
+        <div>
+          <h2 className={styles.tabTitle} style={{ margin: 0 }}>Payouts</h2>
+          <p className={styles.tabDesc} style={{ margin: '4px 0 0 0' }}>
+            Track tournament prize disbursements, review settled payout slips, and disburse prizes to winners.
+          </p>
+        </div>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={handleTriggerSync}
+          disabled={isSyncing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', fontSize: '0.82rem', fontWeight: 700 }}
+        >
+          <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+          {isSyncing ? 'Syncing...' : '🔄 Re-sync Payouts'}
+        </button>
+      </div>
+
+      {syncMsg && (
+        <div style={{ padding: '0.65rem 1rem', borderRadius: '8px', fontSize: '0.82rem', marginBottom: '1rem', background: '#18181b', border: '1px solid #333', color: '#4ade80' }}>
+          {syncMsg}
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -3956,7 +4106,7 @@ function PayoutsTab({
           <div style={{ color: '#facc15', fontSize: '1.3rem', fontWeight: 800 }}>
             {pending.length}
           </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Top 2 slot winners awaiting disbursement</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Slot winners awaiting disbursement</div>
         </div>
       </div>
 
@@ -3970,6 +4120,7 @@ function PayoutsTab({
                   <th>Team</th>
                   <th>Slot</th>
                   <th>Place</th>
+                  <th>Amount</th>
                   <th>UPI ID</th>
                   <th style={{ textAlign: 'center' }}>Action</th>
                 </tr>
@@ -3982,11 +4133,14 @@ function PayoutsTab({
                       {p.slots ? `${formatShortDate(p.slots.date)} • ${p.slots.time_label}` : '—'}
                     </td>
                     <td>
-                      {p.place ? (
-                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>
-                          {p.place}
+                      {p.place || p.amount === 60 ? (
+                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : p.place === '2nd' ? 'badge-silver' : 'badge-bronze'}`}>
+                          {p.place || '3rd'}
                         </span>
                       ) : '—'}
+                    </td>
+                    <td>
+                      <strong style={{ color: '#facc15', fontSize: '0.9rem' }}>₹{p.amount}</strong>
                     </td>
                     <td>
                       <code style={{ fontSize: '0.85rem', color: p.upi_id ? '#4ade80' : '#888' }}>
@@ -3994,29 +4148,38 @@ function PayoutsTab({
                       </code>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button
-                        id={`mark-paid-${p.payout_id}`}
-                        className="btn btn-sm"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '0.82rem',
-                          fontWeight: 700,
-                          padding: '6px 14px',
-                          background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                          color: '#ffffff',
-                          border: '1px solid rgba(74, 222, 128, 0.5)',
-                          borderRadius: '6px',
-                          boxShadow: '0 2px 10px rgba(34, 197, 94, 0.35)',
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                          letterSpacing: '0.01em',
-                        }}
-                        onClick={() => openPayoutPrompt(p)}
-                      >
-                        <CheckCircle size={14} color="#ffffff" strokeWidth={2.5} /> Mark as Paid Out
-                      </button>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                        <button
+                          id={`mark-paid-${p.payout_id}`}
+                          className="btn btn-sm"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            padding: '6px 12px',
+                            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                            color: '#ffffff',
+                            border: '1px solid rgba(74, 222, 128, 0.5)',
+                            borderRadius: '6px',
+                            boxShadow: '0 2px 10px rgba(34, 197, 94, 0.35)',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                          onClick={() => openPayoutPrompt(p)}
+                        >
+                          <CheckCircle size={14} color="#ffffff" strokeWidth={2.5} /> Mark Paid
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: '0.78rem', padding: '6px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#facc15' }}
+                          onClick={() => openEditModal(p)}
+                          title="Edit Amount, UPI ID, or Place"
+                        >
+                          <Edit3 size={13} /> Edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -4040,7 +4203,7 @@ function PayoutsTab({
                   <th>Amount</th>
                   <th>UPI ID</th>
                   <th>Paid On</th>
-                  <th style={{ textAlign: 'center' }}>Receipt</th>
+                  <th style={{ textAlign: 'center' }}>Receipt & Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -4056,9 +4219,9 @@ function PayoutsTab({
                       {p.slots ? `${formatShortDate(p.slots.date)} • ${p.slots.time_label}` : '—'}
                     </td>
                     <td>
-                      {p.place ? (
-                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : 'badge-silver'}`}>
-                          {p.place}
+                      {p.place || p.amount === 60 ? (
+                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : p.place === '2nd' ? 'badge-silver' : 'badge-bronze'}`}>
+                          {p.place || '3rd'}
                         </span>
                       ) : '—'}
                     </td>
@@ -4074,13 +4237,23 @@ function PayoutsTab({
                       {p.paid_at ? formatNumericDate(p.paid_at) : '—'}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: '0.75rem', padding: '3px 8px' }}
-                        onClick={() => setSelectedSlip(p)}
-                      >
-                        🧾 View Slip
-                      </button>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                          onClick={() => setSelectedSlip(p)}
+                        >
+                          🧾 View Slip
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#facc15' }}
+                          onClick={() => openEditModal(p)}
+                          title="Edit Amount, UPI, Place, or Status"
+                        >
+                          <Edit3 size={12} /> Edit
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -4097,10 +4270,14 @@ function PayoutsTab({
       )}
 
       {selectedSlip && (
-        <PayoutSlipModal slip={selectedSlip} onClose={() => setSelectedSlip(null)} />
+        <PayoutSlipModal
+          slip={selectedSlip}
+          onClose={() => setSelectedSlip(null)}
+          onEdit={(slip) => openEditModal(slip)}
+        />
       )}
 
-      {/* Payout Prompt Modal (Prompt for Amount) */}
+      {/* Payout Prompt Modal (Prompt for Amount & UPI ID) */}
       {payoutTarget && (
         <div
           style={{
@@ -4156,19 +4333,13 @@ function PayoutsTab({
                   </span>
                 </div>
                 {payoutTarget.slots && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '0.78rem', color: '#888' }}>Slot:</span>
                     <span style={{ color: '#ccc', fontSize: '0.82rem' }}>
                       {formatShortDate(payoutTarget.slots.date)} • {payoutTarget.slots.time_label}
                     </span>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.78rem', color: '#888' }}>UPI ID:</span>
-                  <span style={{ fontFamily: 'monospace', color: payoutTarget.upi_id ? '#4ade80' : '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
-                    {payoutTarget.upi_id || 'Not Provided'}
-                  </span>
-                </div>
               </div>
 
               {/* Amount Input */}
@@ -4182,7 +4353,7 @@ function PayoutsTab({
                     type="number"
                     min="1"
                     step="1"
-                    placeholder="Enter payout amount (e.g. 500)"
+                    placeholder="Enter payout amount (e.g. 160)"
                     value={payoutAmount}
                     onChange={e => setPayoutAmount(e.target.value)}
                     autoFocus
@@ -4198,6 +4369,32 @@ function PayoutsTab({
                     }}
                   />
                 </div>
+              </div>
+
+              {/* Editable UPI ID */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#4ade80', marginBottom: '6px' }}>
+                  Recipient UPI ID (VPA)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. captain@oksbi"
+                  value={payoutUpiId}
+                  onChange={e => setPayoutUpiId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#18181b',
+                    border: '1px solid #3f3f46',
+                    color: '#fff',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <span style={{ fontSize: '0.72rem', color: '#888', marginTop: '4px', display: 'block' }}>
+                  You can update or verify the UPI ID before completing disbursement.
+                </span>
               </div>
 
               {payoutError && (
@@ -4235,6 +4432,192 @@ function PayoutsTab({
                   }}
                 >
                   {isSubmittingPayout ? 'Creating Slip...' : 'Confirm & Mark Paid'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payout Slip Modal */}
+      {editingSlip && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.85)',
+            zIndex: 100001,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => !editLoading && setEditingSlip(null)}
+        >
+          <div
+            style={{
+              background: '#141414',
+              border: '1px solid #333',
+              borderRadius: '14px',
+              padding: '1.5rem',
+              maxWidth: '460px',
+              width: '100%',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.9)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #262626', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Edit3 size={18} color="#facc15" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
+                  Edit Payout Slip
+                </h3>
+              </div>
+              <button
+                onClick={() => !editLoading && setEditingSlip(null)}
+                style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ background: '#1c1c1c', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '0.85rem' }}>
+                <div style={{ fontSize: '0.9rem', color: '#fff', fontWeight: 700 }}>
+                  {editingSlip.teams?.team_name || 'Team'}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#888', marginTop: '3px' }}>
+                  {editingSlip.slots ? `${formatShortDate(editingSlip.slots.date)} • ${editingSlip.slots.time_label}` : '—'}
+                </div>
+                <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#666', marginTop: '2px' }}>
+                  Ref: BGFS-PAY-{(editingSlip.payout_id || '').slice(0, 8).toUpperCase()}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#facc15', marginBottom: '4px' }}>
+                  Payout Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={editAmount}
+                  onChange={e => setEditAmount(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#18181b',
+                    border: '1px solid #3f3f46',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#4ade80', marginBottom: '4px' }}>
+                  Recipient UPI ID (VPA)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. captain@oksbi"
+                  value={editUpiId}
+                  onChange={e => setEditUpiId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#18181b',
+                    border: '1px solid #3f3f46',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '4px' }}>
+                    Standing / Place
+                  </label>
+                  <select
+                    value={editPlace}
+                    onChange={e => setEditPlace(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: '#18181b',
+                      border: '1px solid #3f3f46',
+                      color: '#fff',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <option value="1st">1st Place</option>
+                    <option value="2nd">2nd Place</option>
+                    <option value="3rd">3rd Place</option>
+                    <option value="">None / Custom</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '4px' }}>
+                    Payout Status
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={e => setEditStatus(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: '#18181b',
+                      border: '1px solid #3f3f46',
+                      color: '#fff',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <option value="pending">⏳ Pending</option>
+                    <option value="paid">✅ Paid Out</option>
+                  </select>
+                </div>
+              </div>
+
+              {editError && (
+                <div style={{ padding: '0.65rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '6px', fontSize: '0.8rem' }}>
+                  {editError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={editLoading}
+                  onClick={() => setEditingSlip(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={editLoading || !editAmount || Number(editAmount) < 0}
+                  onClick={handleSaveEdit}
+                  style={{
+                    background: '#22c55e',
+                    color: '#fff',
+                    fontWeight: 700,
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: editLoading ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>
@@ -4282,6 +4665,7 @@ function UpiInfoTab({
   // Payout prompt and slip states
   const [payoutTarget, setPayoutTarget] = useState<any | null>(null)
   const [payoutAmount, setPayoutAmount] = useState<string>('')
+  const [payoutUpiId, setPayoutUpiId] = useState<string>('')
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false)
   const [payoutError, setPayoutError] = useState('')
   const [selectedSlip, setSelectedSlip] = useState<any | null>(null)
@@ -4316,7 +4700,9 @@ function UpiInfoTab({
 
   function openPayoutPrompt(team: any) {
     setPayoutTarget(team)
-    setPayoutAmount('')
+    const defaultAmt = team.rank === 1 ? 160 : team.rank === 2 ? 80 : team.rank === 3 ? 60 : 0
+    setPayoutAmount(defaultAmt > 0 ? String(defaultAmt) : '')
+    setPayoutUpiId(team.upi_id || '')
     setPayoutError('')
   }
 
@@ -4339,8 +4725,8 @@ function UpiInfoTab({
           slot_id: selectedSlotId,
           team_id: payoutTarget.team_id,
           amount: amt,
-          place: payoutTarget.rank === 1 ? '1st' : payoutTarget.rank === 2 ? '2nd' : null,
-          upi_id: payoutTarget.upi_id || null,
+          place: payoutTarget.rank === 1 ? '1st' : payoutTarget.rank === 2 ? '2nd' : payoutTarget.rank === 3 ? '3rd' : null,
+          upi_id: payoutUpiId.trim() || null,
         }),
       })
 
@@ -4358,6 +4744,7 @@ function UpiInfoTab({
       onPayoutCreated(enrichedPayout)
       setPayoutTarget(null)
       setPayoutAmount('')
+      setPayoutUpiId('')
       if (activeUpiModal?.team_id === payoutTarget.team_id) {
         setActiveUpiModal(null)
       }
@@ -4886,6 +5273,32 @@ function UpiInfoTab({
                     }}
                   />
                 </div>
+              </div>
+
+              {/* Editable UPI ID */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#4ade80', marginBottom: '6px' }}>
+                  Recipient UPI ID (VPA)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. captain@oksbi"
+                  value={payoutUpiId}
+                  onChange={e => setPayoutUpiId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#18181b',
+                    border: '1px solid #3f3f46',
+                    color: '#fff',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <span style={{ fontSize: '0.72rem', color: '#888', marginTop: '4px', display: 'block' }}>
+                  You can update or verify the UPI ID before completing disbursement.
+                </span>
               </div>
 
               {payoutError && (
