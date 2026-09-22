@@ -138,8 +138,10 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
       total_position_points: number
     }> = {}
 
-    // First, populate all paid bookings for this slot
-    const slotBookings = bookings.filter(b => b.slot_id === selectedSlotId)
+    // First, populate all paid bookings for this slot (sorted by room slot)
+    const slotBookings = bookings
+      .filter(b => b.slot_id === selectedSlotId)
+      .sort((a, b) => (a.room_slot_number || 99) - (b.room_slot_number || 99))
     const winners = slotWinnersMap?.[selectedSlotId]
 
     slotBookings.forEach((b, index) => {
@@ -175,10 +177,12 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
           wwcdCount = 1
         }
 
+        const matchBooking = bookings.find(b => b.team_id === m.team_id && b.slot_id === selectedSlotId)
+
         teamMap[m.team_id] = {
           team_id: m.team_id,
           team_name: m.teams?.team_name || 'Team #' + m.team_id.slice(0, 5),
-          room_slot_number: 5,
+          room_slot_number: matchBooking?.room_slot_number || 5,
           wwcd: wwcdCount,
           total_points: 0,
           total_kills: 0,

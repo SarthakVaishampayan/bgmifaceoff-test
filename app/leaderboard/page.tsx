@@ -56,6 +56,7 @@ export default async function LeaderboardPage() {
       .from('bookings')
       .select('booking_id, team_id, slot_id, room_slot_number, is_test_booking, created_at, teams(team_name)')
       .eq('payment_status', 'paid')
+      .order('room_slot_number', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true }),
 
     // Config: Published slots & prize config
