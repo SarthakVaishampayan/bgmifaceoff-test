@@ -6553,7 +6553,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
         <div>
           <h2 className={styles.tabTitle} style={{ margin: 0 }}>Coupons Management</h2>
           <p className={styles.tabDesc} style={{ margin: '4px 0 0 0' }}>
-            Free slot coupons are automatically generated for the <strong>3rd place team</strong> when a slot is marked completed. You can also manually issue coupons.
+            Free slot coupons are automatically generated for the <strong>4th place team</strong> when a slot is marked completed. You can also manually issue coupons.
           </p>
         </div>
         <button
@@ -6636,7 +6636,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
                     {originSlot ? (
                       <div>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#fbbf24', fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', marginBottom: '3px' }}>
-                          🏆 3rd Place Reward
+                          🏆 {c.code?.startsWith('FREE4TH') || (originSlot.date && originSlot.date >= '2026-09-22') ? '4th Place Reward' : '3rd Place Reward'}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: '#ccc' }}>
                           📅 {originSlot.date ? formatNumericDate(originSlot.date) : ''} {originSlot.time_label ? `• ${originSlot.time_label}` : ''}
@@ -6739,7 +6739,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
             {list.length === 0 && (
               <tr>
                 <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2.5rem' }}>
-                  No coupons issued yet. Once a slot is marked completed, a free coupon will automatically be generated for the 3rd place team.
+                  No coupons issued yet. Once a slot is marked completed, a free coupon will automatically be generated for the 4th place team.
                 </td>
               </tr>
             )}

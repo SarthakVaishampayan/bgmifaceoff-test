@@ -226,7 +226,7 @@ export default function DashboardClient({
           <div className={styles.rewardBanner}>
             <div>
               <span className={styles.rewardTitle}>🎁 {unusedCoupons.length} Free Slot Reward{unusedCoupons.length > 1 ? 's' : ''}</span>
-              <span className={styles.rewardSub}>Earned from placing 3rd. Redeem on any open slot.</span>
+              <span className={styles.rewardSub}>Earned from placing 4th. Redeem on any open slot.</span>
             </div>
             <Link href="/slots" className={styles.rewardBtn}>Redeem →</Link>
           </div>

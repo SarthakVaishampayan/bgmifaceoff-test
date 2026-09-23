@@ -512,7 +512,7 @@ function loadRazorpayScript(): Promise<boolean> {
               <div>
                 <strong style={{ color: '#ffffff', fontSize: '0.95rem' }}>FREE SLOT REWARD UNLOCKED!</strong>
                 <span className={styles.bannerSubtext}>
-                  You earned free slot reward pass(es) from placing 3rd in slot matches. Select any open slot below to claim for ₹0!
+                  You earned free slot reward pass(es) from placing 4th in slot matches. Select any open slot below to claim for ₹0!
                 </span>
               </div>
             </div>
