@@ -301,6 +301,19 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
     }
 
     // 9. For each completed slot, issue free slot coupon (3rd place for yesterday's 21 Sep slots, 4th place for 22 Sep onwards)
+    const { data: revokedConfig } = await admin
+      .from('config')
+      .select('value')
+      .eq('key', 'revoked_coupon_slots')
+      .maybeSingle()
+
+    let revokedSlotIds = new Set<string>()
+    try {
+      if (revokedConfig?.value) {
+        revokedSlotIds = new Set(JSON.parse(revokedConfig.value))
+      }
+    } catch {}
+
     const { data: existingSlotCoupons } = await admin
       .from('coupons')
       .select('coupon_id, issued_from_slot, team_id')
@@ -316,7 +329,7 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
 
     for (const slot of completedSlots) {
       const slotId = slot.slot_id
-      if (issuedSlotIds.has(slotId)) continue
+      if (issuedSlotIds.has(slotId) || revokedSlotIds.has(slotId)) continue
 
       const isPastSlot = slot.date && slot.date < '2026-09-22'
 

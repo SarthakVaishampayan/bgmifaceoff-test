@@ -488,6 +488,14 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
   const [savingWinners, setSavingWinners] = useState(false)
   const [winnersMsg, setWinnersMsg] = useState('')
 
+  // ➕ False / Spot Team Management State
+  const [showAddFalseTeamModal, setShowAddFalseTeamModal] = useState(false)
+  const [falseTeamName, setFalseTeamName] = useState('')
+  const [isAddingFalseTeam, setIsAddingFalseTeam] = useState(false)
+  const [falseTeamError, setFalseTeamError] = useState('')
+  const [existingTeamPrompt, setExistingTeamPrompt] = useState<{ team_id: string; team_name: string } | null>(null)
+  const [isRemovingFalseTeam, setIsRemovingFalseTeam] = useState<string | null>(null)
+
   // Automatically load data for the latest closed slot on initial render or when sortedSlots update
   useEffect(() => {
     if (sortedSlots.length > 0) {
@@ -605,12 +613,13 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
     // Load booked teams for slot
     const { data: bData } = await supabase
       .from('bookings')
-      .select('team_id, room_slot_number, teams(team_id, team_name)')
+      .select('team_id, room_slot_number, payment_id, teams(team_id, team_name)')
       .eq('slot_id', slotId)
       .eq('payment_status', 'paid')
     setBookedTeams(bData?.map((b: any) => ({
       ...(b.teams || {}),
       room_slot_number: b.room_slot_number || 5,
+      is_false_team: b.payment_id === 'FREE_SPOT_ENTRY',
     })).filter(Boolean) || [])
 
     // Load recorded matches for slot
@@ -747,6 +756,98 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
       setMsg(`✅ Score deleted for ${teamName || 'team'}.`)
       await loadSlotData(selectedSlot)
       if (onSyncPayouts) onSyncPayouts()
+    }
+  }
+
+  async function handleAddFalseTeam(reuseExisting = false) {
+    if (!selectedSlot) {
+      setFalseTeamError('Please select a slot first.')
+      return
+    }
+    const nameToSubmit = existingTeamPrompt ? existingTeamPrompt.team_name : falseTeamName.trim()
+    if (!nameToSubmit) {
+      setFalseTeamError('Please enter a team name.')
+      return
+    }
+
+    setIsAddingFalseTeam(true)
+    setFalseTeamError('')
+    try {
+      const res = await fetch('/api/admin/slots/add-false-team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot_id: selectedSlot,
+          team_name: nameToSubmit,
+          reuse_existing: reuseExisting,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFalseTeamError(data.error || 'Failed to add team')
+        return
+      }
+
+      if (data.team_exists && data.existing_team) {
+        setExistingTeamPrompt(data.existing_team)
+        return
+      }
+
+      // Successfully added!
+      setShowAddFalseTeamModal(false)
+      setFalseTeamName('')
+      setExistingTeamPrompt(null)
+      setFalseTeamError('')
+      setMsg(`✅ ${data.message || 'Team added successfully!'}`)
+
+      // Refresh slot bookings & auto-select the new team in the form
+      await loadSlotData(selectedSlot)
+      if (data.team?.team_id) {
+        setSelectedTeam(data.team.team_id)
+        setPosPoints('')
+        setKills('')
+      }
+    } catch (err: any) {
+      setFalseTeamError(err.message || 'Error adding false team')
+    } finally {
+      setIsAddingFalseTeam(false)
+    }
+  }
+
+  async function handleRemoveFalseTeam(teamId: string, teamName: string) {
+    if (!confirm(`Are you sure you want to remove false team "${teamName}" from this slot?\nAny entered scores for this team in this slot will also be deleted.`)) {
+      return
+    }
+    setIsRemovingFalseTeam(teamId)
+    setFalseTeamError('')
+    try {
+      const res = await fetch('/api/admin/slots/add-false-team', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot_id: selectedSlot,
+          team_id: teamId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Failed to remove false team')
+        return
+      }
+
+      setMsg(`✅ ${data.message || 'False team removed successfully!'}`)
+      if (selectedTeam === teamId) {
+        setSelectedTeam('')
+        setPosPoints('')
+        setKills('')
+        setEditingMatchId(null)
+      }
+      await loadSlotData(selectedSlot)
+      if (onSyncPayouts) onSyncPayouts()
+    } catch (err: any) {
+      alert(err.message || 'Error removing false team')
+    } finally {
+      setIsRemovingFalseTeam(null)
     }
   }
 
@@ -1268,13 +1369,71 @@ Return ONLY the raw JSON block without markdown wrap.`
 
                   return (
                     <>
-                      <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>
-                        Select Team {totalRegistered > 0 && (
-                          <span style={{ color: pendingCount === 0 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>
-                            ({pendingCount === 0 ? `All ${totalRegistered} Scored` : `${pendingCount} pending / ${totalRegistered} registered`})
-                          </span>
-                        )}
-                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', flexWrap: 'wrap', gap: '4px' }}>
+                        <label className="form-label" style={{ fontSize: '0.75rem', margin: 0 }}>
+                          Select Team {totalRegistered > 0 && (
+                            <span style={{ color: pendingCount === 0 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>
+                              ({pendingCount === 0 ? `All ${totalRegistered} Scored` : `${pendingCount} pending / ${totalRegistered} registered`})
+                            </span>
+                          )}
+                        </label>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {selectedTeam && bookedTeams.find((t: any) => t.team_id === selectedTeam)?.is_false_team && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const curTeam = bookedTeams.find((t: any) => t.team_id === selectedTeam)
+                                if (curTeam) handleRemoveFalseTeam(curTeam.team_id, curTeam.team_name)
+                              }}
+                              disabled={Boolean(isRemovingFalseTeam)}
+                              className="btn btn-danger btn-xs"
+                              style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 8px',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: '1px solid rgba(239, 68, 68, 0.4)',
+                                color: '#ef4444',
+                                fontWeight: 700,
+                                borderRadius: '5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                              }}
+                              title="Remove this false team from the slot"
+                            >
+                              {isRemovingFalseTeam === selectedTeam ? 'Removing...' : '🗑️ Remove False Team'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFalseTeamName('')
+                              setFalseTeamError('')
+                              setExistingTeamPrompt(null)
+                              setShowAddFalseTeamModal(true)
+                            }}
+                            disabled={!selectedSlot}
+                            className="btn btn-secondary btn-xs"
+                            style={{
+                              fontSize: '0.72rem',
+                              padding: '2px 8px',
+                              background: 'rgba(251, 191, 36, 0.12)',
+                              border: '1px solid rgba(251, 191, 36, 0.4)',
+                              color: '#fbbf24',
+                              fontWeight: 700,
+                              cursor: selectedSlot ? 'pointer' : 'not-allowed',
+                              borderRadius: '5px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                            title={selectedSlot ? 'Add an on-spot / giveaway team to this slot' : 'Select a slot first'}
+                          >
+                            + Add False Team
+                          </button>
+                        </div>
+                      </div>
                       <select
                         className="form-input"
                         style={{ padding: '0.45rem 0.6rem', fontSize: '0.85rem', width: '100%' }}
@@ -1305,7 +1464,7 @@ Return ONLY the raw JSON block without markdown wrap.`
                           const isCurrentlyEditing = selectedTeam === t.team_id && editingMatchId
                           return (
                             <option key={t.team_id} value={t.team_id}>
-                              {t.team_name} [Slot {t.room_slot_number || 5}]{isCurrentlyEditing ? ' • [Editing]' : ''}
+                              {t.team_name} [Slot {t.room_slot_number || 5}]{t.is_false_team ? ' 🏷️ [False Team]' : ''}{isCurrentlyEditing ? ' • [Editing]' : ''}
                             </option>
                           )
                         })}
@@ -1620,6 +1779,240 @@ Return ONLY the raw JSON block without markdown wrap.`
           bookedTeams={bookedTeams}
           onApplyScores={handleApplyJsonScores}
         />
+      )}
+      {/* ── ADD FALSE / SPOT TEAM MODAL ── */}
+      {showAddFalseTeamModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => {
+            if (!isAddingFalseTeam) {
+              setShowAddFalseTeamModal(false)
+              setExistingTeamPrompt(null)
+              setFalseTeamError('')
+            }
+          }}
+        >
+          <div
+            style={{
+              background: '#121212',
+              border: '1px solid #282828',
+              borderRadius: '14px',
+              width: '100%',
+              maxWidth: '460px',
+              padding: '1.5rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>➕ Add False / Spot Team</span>
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '2px' }}>
+                  {sortedSlots.find((s: any) => s.slot_id === selectedSlot)
+                    ? `For Slot: ${formatShortDate(sortedSlots.find((s: any) => s.slot_id === selectedSlot).date)} • ${sortedSlots.find((s: any) => s.slot_id === selectedSlot).time_label}`
+                    : 'Add on-spot team to selected slot'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddFalseTeamModal(false)
+                  setExistingTeamPrompt(null)
+                  setFalseTeamError('')
+                }}
+                disabled={isAddingFalseTeam}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#888',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  padding: '4px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {falseTeamError && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#f87171',
+                  borderRadius: '8px',
+                  padding: '0.65rem 0.85rem',
+                  fontSize: '0.8rem',
+                  marginBottom: '1rem',
+                  lineHeight: 1.4,
+                }}
+              >
+                {falseTeamError}
+              </div>
+            )}
+
+            {existingTeamPrompt ? (
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div
+                  style={{
+                    background: 'rgba(251, 191, 36, 0.12)',
+                    border: '1px solid rgba(251, 191, 36, 0.35)',
+                    color: '#fbbf24',
+                    borderRadius: '8px',
+                    padding: '0.85rem',
+                    fontSize: '0.82rem',
+                    lineHeight: 1.45,
+                    marginBottom: '1rem',
+                  }}
+                >
+                  <strong style={{ display: 'block', marginBottom: '4px', color: '#fff' }}>
+                    ⚠️ Team Name Already Exists
+                  </strong>
+                  A team named <strong style={{ color: '#fff' }}>&quot;{existingTeamPrompt.team_name}&quot;</strong> already exists in the system database.
+                  <div style={{ marginTop: '6px', color: '#e5e7eb' }}>
+                    Would you like to assign this existing team to this slot, or choose a different name?
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={isAddingFalseTeam}
+                    onClick={() => {
+                      setExistingTeamPrompt(null)
+                      setFalseTeamError('')
+                    }}
+                  >
+                    Change Name
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={isAddingFalseTeam}
+                    onClick={() => handleAddFalseTeam(true)}
+                    style={{ background: '#fbbf24', borderColor: '#fbbf24', color: '#000', fontWeight: 800 }}
+                  >
+                    {isAddingFalseTeam ? 'Adding Team...' : '✓ Yes, Add Existing Team to Slot'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form
+                onSubmit={e => {
+                  e.preventDefault()
+                  handleAddFalseTeam(false)
+                }}
+              >
+                <div style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '6px', display: 'block' }}>
+                    Team Name <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ width: '100%', fontSize: '0.9rem', padding: '0.55rem 0.75rem' }}
+                    placeholder="e.g. TEAM SOUL or GODLIKE"
+                    value={falseTeamName}
+                    onChange={e => {
+                      setFalseTeamName(e.target.value)
+                      if (falseTeamError) setFalseTeamError('')
+                    }}
+                    autoFocus
+                    required
+                    disabled={isAddingFalseTeam}
+                  />
+                  <div style={{ fontSize: '0.72rem', color: '#888', marginTop: '6px', lineHeight: 1.4 }}>
+                    • Checks for name duplication automatically.<br />
+                    • Allocates next available room slot number.<br />
+                    • Adds team to Score Entry &amp; Leaderboard immediately.
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={isAddingFalseTeam}
+                    onClick={() => {
+                      setShowAddFalseTeamModal(false)
+                      setFalseTeamError('')
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={isAddingFalseTeam || !falseTeamName.trim()}
+                    style={{ background: '#fbbf24', borderColor: '#fbbf24', color: '#000', fontWeight: 800 }}
+                  >
+                    {isAddingFalseTeam ? 'Checking & Adding...' : '+ Add Team to Slot'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* List of existing false teams in this slot */}
+            {bookedTeams.some((t: any) => t.is_false_team) && (
+              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #222' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                  False Teams in this Slot ({bookedTeams.filter((t: any) => t.is_false_team).length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '160px', overflowY: 'auto' }}>
+                  {bookedTeams.filter((t: any) => t.is_false_team).map((ft: any) => (
+                    <div
+                      key={ft.team_id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: '#181818',
+                        border: '1px solid #2e2e2e',
+                        borderRadius: '6px',
+                        padding: '6px 10px',
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: '0.82rem', color: '#fff' }}>{ft.team_name}</strong>
+                        <span style={{ fontSize: '0.72rem', color: '#fbbf24', marginLeft: '6px' }}>Room Slot #{ft.room_slot_number || 5}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFalseTeam(ft.team_id, ft.team_name)}
+                        disabled={isRemovingFalseTeam === ft.team_id}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.12)',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          color: '#ef4444',
+                          borderRadius: '4px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {isRemovingFalseTeam === ft.team_id ? 'Removing...' : '🗑️ Remove'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

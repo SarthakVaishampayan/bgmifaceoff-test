@@ -119,7 +119,7 @@ export async function DELETE(request: Request) {
     // 1. Fetch coupon to check its current status
     const { data: coupon, error: findErr } = await admin
       .from('coupons')
-      .select('coupon_id, code, status, team_id, teams(team_name)')
+      .select('coupon_id, code, status, team_id, issued_from_slot, teams(team_name)')
       .eq('coupon_id', coupon_id)
       .maybeSingle()
 
@@ -135,7 +135,36 @@ export async function DELETE(request: Request) {
       )
     }
 
-    // 3. Delete unused coupon safely
+    // 3. If this coupon was auto-issued from a slot, permanently mark the slot as revoked
+    // so syncPendingPayouts will NEVER re-generate another coupon for this slot.
+    if (coupon.issued_from_slot) {
+      try {
+        const { data: revokedConfig } = await admin
+          .from('config')
+          .select('value')
+          .eq('key', 'revoked_coupon_slots')
+          .maybeSingle()
+
+        let revokedList: string[] = []
+        if (revokedConfig?.value) {
+          try {
+            revokedList = JSON.parse(revokedConfig.value)
+          } catch {}
+        }
+
+        if (!revokedList.includes(coupon.issued_from_slot)) {
+          revokedList.push(coupon.issued_from_slot)
+          await admin.from('config').upsert(
+            { key: 'revoked_coupon_slots', value: JSON.stringify(revokedList) },
+            { onConflict: 'key' }
+          )
+        }
+      } catch (e) {
+        console.error('Error recording revoked slot coupon in config:', e)
+      }
+    }
+
+    // 4. Delete unused coupon safely
     const { error: delErr } = await admin
       .from('coupons')
       .delete()
