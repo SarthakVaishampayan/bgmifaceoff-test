@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
@@ -9,7 +9,7 @@ import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
 import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert } from 'lucide-react'
 import styles from './page.module.css'
 
-type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'pending_bookings' | 'coupons' | 'config' | 'users'
+type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'pending_bookings' | 'coupons' | 'finances' | 'config' | 'users'
 
 /**
  * Sorts slots in descending order:
@@ -141,6 +141,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
     { id: 'bookings', label: 'Bookings', superOnly: true },
     { id: 'pending_bookings', label: pendingBookingsCount > 0 ? `Pending (${pendingBookingsCount})` : 'Pending Bookings', superOnly: true },
     { id: 'coupons', label: 'Coupons', superOnly: true },
+    { id: 'finances', label: '💵 Finances', superOnly: true },
     { id: 'config', label: 'Config', superOnly: true },
     { id: 'users', label: 'Users & Passwords', superOnly: true },
   ]
@@ -370,6 +371,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
             <PendingBookingsTab onCountChange={setPendingBookingsCount} />
           )}
           {isSuperAdmin && tab === 'coupons' && <CouponsTab coupons={coupons} teams={teams} supabase={supabase} />}
+          {isSuperAdmin && tab === 'finances' && <FinancesTab />}
           {isSuperAdmin && tab === 'config' && <ConfigTab config={configState} setConfig={setConfigState} supabase={supabase} />}
           {isSuperAdmin && tab === 'users' && (
             <UsersTab
@@ -7143,7 +7145,1013 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
   )
 }
 
-// ── CONFIG TAB ───────────────────────────────────────────────────
+// ── FINANCES TAB ─────────────────────────────────────────────────
+interface DaySlotItem {
+  slot_label: string
+  teams_played: number
+  slot_price: number
+  prize_money: number
+}
+
+interface DayFinanceRecord {
+  id: string
+  date: string
+  slots: DaySlotItem[]
+  expenses: {
+    caster_fee: number
+    caster_note?: string
+    room_maker_fee: number
+    room_maker_note?: string
+    observer_fee: number
+    observer_note?: string
+    global_expense?: number
+    global_note?: string
+    misc_fee: number
+    misc_note?: string
+  }
+  notes?: string
+  created_at?: string
+}
+
+function FinancesTab() {
+  const [records, setRecords] = useState<DayFinanceRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [statusMsg, setStatusMsg] = useState('')
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
+
+  // Modal Form State
+  const [formDate, setFormDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [formSlots, setFormSlots] = useState<DaySlotItem[]>([
+    { slot_label: '7:00 PM – 9:00 PM', teams_played: 0, slot_price: 40, prize_money: 340 },
+    { slot_label: '9:00 PM – 11:00 PM', teams_played: 0, slot_price: 40, prize_money: 340 },
+    { slot_label: '11:00 PM – 1:00 AM', teams_played: 0, slot_price: 40, prize_money: 340 },
+  ])
+  const [formExpenses, setFormExpenses] = useState({
+    caster_fee: 120,
+    caster_note: '',
+    room_maker_fee: 540,
+    room_maker_note: '',
+    observer_fee: 20,
+    observer_note: '',
+    global_expense: 0,
+    global_note: '',
+    misc_fee: 40,
+    misc_note: 'Team gilli',
+  })
+  const [formNotes, setFormNotes] = useState('')
+
+  // Load finance records
+  const fetchFinances = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/finances')
+      const data = await res.json()
+      if (data.records && Array.isArray(data.records)) {
+        setRecords(data.records)
+      }
+    } catch (err) {
+      console.error('Failed to load finances:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchFinances()
+  }, [fetchFinances])
+
+  // Reset form to defaults
+  function openNewDayModal() {
+    setEditingRecordId(null)
+    setFormDate(new Date().toISOString().split('T')[0])
+    setFormSlots([
+      { slot_label: '7:00 PM – 9:00 PM', teams_played: 0, slot_price: 40, prize_money: 340 },
+      { slot_label: '9:00 PM – 11:00 PM', teams_played: 0, slot_price: 40, prize_money: 340 },
+      { slot_label: '11:00 PM – 1:00 AM', teams_played: 0, slot_price: 40, prize_money: 340 },
+    ])
+    setFormExpenses({
+      caster_fee: 120,
+      caster_note: '',
+      room_maker_fee: 540,
+      room_maker_note: '',
+      observer_fee: 20,
+      observer_note: '',
+      global_expense: 0,
+      global_note: '',
+      misc_fee: 40,
+      misc_note: 'Team gilli',
+    })
+    setFormNotes('')
+    setStatusMsg('')
+    setModalOpen(true)
+  }
+
+  // Pre-fill form for editing
+  function openEditModal(r: DayFinanceRecord) {
+    setEditingRecordId(r.id)
+    setFormDate(r.date)
+    setFormSlots(r.slots?.length ? r.slots : [
+      { slot_label: 'Slot 1', teams_played: 0, slot_price: 40, prize_money: 340 }
+    ])
+    setFormExpenses({
+      caster_fee: r.expenses?.caster_fee || 0,
+      caster_note: r.expenses?.caster_note || '',
+      room_maker_fee: r.expenses?.room_maker_fee || 0,
+      room_maker_note: r.expenses?.room_maker_note || '',
+      observer_fee: r.expenses?.observer_fee || 0,
+      observer_note: r.expenses?.observer_note || '',
+      global_expense: r.expenses?.global_expense || 0,
+      global_note: r.expenses?.global_note || '',
+      misc_fee: r.expenses?.misc_fee || 0,
+      misc_note: r.expenses?.misc_note || '',
+    })
+    setFormNotes(r.notes || '')
+    setStatusMsg('')
+    setModalOpen(true)
+  }
+
+  // Save day record
+  async function handleSaveDay(e: React.FormEvent) {
+    e.preventDefault()
+    if (!formDate) return
+    setSaving(true)
+    setStatusMsg('')
+
+    const payload = {
+      id: editingRecordId || undefined,
+      date: formDate,
+      slots: formSlots.map(s => ({
+        slot_label: s.slot_label || 'Slot',
+        teams_played: Number(s.teams_played) || 0,
+        slot_price: Number(s.slot_price) || 0,
+        prize_money: Number(s.prize_money) || 0,
+      })),
+      expenses: {
+        caster_fee: Number(formExpenses.caster_fee) || 0,
+        caster_note: formExpenses.caster_note?.trim() || '',
+        room_maker_fee: Number(formExpenses.room_maker_fee) || 0,
+        room_maker_note: formExpenses.room_maker_note?.trim() || '',
+        observer_fee: Number(formExpenses.observer_fee) || 0,
+        observer_note: formExpenses.observer_note?.trim() || '',
+        global_expense: Number(formExpenses.global_expense) || 0,
+        global_note: formExpenses.global_note?.trim() || '',
+        misc_fee: Number(formExpenses.misc_fee) || 0,
+        misc_note: formExpenses.misc_note?.trim() || '',
+      },
+      notes: formNotes?.trim() || '',
+    }
+
+    try {
+      const res = await fetch('/api/admin/finances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setStatusMsg('❌ ' + (data.error || 'Failed to save record'))
+        return
+      }
+
+      setRecords(data.records || [])
+      setModalOpen(false)
+    } catch (err: any) {
+      setStatusMsg('❌ ' + (err.message || 'Error saving record'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Delete day record
+  async function handleDeleteRecord(id: string, date: string) {
+    if (!confirm(`Are you sure you want to delete the financial record for ${formatNumericDate(date)}?`)) {
+      return
+    }
+
+    try {
+      const res = await fetch('/api/admin/finances', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, date }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Failed to delete record')
+        return
+      }
+      setRecords(data.records || [])
+    } catch (err: any) {
+      alert(err.message || 'Error deleting record')
+    }
+  }
+
+  // Live modal totals calculation
+  const modalRevenue = formSlots.reduce((sum, s) => sum + (Number(s.teams_played) || 0) * (Number(s.slot_price) || 0), 0)
+  const modalPrizes = formSlots.reduce((sum, s) => sum + (Number(s.prize_money) || 0), 0)
+  const modalStaff = (Number(formExpenses.caster_fee) || 0) + (Number(formExpenses.room_maker_fee) || 0) + (Number(formExpenses.observer_fee) || 0) + (Number(formExpenses.misc_fee) || 0)
+  const modalGlobal = Number(formExpenses.global_expense) || 0
+  const modalTotalOutflows = modalPrizes + modalStaff + modalGlobal
+  const modalNetProfit = modalRevenue - modalTotalOutflows
+
+  // Cumulative chronological calculation of running balance
+  const { enrichedRecords, totals } = useMemo(() => {
+    // Sort chronological (oldest to newest) to accumulate balance
+    const sortedChronological = [...records].sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0))
+
+    let runningBal = 0
+    let totalRev = 0
+    let totalPrizes = 0
+    let totalStaff = 0
+    let totalGlobal = 0
+
+    const balanceMap = new Map<string, number>()
+
+    sortedChronological.forEach(r => {
+      const rev = (r.slots || []).reduce((s, sl) => s + (Number(sl.teams_played) || 0) * (Number(sl.slot_price) || 0), 0)
+      const pz = (r.slots || []).reduce((s, sl) => s + (Number(sl.prize_money) || 0), 0)
+      const st = (Number(r.expenses?.caster_fee) || 0) + (Number(r.expenses?.room_maker_fee) || 0) + (Number(r.expenses?.observer_fee) || 0) + (Number(r.expenses?.misc_fee) || 0)
+      const gl = Number(r.expenses?.global_expense) || 0
+      const net = rev - (pz + st + gl)
+
+      runningBal += net
+      totalRev += rev
+      totalPrizes += pz
+      totalStaff += st
+      totalGlobal += gl
+
+      balanceMap.set(r.id, runningBal)
+    })
+
+    // Display list sorted newest first
+    const displayList = [...records].sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0)).map(r => {
+      const rev = (r.slots || []).reduce((s, sl) => s + (Number(sl.teams_played) || 0) * (Number(sl.slot_price) || 0), 0)
+      const pz = (r.slots || []).reduce((s, sl) => s + (Number(sl.prize_money) || 0), 0)
+      const st = (Number(r.expenses?.caster_fee) || 0) + (Number(r.expenses?.room_maker_fee) || 0) + (Number(r.expenses?.observer_fee) || 0) + (Number(r.expenses?.misc_fee) || 0)
+      const gl = Number(r.expenses?.global_expense) || 0
+      const totalOut = pz + st + gl
+      const net = rev - totalOut
+
+      return {
+        ...r,
+        revenue: rev,
+        prizePool: pz,
+        staffExpenses: st,
+        globalExpense: gl,
+        totalOutflow: totalOut,
+        netProfit: net,
+        runningBalance: balanceMap.get(r.id) || 0,
+      }
+    })
+
+    const totalOutflowAll = totalPrizes + totalStaff + totalGlobal
+    const overallNetBalance = totalRev - totalOutflowAll
+
+    return {
+      enrichedRecords: displayList,
+      totals: {
+        totalRevenue: totalRev,
+        totalPrizes,
+        totalStaff,
+        totalGlobal,
+        totalOutflow: totalOutflowAll,
+        overallNetBalance,
+      }
+    }
+  }, [records])
+
+  // Export to CSV
+  function exportCSV() {
+    if (enrichedRecords.length === 0) {
+      alert('No financial records to export.')
+      return
+    }
+
+    const headers = [
+      'Date',
+      'Total Slots',
+      'Total Teams Played',
+      'Gross Slot Revenue (INR)',
+      'Prize Money Outflow (INR)',
+      'Staff Expenses (INR)',
+      'Global Expense (INR)',
+      'Global Expense Note',
+      'Total Outflows (INR)',
+      'Day Net Profit (INR)',
+      'Cumulative Balance (INR)',
+      'Notes'
+    ]
+
+    const rows = enrichedRecords.map(r => {
+      const totalTeams = (r.slots || []).reduce((sum, s) => sum + (Number(s.teams_played) || 0), 0)
+      return [
+        r.date,
+        (r.slots || []).length,
+        totalTeams,
+        r.revenue,
+        r.prizePool,
+        r.staffExpenses,
+        r.globalExpense,
+        `"${(r.expenses?.global_note || '').replace(/"/g, '""')}"`,
+        r.totalOutflow,
+        r.netProfit,
+        r.runningBalance,
+        `"${(r.notes || '').replace(/"/g, '""')}"`,
+      ].join(',')
+    })
+
+    const csvContent = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `BGFS_Finances_Ledger_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  return (
+    <div>
+      {/* ── HEADER & ACTIONS ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.75rem' }}>
+        <div>
+          <h2 className={styles.tabTitle} style={{ margin: 0 }}>Financial Management &amp; P&amp;L Ledger</h2>
+          <p className={styles.tabDesc} style={{ margin: '4px 0 0 0' }}>
+            Daily 3-slot revenue tracking, staff &amp; global expenses, automated daily net profit, and cumulative balance.
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={exportCSV}
+            disabled={enrichedRecords.length === 0}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            📥 Export CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={openNewDayModal}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fbbf24', borderColor: '#fbbf24', color: '#000', fontWeight: 800 }}
+          >
+            + Log Day Finances
+          </button>
+        </div>
+      </div>
+
+      {/* ── METRIC STATS SUMMARY ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem', margin: '1rem 0 1.25rem 0' }}>
+        <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Total Revenue</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', marginTop: '3px' }}>₹{totals.totalRevenue.toLocaleString('en-IN')}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Total Prize Pools</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fbbf24', marginTop: '3px' }}>₹{totals.totalPrizes.toLocaleString('en-IN')}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Staff Expenses</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#f87171', marginTop: '3px' }}>₹{totals.totalStaff.toLocaleString('en-IN')}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>🌐 Global Expenses</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#38bdf8', marginTop: '3px' }}>₹{totals.totalGlobal.toLocaleString('en-IN')}</div>
+        </div>
+        <div style={{
+          background: totals.overallNetBalance >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+          border: `1px solid ${totals.overallNetBalance >= 0 ? 'rgba(34, 197, 94, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
+          borderRadius: '10px',
+          padding: '0.85rem 1rem'
+        }}>
+          <div style={{ fontSize: '0.72rem', color: totals.overallNetBalance >= 0 ? '#4ade80' : '#f87171', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Overall Net Balance</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: totals.overallNetBalance >= 0 ? '#4ade80' : '#f87171', marginTop: '3px' }}>
+            {totals.overallNetBalance >= 0 ? '+' : ''}₹{totals.overallNetBalance.toLocaleString('en-IN')}
+          </div>
+        </div>
+      </div>
+
+      {/* ── LEDGER TABLE ── */}
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Slots Summary</th>
+              <th>Gross Revenue</th>
+              <th>Prize Pool</th>
+              <th>Staff Costs</th>
+              <th>Global Expense</th>
+              <th>Day Net Profit</th>
+              <th>Running Balance</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {enrichedRecords.map(r => {
+              const isPositive = r.netProfit >= 0
+              const isExpanded = expandedRowId === r.id
+              const totalTeams = (r.slots || []).reduce((sum, s) => sum + (Number(s.teams_played) || 0), 0)
+
+              return (
+                <Fragment key={r.id}>
+                  <tr
+                    onClick={() => setExpandedRowId(isExpanded ? null : r.id)}
+                    style={{ cursor: 'pointer', background: isExpanded ? 'rgba(255, 255, 255, 0.03)' : undefined }}
+                  >
+                    <td>
+                      <strong style={{ color: '#fff', fontSize: '0.9rem' }}>
+                        📅 {formatNumericDate(r.date)}
+                      </strong>
+                      {r.notes && (
+                        <div
+                          style={{
+                            fontSize: '0.72rem',
+                            color: '#fbbf24',
+                            marginTop: '3px',
+                            maxWidth: '160px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={`Remark: ${r.notes}`}
+                        >
+                          📝 {r.notes}
+                        </div>
+                      )}
+                    </td>
+
+                    <td>
+                      <div style={{ fontSize: '0.8rem', color: '#ccc' }}>
+                        {(r.slots || []).length} Slots • <strong style={{ color: '#fbbf24' }}>{totalTeams} Teams</strong>
+                      </div>
+                    </td>
+
+                    <td>
+                      <strong style={{ color: '#fff', fontSize: '0.9rem' }}>
+                        ₹{r.revenue.toLocaleString('en-IN')}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <span style={{ color: '#fbbf24', fontSize: '0.85rem', fontWeight: 700 }}>
+                        ₹{r.prizePool.toLocaleString('en-IN')}
+                      </span>
+                    </td>
+
+                    <td>
+                      <span style={{ color: '#f87171', fontSize: '0.85rem' }}>
+                        ₹{r.staffExpenses.toLocaleString('en-IN')}
+                      </span>
+                    </td>
+
+                    <td>
+                      {r.globalExpense > 0 ? (
+                        <div style={{ fontSize: '0.82rem' }}>
+                          <span style={{ color: '#38bdf8', fontWeight: 700 }}>₹{r.globalExpense.toLocaleString('en-IN')}</span>
+                          {r.expenses?.global_note && (
+                            <div style={{ fontSize: '0.7rem', color: '#888' }}>{r.expenses.global_note}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#666', fontSize: '0.8rem' }}>—</span>
+                      )}
+                    </td>
+
+                    <td>
+                      <span
+                        className="badge"
+                        style={{
+                          background: isPositive ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                          color: isPositive ? '#4ade80' : '#f87171',
+                          border: `1px solid ${isPositive ? 'rgba(34, 197, 94, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {isPositive ? '+' : ''}₹{r.netProfit.toLocaleString('en-IN')}
+                      </span>
+                    </td>
+
+                    <td>
+                      <strong style={{ color: r.runningBalance >= 0 ? '#4ade80' : '#f87171', fontSize: '0.9rem' }}>
+                        {r.runningBalance >= 0 ? '+' : ''}₹{r.runningBalance.toLocaleString('en-IN')}
+                      </strong>
+                    </td>
+
+                    <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'inline-flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(r)}
+                          style={{
+                            background: '#222',
+                            border: '1px solid #444',
+                            color: '#ccc',
+                            borderRadius: '5px',
+                            padding: '3px 8px',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                          }}
+                          title="Edit this record"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRecord(r.id, r.date)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.35)',
+                            color: '#f87171',
+                            borderRadius: '5px',
+                            padding: '3px 8px',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                          }}
+                          title="Delete this record"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Expanded Row Details */}
+                  {isExpanded && (
+                    <tr style={{ background: '#121212' }}>
+                      <td colSpan={9} style={{ padding: '1rem 1.25rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                          {/* Slots Details */}
+                          <div style={{ background: '#181818', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '0.75rem 1rem' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                              Slots Details ({r.slots?.length || 0})
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {(r.slots || []).map((sl, sIdx) => {
+                                const subRev = (Number(sl.teams_played) || 0) * (Number(sl.slot_price) || 0)
+                                return (
+                                  <div key={sIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', borderBottom: '1px solid #222', paddingBottom: '4px' }}>
+                                    <div>
+                                      <span style={{ color: '#fff', fontWeight: 700 }}>{sl.slot_label}</span>
+                                      <div style={{ color: '#888', fontSize: '0.72rem' }}>
+                                        {sl.teams_played} teams × ₹{sl.slot_price} • Prize: ₹{sl.prize_money}
+                                      </div>
+                                    </div>
+                                    <strong style={{ color: '#4ade80' }}>₹{subRev}</strong>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Expenses Details */}
+                          <div style={{ background: '#181818', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '0.75rem 1rem' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                              Expenses Breakdown
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.78rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#aaa' }}>Caster: {r.expenses?.caster_note ? `(${r.expenses.caster_note})` : ''}</span>
+                                <span style={{ color: '#fff' }}>₹{r.expenses?.caster_fee || 0}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#aaa' }}>Room Maker: {r.expenses?.room_maker_note ? `(${r.expenses.room_maker_note})` : ''}</span>
+                                <span style={{ color: '#fff' }}>₹{r.expenses?.room_maker_fee || 0}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#aaa' }}>Observer: {r.expenses?.observer_note ? `(${r.expenses.observer_note})` : ''}</span>
+                                <span style={{ color: '#fff' }}>₹{r.expenses?.observer_fee || 0}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#38bdf8' }}>🌐 Global Expense: {r.expenses?.global_note ? `(${r.expenses.global_note})` : ''}</span>
+                                <span style={{ color: '#38bdf8', fontWeight: 700 }}>₹{r.expenses?.global_expense || 0}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#aaa' }}>Misc: {r.expenses?.misc_note ? `(${r.expenses.misc_note})` : ''}</span>
+                                <span style={{ color: '#fff' }}>₹{r.expenses?.misc_fee || 0}</span>
+                              </div>
+                              {r.notes && (
+                                <div style={{ borderTop: '1px solid #222', paddingTop: '4px', marginTop: '4px', color: '#888', fontStyle: 'italic', fontSize: '0.72rem' }}>
+                                  Note: {r.notes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+
+            {enrichedRecords.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ textAlign: 'center', color: '#888', padding: '3rem 1rem' }}>
+                  {loading ? 'Loading financial records...' : 'No daily financial records logged yet. Click "+ Log Day Finances" to record your first day!'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── MODAL FORM: LOG / EDIT DAY FINANCES ── */}
+      {modalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => {
+            if (!saving) setModalOpen(false)
+          }}
+        >
+          <div
+            style={{
+              background: '#121212',
+              border: '1px solid #282828',
+              borderRadius: '14px',
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '1.5rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#fbbf24' }}>
+                  {editingRecordId ? '✏️ Edit Day Finances' : '➕ Log Day Finances'}
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '2px' }}>
+                  Enter slot counts, prices, and daily expenses. Calculations update in real-time.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                disabled={saving}
+                style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '1.2rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {statusMsg && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', color: '#f87171', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.8rem', marginBottom: '1rem' }}>
+                {statusMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveDay}>
+              {/* Date Input */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'block' }}>
+                  Date of Record <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
+                  value={formDate}
+                  onChange={e => setFormDate(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* ── DAILY SLOTS SECTION ── */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label className="form-label" style={{ fontSize: '0.78rem', margin: 0, fontWeight: 700, color: '#fbbf24' }}>
+                    🎮 Day&apos;s Slots (Default 3 Slots)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormSlots(prev => [
+                        ...prev,
+                        { slot_label: `Slot ${prev.length + 1}`, teams_played: 0, slot_price: 40, prize_money: 340 }
+                      ])
+                    }}
+                    style={{ background: '#222', border: '1px solid #444', color: '#ccc', borderRadius: '4px', fontSize: '0.7rem', padding: '2px 8px', cursor: 'pointer' }}
+                  >
+                    + Add Slot
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {formSlots.map((slot, idx) => {
+                    const subRevenue = (Number(slot.teams_played) || 0) * (Number(slot.slot_price) || 0)
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          background: '#181818',
+                          border: '1px solid #282828',
+                          borderRadius: '8px',
+                          padding: '0.75rem',
+                          display: 'grid',
+                          gridTemplateColumns: '1.8fr 1fr 1fr 1fr auto',
+                          gap: '8px',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontSize: '0.7rem', color: '#888', display: 'block' }}>Slot Timing</span>
+                          <input
+                            type="text"
+                            className="form-input"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', width: '100%' }}
+                            value={slot.slot_label}
+                            onChange={e => {
+                              const val = e.target.value
+                              setFormSlots(prev => prev.map((s, i) => i === idx ? { ...s, slot_label: val } : s))
+                            }}
+                            placeholder="e.g. 7:00 PM – 9:00 PM"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <span style={{ fontSize: '0.7rem', color: '#888', display: 'block' }}>Teams Played</span>
+                          <input
+                            type="number"
+                            className="form-input"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', width: '100%' }}
+                            min={0}
+                            max={30}
+                            placeholder="0"
+                            value={slot.teams_played}
+                            onChange={e => {
+                              const val = parseInt(e.target.value) || 0
+                              setFormSlots(prev => prev.map((s, i) => i === idx ? { ...s, teams_played: val } : s))
+                            }}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <span style={{ fontSize: '0.7rem', color: '#888', display: 'block' }}>Price/Team (₹)</span>
+                          <input
+                            type="number"
+                            className="form-input"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', width: '100%' }}
+                            min={0}
+                            placeholder="40"
+                            value={slot.slot_price}
+                            onChange={e => {
+                              const val = parseInt(e.target.value) || 0
+                              setFormSlots(prev => prev.map((s, i) => i === idx ? { ...s, slot_price: val } : s))
+                            }}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <span style={{ fontSize: '0.7rem', color: '#888', display: 'block' }}>Prize Pool (₹)</span>
+                          <input
+                            type="number"
+                            className="form-input"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', width: '100%' }}
+                            min={0}
+                            placeholder="340"
+                            value={slot.prize_money}
+                            onChange={e => {
+                              const val = parseInt(e.target.value) || 0
+                              setFormSlots(prev => prev.map((s, i) => i === idx ? { ...s, prize_money: val } : s))
+                            }}
+                            required
+                          />
+                        </div>
+
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4ade80' }}>₹{subRevenue}</span>
+                          {formSlots.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setFormSlots(prev => prev.filter((_, i) => i !== idx))}
+                              style={{ background: 'transparent', border: 'none', color: '#f87171', fontSize: '0.7rem', cursor: 'pointer', marginTop: '2px', padding: 0 }}
+                              title="Remove slot"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* ── EXPENSES SECTION ── */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '8px', display: 'block', fontWeight: 700, color: '#f87171' }}>
+                  👥 Staff &amp; Operational Expenses
+                </label>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
+                  {/* Caster */}
+                  <div style={{ background: '#181818', border: '1px solid #282828', borderRadius: '8px', padding: '0.65rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#aaa', fontWeight: 700 }}>🎙️ Caster Payment (₹)</span>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '0.35rem 0.5rem', fontSize: '0.85rem', width: '100%', margin: '4px 0' }}
+                      min={0}
+                      placeholder="120"
+                      value={formExpenses.caster_fee}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, caster_fee: parseInt(e.target.value) || 0 }))}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', width: '100%', color: '#aaa' }}
+                      placeholder="Caster name / note"
+                      value={formExpenses.caster_note}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, caster_note: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Room Maker */}
+                  <div style={{ background: '#181818', border: '1px solid #282828', borderRadius: '8px', padding: '0.65rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#aaa', fontWeight: 700 }}>🏠 Room Maker / Host (₹)</span>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '0.35rem 0.5rem', fontSize: '0.85rem', width: '100%', margin: '4px 0' }}
+                      min={0}
+                      placeholder="540"
+                      value={formExpenses.room_maker_fee}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, room_maker_fee: parseInt(e.target.value) || 0 }))}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', width: '100%', color: '#aaa' }}
+                      placeholder="Host name / note"
+                      value={formExpenses.room_maker_note}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, room_maker_note: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Observer */}
+                  <div style={{ background: '#181818', border: '1px solid #282828', borderRadius: '8px', padding: '0.65rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#aaa', fontWeight: 700 }}>🎥 Observer / Production (₹)</span>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '0.35rem 0.5rem', fontSize: '0.85rem', width: '100%', margin: '4px 0' }}
+                      min={0}
+                      placeholder="20"
+                      value={formExpenses.observer_fee}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, observer_fee: parseInt(e.target.value) || 0 }))}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', width: '100%', color: '#aaa' }}
+                      placeholder="Observer note"
+                      value={formExpenses.observer_note}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, observer_note: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Global Expense */}
+                  <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '8px', padding: '0.65rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700 }}>🌐 Global / Business Expense (₹)</span>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '0.35rem 0.5rem', fontSize: '0.85rem', width: '100%', margin: '4px 0', borderColor: 'rgba(56, 189, 248, 0.4)' }}
+                      min={0}
+                      placeholder="0"
+                      value={formExpenses.global_expense}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, global_expense: parseInt(e.target.value) || 0 }))}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', width: '100%', color: '#38bdf8' }}
+                      placeholder="e.g. Hosting, Domain, Dev, Ads"
+                      value={formExpenses.global_note}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, global_note: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Misc */}
+                  <div style={{ background: '#181818', border: '1px solid #282828', borderRadius: '8px', padding: '0.65rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#aaa', fontWeight: 700 }}>⚙️ Other / Misc (₹)</span>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '0.35rem 0.5rem', fontSize: '0.85rem', width: '100%', margin: '4px 0' }}
+                      min={0}
+                      placeholder="40"
+                      value={formExpenses.misc_fee}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, misc_fee: parseInt(e.target.value) || 0 }))}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', width: '100%', color: '#aaa' }}
+                      placeholder="Team gilli"
+                      value={formExpenses.misc_note}
+                      onChange={e => setFormExpenses(prev => ({ ...prev, misc_note: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── DAY REMARK / NOTES SECTION ── */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ fontSize: '0.78rem', marginBottom: '6px', display: 'block', fontWeight: 700, color: '#e2e8f0' }}>
+                  📝 Day Remark / Note
+                </label>
+                <textarea
+                  className="form-input"
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    fontSize: '0.82rem',
+                    width: '100%',
+                    minHeight: '65px',
+                    resize: 'vertical',
+                    background: '#181818',
+                    border: '1px solid #333',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    lineHeight: 1.4,
+                  }}
+                  placeholder="e.g. Any special notes, sponsor mentions, issues faced, bonus payments, etc."
+                  value={formNotes}
+                  onChange={e => setFormNotes(e.target.value)}
+                />
+              </div>
+
+              {/* ── REAL-TIME SUMMARY BOX ── */}
+              <div
+                style={{
+                  background: modalNetProfit >= 0 ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                  border: `1px solid ${modalNetProfit >= 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                  borderRadius: '10px',
+                  padding: '0.85rem 1rem',
+                  marginBottom: '1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                    Revenue: <strong style={{ color: '#fff' }}>₹{modalRevenue}</strong> • Outflow: <strong style={{ color: '#f87171' }}>₹{modalTotalOutflows}</strong> (Prizes: ₹{modalPrizes} + Staff: ₹{modalStaff} + Global: ₹{modalGlobal})
+                  </div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 900, color: modalNetProfit >= 0 ? '#4ade80' : '#f87171', marginTop: '2px' }}>
+                    Day Net Profit: {modalNetProfit >= 0 ? '+' : ''}₹{modalNetProfit.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={saving}
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={saving || !formDate}
+                  style={{ background: '#fbbf24', borderColor: '#fbbf24', color: '#000', fontWeight: 800 }}
+                >
+                  {saving ? 'Saving Record...' : '✓ Save Day Record'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 function ConfigTab({ config, setConfig, supabase }: { config: Record<string, string>; setConfig?: (cfg: any) => void; supabase: any }) {
   const [values, setValues] = useState(config)
   const [saving, setSaving] = useState(false)
