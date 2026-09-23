@@ -33,14 +33,6 @@
   display: block;
 }
 
-.bgmiLogoImg {
-  height: 68px;
-  width: auto;
-  max-width: 140px;
-  object-fit: contain;
-  display: block;
-}
-
 .logoText {
   font-family: 'Inter', sans-serif;
   font-size: 1.25rem;
@@ -244,12 +236,7 @@
 
   .logoImg {
     height: 44px;
-    max-width: 170px;
-  }
-
-  .bgmiLogoImg {
-    height: 44px;
-    max-width: 85px;
+    max-width: 220px;
   }
 
   .links, .actions {
@@ -272,13 +259,8 @@
   }
 
   .logoImg {
-    height: 36px;
-    max-width: 140px;
-  }
-
-  .bgmiLogoImg {
-    height: 36px;
-    max-width: 70px;
+    height: 38px;
+    max-width: 180px;
   }
 
   .logo {

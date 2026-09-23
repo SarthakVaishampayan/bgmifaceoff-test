@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Trophy, Medal, Award, Layers, ChevronDown, Check } from 'lucide-react'
+import { Trophy, Medal, Award, Layers, ChevronDown, Check, Copy } from 'lucide-react'
 import { formatMonthDay, formatFullDate } from '@/lib/utils/formatDate'
 import styles from './page.module.css'
 
@@ -225,6 +225,35 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     filteredSlots.find(s => s.slot_id === selectedSlotId),
     [filteredSlots, selectedSlotId]
   )
+
+  const [copiedRoster, setCopiedRoster] = useState(false)
+
+  // Extract all teams registered in this slot ordered strictly by room slot number (Slot 5-24)
+  const slotRoster = useMemo(() => {
+    if (!slotLeaderboard.items.length) return []
+    return [...slotLeaderboard.items]
+      .sort((a, b) => (a.room_slot_number || 99) - (b.room_slot_number || 99))
+      .map(item => ({
+        room_slot_number: item.room_slot_number,
+        team_name: item.team_name,
+      }))
+  }, [slotLeaderboard.items])
+
+  // Clean, copyable text: Date & Time on top, followed by each team name in slot order
+  const rosterCopyText = useMemo(() => {
+    if (!selectedSlot || !slotRoster.length) return ''
+    const dateFormatted = formatFullDate(selectedSlot.date)
+    const header = `${dateFormatted} — ${selectedSlot.time_label}`
+    const lines = slotRoster.map(r => r.team_name)
+    return `${header}\n\n${lines.join('\n')}`
+  }, [selectedSlot, slotRoster])
+
+  function handleCopyRoster() {
+    if (!rosterCopyText) return
+    navigator.clipboard.writeText(rosterCopyText)
+    setCopiedRoster(true)
+    setTimeout(() => setCopiedRoster(false), 2000)
+  }
 
   function getRankBadgeClass(rank: number) {
     if (rank === 1) return 'badge-gold'
@@ -692,6 +721,39 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                 </p>
               )}
             </div>
+
+            {/* Copy Slot List Button */}
+            {slotRoster.length > 0 && selectedSlot && (
+              <div style={{
+                marginTop: '1.5rem',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <button
+                  type="button"
+                  onClick={handleCopyRoster}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: copiedRoster ? 'rgba(34, 197, 94, 0.15)' : '#fbbf24',
+                    color: copiedRoster ? '#4ade80' : '#000',
+                    border: copiedRoster ? '1px solid #22c55e' : 'none',
+                    fontWeight: 800,
+                    fontSize: '0.875rem',
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {copiedRoster ? <Check size={16} /> : <Copy size={16} />}
+                  {copiedRoster ? 'Copied to Clipboard!' : 'Copy Slot List'}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

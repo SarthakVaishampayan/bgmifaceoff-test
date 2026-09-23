@@ -16,14 +16,6 @@ export default function Footer() {
             className={styles.logoImg}
             priority
           />
-          <Image
-            src="/images/bgmilogo.png"
-            alt="BGMI Official Logo"
-            width={120}
-            height={50}
-            className={styles.logoImg}
-            priority
-          />
         </Link>
 
         <div className={styles.socials}>
