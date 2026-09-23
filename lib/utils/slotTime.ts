@@ -3,7 +3,7 @@
  * Takes slot.date ("YYYY-MM-DD") and slot.time_label (e.g. "1:00 PM – 3:00 PM", "9:00 PM – 11:00 PM").
  * 
  * CORE BUSINESS LOGIC:
- * The slot automatically closes 10 minutes before the starting time of the slot
+ * The slot automatically closes 13 minutes after the starting time of the slot
  * if the admin has not manually closed it.
  */
 
@@ -154,8 +154,8 @@ export function isSlotPastOrEnded(
   const slotStartMinutes = getSlotStartMinutes(timeLabelStr)
   const currentMinutes = ist.hour * 60 + ist.minute
 
-  // Cutoff is strictly 10 minutes BEFORE the slot starting time
-  const cutoffMinutes = slotStartMinutes - 10
+  // Cutoff is strictly 13 minutes AFTER the slot starting time (e.g. 7:00 PM – 9:00 PM slot closes at 7:13 PM)
+  const cutoffMinutes = slotStartMinutes + 13
 
   return currentMinutes >= cutoffMinutes
 }

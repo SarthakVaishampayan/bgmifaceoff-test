@@ -2788,7 +2788,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           }}
                         >
                           <span>⏱️</span>
-                          <span>Auto-closed: bookings locked 10 mins before slot start</span>
+                          <span>Auto-closed: registration cutoff reached</span>
                         </div>
                       )}
 
@@ -3379,7 +3379,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                         }}
                       >
                         <span>⏱️</span>
-                        <span>Auto-closed: bookings locked 10 mins before slot start</span>
+                        <span>Auto-closed: registration cutoff reached</span>
                       </div>
                     )}
 
