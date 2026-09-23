@@ -59,44 +59,11 @@ export async function POST(request: Request) {
       if (teamRec?.is_test_account) isTestAccount = true
     }
 
-    // If user has no team yet, create one seamlessly on the spot!
+    // Users must have an official unique team registered before booking a slot
     if (!team_id) {
-      const finalTeamName = (team_name && team_name.trim()) || user.email?.split('@')[0] || 'Team User'
-      const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase()
-
-      let teamToInsert = finalTeamName
-      let { data: newTeam, error: teamErr } = await admin
-        .from('teams')
-        .insert({
-          team_name: teamToInsert,
-          captain_user_id: user.id,
-          invite_code: inviteCode,
-          is_test_account: isTestAccount,
-        })
-        .select('team_id')
-        .single()
-
-      if (teamErr && teamErr.code === '23505') {
-        teamToInsert = `${finalTeamName} ${Math.floor(1000 + Math.random() * 9000)}`
-        const retry = await admin
-          .from('teams')
-          .insert({
-            team_name: teamToInsert,
-            captain_user_id: user.id,
-            invite_code: inviteCode,
-            is_test_account: isTestAccount,
-          })
-          .select('team_id')
-          .single()
-        newTeam = retry.data
-        teamErr = retry.error
-      }
-
-      if (teamErr || !newTeam) {
-        return NextResponse.json({ error: 'Failed to set up team name: ' + (teamErr?.message || 'Error creating team') }, { status: 500 })
-      }
-
-      team_id = newTeam.team_id
+      return NextResponse.json({
+        error: 'You must set up your team name before booking a slot. Please visit your Profile to set your team name.'
+      }, { status: 400 })
     }
 
     // Always ensure user profile in public.users has team_id linked (eliminates RLS violation 100%)

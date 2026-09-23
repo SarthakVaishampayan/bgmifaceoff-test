@@ -35,34 +35,9 @@ export async function POST(request: Request) {
       : ((userProfile?.role === 'admin' || userProfile?.role === 'admin_scores') ? userProfile.role : 'captain')
 
     if (!team_id) {
-      const finalTeamName = (team_name && team_name.trim()) || user.email?.split('@')[0] || 'Team User'
-      const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase()
-
-      const { data: newTeam, error: teamErr } = await admin
-        .from('teams')
-        .insert({
-          team_name: finalTeamName,
-          captain_user_id: user.id,
-          invite_code: inviteCode,
-          phone: phone || null,
-        })
-        .select('team_id')
-        .single()
-
-      if (teamErr) {
-        return NextResponse.json({ error: 'Failed to set up team: ' + teamErr.message }, { status: 500 })
-      }
-
-      team_id = newTeam.team_id
-
-      await admin
-        .from('users')
-        .upsert({
-          user_id: user.id,
-          email: user.email,
-          team_id: team_id,
-          role: assignedRole,
-        }, { onConflict: 'user_id' })
+      return NextResponse.json({
+        error: 'You must set up your team name before redeeming a slot pass. Please visit your Profile to set your team name.'
+      }, { status: 400 })
     }
 
     // Guard: Re-verify coupon is still valid

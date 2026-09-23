@@ -6,10 +6,10 @@ import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate } from '@/lib/utils/formatDate'
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
-import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3 } from 'lucide-react'
+import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert } from 'lucide-react'
 import styles from './page.module.css'
 
-type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'coupons' | 'config' | 'users'
+type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'pending_bookings' | 'coupons' | 'config' | 'users'
 
 /**
  * Sorts slots in descending order:
@@ -119,6 +119,17 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   }
 
   const isSuperAdmin = userRole === 'admin'
+  const [pendingBookingsCount, setPendingBookingsCount] = useState(0)
+
+  useEffect(() => {
+    fetch('/api/admin/bookings/pending')
+      .then(res => res.json())
+      .then(data => {
+        if (data.bookings) setPendingBookingsCount(data.bookings.length)
+      })
+      .catch(() => {})
+  }, [])
+
   const uniquePendingKeys = new Set(payouts.filter(p => p.status === 'pending').map(p => `${p.slot_id}_${p.team_id}`))
   const pendingPayoutsCount = uniquePendingKeys.size
 
@@ -128,6 +139,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
     { id: 'upi_info', label: 'UPI Info', superOnly: false },
     { id: 'payouts', label: pendingPayoutsCount > 0 ? `Payouts (${pendingPayoutsCount})` : 'Payouts', superOnly: true },
     { id: 'bookings', label: 'Bookings', superOnly: true },
+    { id: 'pending_bookings', label: pendingBookingsCount > 0 ? `Pending (${pendingBookingsCount})` : 'Pending Bookings', superOnly: true },
     { id: 'coupons', label: 'Coupons', superOnly: true },
     { id: 'config', label: 'Config', superOnly: true },
     { id: 'users', label: 'Users & Passwords', superOnly: true },
@@ -353,6 +365,9 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               slots={slots}
               setSlots={setSlots}
             />
+          )}
+          {isSuperAdmin && tab === 'pending_bookings' && (
+            <PendingBookingsTab onCountChange={setPendingBookingsCount} />
           )}
           {isSuperAdmin && tab === 'coupons' && <CouponsTab coupons={coupons} teams={teams} supabase={supabase} />}
           {isSuperAdmin && tab === 'config' && <ConfigTab config={configState} setConfig={setConfigState} supabase={supabase} />}
@@ -6023,12 +6038,433 @@ function BookingsTab({
   )
 }
 
+// ── PENDING BOOKINGS TAB ──────────────────────────────────────────
+function PendingBookingsTab({ onCountChange }: { onCountChange?: (count: number) => void }) {
+  const [list, setList] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterReason, setFilterReason] = useState<string>('all')
+  const [filterDate, setFilterDate] = useState<string>('all')
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
+  const fetchPending = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const res = await fetch('/api/admin/bookings/pending')
+      const data = await res.json()
+      if (data.bookings) {
+        setList(data.bookings)
+        if (onCountChange) onCountChange(data.bookings.length)
+      }
+    } catch (e) {
+      console.error('Failed to fetch pending bookings', e)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [onCountChange])
+
+  useEffect(() => {
+    fetchPending()
+  }, [fetchPending])
+
+  // Unique dates for filter
+  const uniqueDates = useMemo(() => {
+    const dates = new Set<string>()
+    list.forEach(b => {
+      if (b.slot_date && b.slot_date !== '—') dates.add(b.slot_date)
+    })
+    return Array.from(dates).sort().reverse()
+  }, [list])
+
+  // Filtered list
+  const filteredList = useMemo(() => {
+    return list.filter(b => {
+      if (filterReason !== 'all' && b.reason_category !== filterReason) return false
+      if (filterDate !== 'all' && b.slot_date !== filterDate) return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim()
+        const teamName = (b.team_name || '').toLowerCase()
+        const email = (b.captain_email || '').toLowerCase()
+        const id = (b.booking_id || '').toLowerCase()
+        const time = (b.slot_time || '').toLowerCase()
+        if (!teamName.includes(q) && !email.includes(q) && !id.includes(q) && !time.includes(q)) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [list, filterReason, filterDate, searchQuery])
+
+  // Metric counts
+  const totalCount = list.length
+  const todayStr = getTodayStr()
+  const todayCount = list.filter(b => b.slot_date === todayStr).length
+  const recentCount = list.filter(b => b.reason_category === 'in_progress').length
+  const supersededCount = list.filter(b => b.reason_category === 'superseded').length
+
+  async function handleConfirmManual(bookingId: string, teamName: string) {
+    if (!window.confirm(`Are you sure you want to manually mark the booking for "${teamName}" as PAID?\nThis will allocate a room slot number and add them to the official match roster.`)) {
+      return
+    }
+    setActionLoadingId(bookingId)
+    setFeedbackMsg(null)
+    try {
+      const res = await fetch('/api/admin/bookings/confirm-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: bookingId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFeedbackMsg({ text: data.error || 'Failed to confirm booking', type: 'error' })
+        return
+      }
+      setList(prev => {
+        const next = prev.filter(b => b.booking_id !== bookingId)
+        if (onCountChange) onCountChange(next.length)
+        return next
+      })
+      setFeedbackMsg({ text: data.message || `Booking for ${teamName} confirmed!`, type: 'success' })
+    } catch (e: any) {
+      setFeedbackMsg({ text: e.message || 'Error confirming booking', type: 'error' })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  async function handleCancelBooking(bookingId: string, teamName: string) {
+    if (!window.confirm(`Are you sure you want to discard this pending booking for "${teamName}"?`)) {
+      return
+    }
+    setActionLoadingId(bookingId)
+    setFeedbackMsg(null)
+    try {
+      const res = await fetch('/api/admin/bookings/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: bookingId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFeedbackMsg({ text: data.error || 'Failed to cancel booking', type: 'error' })
+        return
+      }
+      setList(prev => {
+        const next = prev.filter(b => b.booking_id !== bookingId)
+        if (onCountChange) onCountChange(next.length)
+        return next
+      })
+      setFeedbackMsg({ text: data.message || `Pending booking for ${teamName} discarded.`, type: 'success' })
+    } catch (e: any) {
+      setFeedbackMsg({ text: e.message || 'Error cancelling booking', type: 'error' })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  function getReasonBadge(b: any) {
+    if (b.reason_category === 'superseded') {
+      return (
+        <div>
+          <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.35)', fontWeight: 800 }}>
+            ✓ Superseded by Paid
+          </span>
+          <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '3px' }}>
+            {b.reason_details}
+          </div>
+        </div>
+      )
+    }
+    if (b.reason_category === 'in_progress') {
+      return (
+        <div>
+          <span className="badge" style={{ background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.35)', fontWeight: 800 }}>
+            ⏳ Recent Attempt (&lt;15m)
+          </span>
+          <div style={{ fontSize: '0.72rem', color: '#fbbf24', marginTop: '3px' }}>
+            {b.reason_details}
+          </div>
+        </div>
+      )
+    }
+    if (b.reason_category === 'full') {
+      return (
+        <div>
+          <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.35)', fontWeight: 800 }}>
+            🚫 Slot Full
+          </span>
+          <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '3px' }}>
+            {b.reason_details}
+          </div>
+        </div>
+      )
+    }
+    if (b.reason_category === 'closed') {
+      return (
+        <div>
+          <span className="badge" style={{ background: 'rgba(156, 163, 175, 0.15)', color: '#9ca3af', border: '1px solid rgba(156, 163, 175, 0.35)', fontWeight: 700 }}>
+            🔒 Slot Closed
+          </span>
+          <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '3px' }}>
+            {b.reason_details}
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div>
+        <span className="badge" style={{ background: 'rgba(113, 113, 122, 0.2)', color: '#d4d4d8', border: '1px solid rgba(113, 113, 122, 0.4)', fontWeight: 700 }}>
+          ⚠️ Checkout Abandoned
+        </span>
+        <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '3px' }}>
+          {b.reason_details}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* ── HEADER ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.5rem' }}>
+        <div>
+          <h2 className={styles.tabTitle} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            Pending Match Registrations
+            {totalCount > 0 && (
+              <span style={{ fontSize: '0.8rem', background: '#eab308', color: '#000', padding: '2px 8px', borderRadius: '12px', fontWeight: 800 }}>
+                {totalCount}
+              </span>
+            )}
+          </h2>
+          <p className={styles.tabDesc} style={{ margin: '4px 0 0 0' }}>
+            Inspect abandoned or incomplete registrations. Cross-verify manual UPI payments directly with players via WhatsApp.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={fetchPending}
+          disabled={refreshing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Refreshing...' : 'Refresh Pending'}
+        </button>
+      </div>
+
+      {feedbackMsg && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          margin: '0.75rem 0',
+          background: feedbackMsg.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+          border: `1px solid ${feedbackMsg.type === 'success' ? '#22c55e' : '#ef4444'}`,
+          color: feedbackMsg.type === 'success' ? '#4ade80' : '#f87171',
+          fontSize: '0.88rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <span>{feedbackMsg.text}</span>
+          <button type="button" onClick={() => setFeedbackMsg(null)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+
+      {/* ── METRIC STATS SUMMARY ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', margin: '1rem 0 1.25rem 0' }}>
+        <div style={{ background: '#141414', border: '1px solid #282828', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Total Pending</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fbbf24', marginTop: '3px' }}>{totalCount}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Today's Matches</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', marginTop: '3px' }}>{todayCount}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Recent (&lt; 15 mins)</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#60a5fa', marginTop: '3px' }}>{recentCount}</div>
+        </div>
+        <div style={{ background: '#141414', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Superseded (Paid Later)</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#4ade80', marginTop: '3px' }}>{supersededCount}</div>
+        </div>
+      </div>
+
+      {/* ── SEARCH & FILTERS ── */}
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+        <div style={{ flex: '1', minWidth: '220px', position: 'relative' }}>
+          <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Search team, email, slot time..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ paddingLeft: '32px', width: '100%' }}
+          />
+        </div>
+
+        <select
+          className="form-input"
+          value={filterDate}
+          onChange={e => setFilterDate(e.target.value)}
+          style={{ minWidth: '150px' }}
+        >
+          <option value="all">📅 All Dates</option>
+          {uniqueDates.map(d => (
+            <option key={d} value={d}>{formatNumericDate(d)}</option>
+          ))}
+        </select>
+
+        <select
+          className="form-input"
+          value={filterReason}
+          onChange={e => setFilterReason(e.target.value)}
+          style={{ minWidth: '180px' }}
+        >
+          <option value="all">🔍 All Diagnostics</option>
+          <option value="in_progress">⏳ Recent (&lt; 15m)</option>
+          <option value="abandoned">⚠️ Checkout Abandoned</option>
+          <option value="superseded">✓ Superseded by Paid</option>
+          <option value="full">🚫 Slot Full</option>
+          <option value="closed">🔒 Slot Closed</option>
+        </select>
+      </div>
+
+      {/* ── TABLE ── */}
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Team &amp; Captain</th>
+              <th>Target Slot</th>
+              <th>Entry Fee</th>
+              <th>Attempt Time</th>
+              <th>Diagnostic Reason</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: '#888' }}>
+                  Loading pending registrations...
+                </td>
+              </tr>
+            ) : filteredList.length > 0 ? (
+              filteredList.map(b => (
+                <tr key={b.booking_id}>
+                  <td>
+                    <div>
+                      <strong style={{ fontSize: '0.9rem', color: '#fff' }}>
+                        {b.team_name}
+                      </strong>
+                      <div style={{ fontSize: '0.78rem', color: '#a1a1aa', marginTop: '2px' }}>
+                        👤 {b.captain_name} • <span style={{ color: '#93c5fd' }}>{b.captain_email}</span>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fbbf24' }}>
+                        📅 {formatNumericDate(b.slot_date)}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#ccc', marginTop: '1px' }}>
+                        ⏰ {b.slot_time}
+                      </div>
+                    </div>
+                  </td>
+
+                  <td>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#facc15' }}>
+                      ₹{b.slot_entry_fee}
+                    </span>
+                  </td>
+
+                  <td>
+                    <div style={{ fontSize: '0.8rem', color: '#ccc' }}>
+                      {formatNumericDate(b.created_at)}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: b.age_minutes <= 15 ? '#fbbf24' : '#888', marginTop: '1px' }}>
+                      {b.age_minutes < 1 ? 'Just now' : `${b.age_minutes}m ago`}
+                    </div>
+                  </td>
+
+                  <td style={{ maxWidth: '280px' }}>
+                    {getReasonBadge(b)}
+                  </td>
+
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {/* WhatsApp Cross-Verify */}
+                      <a
+                        href={b.whatsapp_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-secondary btn-xs"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#25D366', color: '#000', fontWeight: 700, fontSize: '0.72rem', padding: '3px 8px', borderRadius: '4px', textDecoration: 'none' }}
+                        title="Chat with captain on WhatsApp to cross-verify payment"
+                      >
+                        <MessageCircle size={12} />
+                        WhatsApp
+                      </a>
+
+                      {/* Manual Confirm to Paid */}
+                      {!b.has_paid_booking && (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-xs"
+                          onClick={() => handleConfirmManual(b.booking_id, b.team_name)}
+                          disabled={actionLoadingId === b.booking_id}
+                          style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: '4px' }}
+                          title="Manually mark as Paid and allocate Room Slot"
+                        >
+                          {actionLoadingId === b.booking_id ? 'Confirming...' : '✅ Mark Paid'}
+                        </button>
+                      )}
+
+                      {/* Discard / Cancel */}
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-xs"
+                        onClick={() => handleCancelBooking(b.booking_id, b.team_name)}
+                        disabled={actionLoadingId === b.booking_id}
+                        style={{ fontSize: '0.72rem', padding: '3px 7px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#f87171' }}
+                        title="Discard this abandoned pending attempt"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                  {searchQuery || filterReason !== 'all' || filterDate !== 'all'
+                    ? 'No pending registrations match the selected filters.'
+                    : '🎉 No pending registrations! All bookings are verified and paid.'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── COUPONS TAB ──────────────────────────────────────────────────
 function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams: any[]; supabase: any }) {
   const [list, setList] = useState(initialCoupons || [])
   const [issueTeam, setIssueTeam] = useState('')
   const [issuing, setIssuing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
 
@@ -6050,6 +6486,32 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
   useEffect(() => {
     fetchCoupons()
   }, [])
+
+  async function cancelCoupon(couponId: string, code: string, teamName: string) {
+    if (!window.confirm(`Are you sure you want to cancel and revoke coupon "${code}" for ${teamName}?\nThis action cannot be undone.`)) {
+      return
+    }
+    setCancellingId(couponId)
+    setMsg('')
+    try {
+      const res = await fetch('/api/admin/coupons', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coupon_id: couponId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setMsg('❌ ' + (data.error || 'Failed to cancel coupon'))
+        return
+      }
+      setList(prev => prev.filter((c: any) => c.coupon_id !== couponId))
+      setMsg(`✅ Coupon ${code} was successfully cancelled and revoked.`)
+    } catch (e: any) {
+      setMsg('❌ ' + (e.message || 'Error cancelling coupon'))
+    } finally {
+      setCancellingId(null)
+    }
+  }
 
   async function issueCoupon(e: React.FormEvent) {
     e.preventDefault()
@@ -6152,6 +6614,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
               <th>Status</th>
               <th>Has Team Used It?</th>
               <th>Issued At</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -6238,13 +6701,44 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                     {formatNumericDate(c.issued_at)}
                   </td>
+
+                  <td style={{ textAlign: 'right' }}>
+                    {isUnused ? (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-xs"
+                        onClick={() => cancelCoupon(c.coupon_id, c.code, c.teams?.team_name || 'Team')}
+                        disabled={cancellingId === c.coupon_id}
+                        style={{
+                          fontSize: '0.72rem',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          color: '#f87171',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        title="Safely cancel and revoke this unused coupon"
+                      >
+                        <Trash2 size={12} />
+                        {cancellingId === c.coupon_id ? 'Cancelling...' : 'Cancel'}
+                      </button>
+                    ) : (
+                      <span style={{ color: '#666', fontSize: '0.72rem', fontStyle: 'italic' }}>
+                        🔒 Redeemed
+                      </span>
+                    )}
+                  </td>
                 </tr>
               )
             })}
 
             {list.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2.5rem' }}>
+                <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2.5rem' }}>
                   No coupons issued yet. Once a slot is marked completed, a free coupon will automatically be generated for the 3rd place team.
                 </td>
               </tr>

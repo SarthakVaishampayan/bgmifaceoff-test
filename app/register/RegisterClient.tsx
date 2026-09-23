@@ -34,6 +34,25 @@ export default function RegisterClient() {
 
     const cleanEmail = email.trim().toLowerCase()
 
+    // Step 0: Pre-validate team name and email uniqueness BEFORE creating auth user
+    try {
+      const valRes = await fetch('/api/auth/validate-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, teamName: teamName.trim() }),
+      })
+      const valData = await valRes.json()
+      if (!valRes.ok || !valData.valid) {
+        setLoading(false)
+        setError(valData.error || 'Please choose a different team name or email.')
+        return
+      }
+    } catch (e: any) {
+      setLoading(false)
+      setError('Unable to validate registration details. Please try again.')
+      return
+    }
+
     // Step 1: Register the auth user & save metadata
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: cleanEmail,

@@ -12,7 +12,7 @@ export default async function AdminPage({
   searchParams?: Promise<{ tab?: string }> | { tab?: string }
 }) {
   const resolvedParams = searchParams ? await searchParams : {}
-  const validTabs = ['scores', 'upi_info', 'slots', 'users', 'payouts', 'bookings', 'coupons', 'config', 'test_data']
+  const validTabs = ['scores', 'upi_info', 'slots', 'users', 'payouts', 'bookings', 'pending_bookings', 'coupons', 'config', 'test_data']
   const initialTab = validTabs.includes(resolvedParams?.tab || '') ? (resolvedParams?.tab as any) : undefined
 
   const supabase = await createClient()

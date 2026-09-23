@@ -211,6 +211,12 @@ function loadRazorpayScript(): Promise<boolean> {
       return
     }
 
+    if (!userTeam?.team_name) {
+      alert('Please set up your official team name in Profile before registering for slots.')
+      router.push('/profile')
+      return
+    }
+
     setBookingSlotId(slot.slot_id)
     window.dispatchEvent(new CustomEvent('app:showLoader', {
       detail: { message: isFree ? 'Redeeming Free Slot Reward...' : 'Preparing Secure Registration...' }
@@ -228,7 +234,7 @@ function loadRazorpayScript(): Promise<boolean> {
           body: JSON.stringify({
             coupon_id: couponToUse.coupon_id,
             slot_id: slot.slot_id,
-            team_name: userTeam?.team_name || 'My Team',
+            team_name: userTeam.team_name,
           }),
         })
         const data = await res.json()
@@ -249,7 +255,7 @@ function loadRazorpayScript(): Promise<boolean> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             slot_id: slot.slot_id,
-            team_name: userTeam?.team_name || 'My Team',
+            team_name: userTeam.team_name,
             test_mode: isTestAccount && testModeEnabled,
           }),
         })
