@@ -34,9 +34,9 @@ export default async function PrizePoolPage() {
   const config: Record<string, string> = {}
   configRows?.forEach(r => { config[r.key] = r.value })
 
-  const firstPrize = parseInt(config.slot_first_prize || '160', 10)
-  const secondPrize = parseInt(config.slot_second_prize || '80', 10)
-  const thirdPrize = parseInt(config.slot_third_prize || '60', 10)
+  const firstPrize = parseInt(config.slot_first_prize || '200', 10)
+  const secondPrize = parseInt(config.slot_second_prize || '100', 10)
+  const thirdPrize = parseInt(config.slot_third_prize || '80', 10)
 
   return (
     <div className={styles.container}>
@@ -61,15 +61,15 @@ export default async function PrizePoolPage() {
           </h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <span style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid #d97706', color: '#fbbf24', fontSize: '0.78rem', fontWeight: 800, padding: '0.25rem 0.75rem', borderRadius: '999px' }}>
-              Slot Prize Pool = ₹900
+              Slot Prize Pool = ₹1000
             </span>
             <span style={{ background: '#2563eb', color: '#fff', fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '999px', textTransform: 'uppercase' }}>
-              🏆 ₹40 Entry
+              🏆 ₹{config.slot_entry_fee || '50'} Entry
             </span>
           </div>
         </div>
         <p className={styles.sectionSubtitle} style={{ marginBottom: '1.25rem' }}>
-          Entry fee: <strong style={{ color: '#60a5fa', fontSize: '1.05rem' }}>₹40</strong> / team · 3 matches per slot · up to 20 teams · top 4 get rewarded.
+          Entry fee: <strong style={{ color: '#60a5fa', fontSize: '1.05rem' }}>₹{config.slot_entry_fee || '50'}</strong> / team · 3 matches per slot · up to 20 teams · top 4 get rewarded.
         </p>
 
         <div className={styles.podiumGrid}>
@@ -138,14 +138,14 @@ export default async function PrizePoolPage() {
               </strong>
             </div>
             <div style={{ background: '#ea580c', color: '#ffffff', fontSize: '0.85rem', fontWeight: 900, padding: '3px 10px', borderRadius: '6px' }}>
-              ₹560 CASH BOUNTY
+              ₹570 CASH BOUNTY
             </div>
           </div>
           <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '1.05rem', marginTop: '4px' }}>
-            B2B 3 Chicken Dinners + 50 Kills = ₹560
+            B2B 3 Chicken Dinners + 50 Kills = ₹570
           </div>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#a1a1aa', lineHeight: '1.5' }}>
-            Dominate all 3 matches of the slot back-to-back with 50+ total team finishes to unlock the ₹560 jackpot prize!
+            Dominate all 3 matches of the slot back-to-back with 50+ total team finishes to unlock the ₹570 jackpot prize!
           </p>
         </div>
       </section>

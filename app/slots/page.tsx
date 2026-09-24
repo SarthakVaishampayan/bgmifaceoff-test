@@ -43,14 +43,15 @@ export default async function SlotsPage() {
     try { slotPrizesMap = JSON.parse(configObj.slot_prizes_map) } catch {}
   }
 
-  const defaultFirst = parseInt(configObj.slot_first_prize || '160', 10)
-  const defaultSecond = parseInt(configObj.slot_second_prize || '80', 10)
-  const defaultThird = parseInt(configObj.slot_third_prize || '60', 10)
+  const defaultFirst = parseInt(configObj.slot_first_prize || '200', 10)
+  const defaultSecond = parseInt(configObj.slot_second_prize || '100', 10)
+  const defaultThird = parseInt(configObj.slot_third_prize || '80', 10)
+  const defaultEntryFee = parseInt(configObj.slot_entry_fee || '50', 10)
 
   slots = slots.map(s => {
     return {
       ...s,
-      entry_fee: s.entry_fee === 50 ? 40 : (s.entry_fee || 40),
+      entry_fee: (s.entry_fee !== undefined && s.entry_fee !== null) ? s.entry_fee : defaultEntryFee,
       first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
       second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
       third_prize: s.third_prize ?? slotPrizesMap[s.slot_id]?.third_prize ?? defaultThird,
@@ -198,10 +199,10 @@ export default async function SlotsPage() {
       userBookedSlotIds={userBookedSlotIds}
       userBookedSlotsMap={userBookedSlotsMap}
       whatsappLink={config.whatsapp_invite_link || ''}
-      entryFee={parseInt(config.slot_entry_fee || '40')}
-      firstPrize={config.slot_first_prize === '120' ? 160 : parseInt(config.slot_first_prize || '160')}
-      secondPrize={parseInt(config.slot_second_prize || '80')}
-      thirdPrize={parseInt(config.slot_third_prize || '60')}
+      entryFee={parseInt(config.slot_entry_fee || '50', 10)}
+      firstPrize={parseInt(config.slot_first_prize || '200', 10)}
+      secondPrize={parseInt(config.slot_second_prize || '100', 10)}
+      thirdPrize={parseInt(config.slot_third_prize || '80', 10)}
       isLoggedIn={!!user}
       isTestAccount={isTestAccount}
     />

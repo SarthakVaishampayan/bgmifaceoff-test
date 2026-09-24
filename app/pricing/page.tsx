@@ -5,7 +5,7 @@ import styles from './page.module.css'
 
 export const metadata: Metadata = {
   title: 'Pricing | BGFS',
-  description: 'BGFS tournament entry fee: ₹40 per slot, 3 matches per slot, no cap on slots per team.',
+  description: 'BGFS tournament entry fee: ₹50 per slot, 3 matches per slot, no cap on slots per team.',
 }
 
 export default function PricingPage() {
@@ -14,7 +14,7 @@ export default function PricingPage() {
     'Access to that slot\'s in-game room credentials via WhatsApp',
     'Scores recorded and reflected on the public leaderboard',
     'Qualifies toward your Best-16 seasonal score',
-    'Eligible for slot rewards (₹160 / ₹80 / ₹60 / Free Slot Pass)',
+    'Eligible for slot rewards (₹200 / ₹100 / ₹80 / Free Slot Pass)',
     'Grand Finals qualification tracking (top 16 overall teams)',
   ]
 
@@ -56,13 +56,13 @@ export default function PricingPage() {
       <section className={styles.section}>
         <div className="container">
           <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-            <p className={styles.priceTag}>₹40</p>
+            <p className={styles.priceTag}>₹50</p>
             <p className={styles.priceTagSub}>per slot · per team</p>
           </div>
 
           <div className={styles.pricingCard}>
             <p className={styles.pricingCardTitle}>What&rsquo;s Included in Each Slot</p>
-            <p className={styles.pricingCardSub}>Every ₹40 entry unlocks the following for your team</p>
+            <p className={styles.pricingCardSub}>Every ₹50 entry unlocks the following for your team</p>
 
             <ul className={styles.priceList}>
               {included.map(item => (

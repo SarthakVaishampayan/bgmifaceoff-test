@@ -85,15 +85,15 @@ export default function SlotsClient({
   userBookedSlotIds = [],
   userBookedSlotsMap = {},
   whatsappLink,
-  entryFee = 40,
-  firstPrize = 160,
-  secondPrize = 80,
-  thirdPrize = 60,
+  entryFee = 50,
+  firstPrize = 200,
+  secondPrize = 100,
+  thirdPrize = 80,
   isLoggedIn,
   isTestAccount = false,
 }: Props) {
   const router = useRouter()
-  const effectiveEntryFee = (entryFee === 50 || !entryFee) ? 40 : entryFee
+  const effectiveEntryFee = entryFee || 50
 
   const [slotsList, setSlotsList] = useState<Slot[]>(slots)
   useEffect(() => {
@@ -535,7 +535,7 @@ function loadRazorpayScript(): Promise<boolean> {
             <p className={styles.subtitle}>
               3 Matches per Slot · {effectiveEntryFee === 1 ? (
                 <span>
-                  <span style={{ textDecoration: 'line-through', color: '#71717a', marginRight: '4px' }}>₹40</span>
+                  <span style={{ textDecoration: 'line-through', color: '#71717a', marginRight: '4px' }}>₹50</span>
                   <span style={{ color: '#fbbf24', fontWeight: 800 }}>₹1</span>
                 </span>
               ) : (
@@ -620,7 +620,7 @@ function loadRazorpayScript(): Promise<boolean> {
                 const isUrgent = !isFull && !isCompleted && !isAlreadyBooked && spotsLeft < 5
 
                 const showFreeOption = Boolean(remainingCoupons.length > 0 && !isFull && !isCompleted && !isAlreadyBooked)
-                const currentFee = (slot.entry_fee === 50 || !slot.entry_fee) ? effectiveEntryFee : slot.entry_fee
+                const currentFee = (slot.entry_fee !== undefined && slot.entry_fee !== null) ? slot.entry_fee : effectiveEntryFee
 
                 if (isAlreadyBooked) {
                   const matchTimes = getMatchTimes(slot.time_label)
@@ -782,7 +782,7 @@ function loadRazorpayScript(): Promise<boolean> {
                         <div className={styles.normalPriceTag} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           {currentFee === 1 ? (
                             <>
-                              <span style={{ textDecoration: 'line-through', color: '#71717a', fontSize: '0.92em', fontWeight: 600 }}>₹40</span>
+                              <span style={{ textDecoration: 'line-through', color: '#71717a', fontSize: '0.92em', fontWeight: 600 }}>₹{slot.entry_fee && slot.entry_fee !== 1 ? slot.entry_fee : (effectiveEntryFee !== 1 ? effectiveEntryFee : 50)}</span>
                               <span style={{ color: '#fbbf24', fontWeight: 800, fontSize: '1.05em' }}>₹1</span>
                               <span className={styles.priceMeta}>/ 3 Matches</span>
                             </>
@@ -844,7 +844,7 @@ function loadRazorpayScript(): Promise<boolean> {
                             <><FlaskConical size={13} /> Register (Test Mode)</>
                           ) : currentFee === 1 ? (
                             <span>
-                              Register • <span style={{ textDecoration: 'line-through', opacity: 0.65, fontSize: '0.88em', marginRight: '2px' }}>₹40</span> ₹1
+                              Register • <span style={{ textDecoration: 'line-through', opacity: 0.65, fontSize: '0.88em', marginRight: '2px' }}>₹{effectiveEntryFee !== 1 ? effectiveEntryFee : 50}</span> ₹1
                             </span>
                           ) : (
                             'Register'
@@ -942,10 +942,10 @@ function loadRazorpayScript(): Promise<boolean> {
               gap: '8px'
             }}>
               <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: '1.1rem', letterSpacing: '0.04em' }}>
-                Slot Prize Pool = ₹900
+                Slot Prize Pool = ₹1000
               </span>
               <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 600 }}>
-                ₹40 entry · 3 matches · top 4 rewarded
+                ₹{entryFee || 50} entry · 3 matches · top 4 rewarded
               </span>
             </div>
 
@@ -960,7 +960,7 @@ function loadRazorpayScript(): Promise<boolean> {
                   </div>
                 </div>
                 <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#fbbf24' }}>
-                  ₹{firstPrize === 120 ? 160 : (firstPrize || 160)}
+                  ₹{firstPrize || 200}
                 </div>
               </div>
 
@@ -1014,11 +1014,11 @@ function loadRazorpayScript(): Promise<boolean> {
                   </strong>
                 </div>
                 <div style={{ background: '#ea580c', color: '#ffffff', fontSize: '0.82rem', fontWeight: 900, padding: '2px 8px', borderRadius: '6px' }}>
-                  ₹560
+                  ₹570
                 </div>
               </div>
               <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '0.95rem', marginTop: '4px' }}>
-                B2B 3 Chicken Dinners + 50 Kills = ₹560
+                B2B 3 Chicken Dinners + 50 Kills = ₹570
               </div>
               <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '3px' }}>
                 Squad bonus: Win all 3 matches of the slot back-to-back with 50+ total team finishes.
