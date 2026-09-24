@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
-import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate } from '@/lib/utils/formatDate'
+import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate, formatTime, formatNumericDateTime } from '@/lib/utils/formatDate'
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
 import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert } from 'lucide-react'
 import styles from './page.module.css'
@@ -6374,8 +6374,15 @@ function BookingsTab({
                     ? <span className="badge badge-info">Coupon Applied</span>
                     : <span className="badge badge-neutral">No</span>}
                 </td>
-                <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                  {formatNumericDate(b.created_at)}
+                <td style={{ whiteSpace: 'nowrap' }} title={b.created_at ? formatNumericDateTime(b.created_at, true) : undefined}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main, #f4f4f5)' }}>
+                    {formatNumericDate(b.created_at) || '—'}
+                  </div>
+                  {b.created_at && formatTime(b.created_at, true) ? (
+                    <div style={{ fontSize: '0.74rem', color: '#a1a1aa', marginTop: '1px' }}>
+                      {formatTime(b.created_at, true)}
+                    </div>
+                  ) : null}
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   <button
@@ -6780,11 +6787,16 @@ function PendingBookingsTab({ onCountChange }: { onCountChange?: (count: number)
                     </span>
                   </td>
 
-                  <td>
-                    <div style={{ fontSize: '0.8rem', color: '#ccc' }}>
-                      {formatNumericDate(b.created_at)}
+                  <td style={{ whiteSpace: 'nowrap' }} title={b.created_at ? formatNumericDateTime(b.created_at, true) : undefined}>
+                    <div style={{ fontSize: '0.82rem', color: '#f4f4f5', fontWeight: 600 }}>
+                      {formatNumericDate(b.created_at) || '—'}
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: b.age_minutes <= 15 ? '#fbbf24' : '#888', marginTop: '1px' }}>
+                    {b.created_at && formatTime(b.created_at, true) ? (
+                      <div style={{ fontSize: '0.74rem', color: '#a1a1aa', marginTop: '1px' }}>
+                        {formatTime(b.created_at, true)}
+                      </div>
+                    ) : null}
+                    <div style={{ fontSize: '0.72rem', color: b.age_minutes <= 15 ? '#fbbf24' : '#888', marginTop: '2px' }}>
                       {b.age_minutes < 1 ? 'Just now' : `${b.age_minutes}m ago`}
                     </div>
                   </td>
