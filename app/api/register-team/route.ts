@@ -8,11 +8,13 @@ import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 // Uses service role to bypass RLS and reliably write team + user profile.
 export async function POST(request: Request) {
   try {
-    const { teamName, displayName, userId: bodyUserId } = await request.json()
+    const { teamName, displayName, userId: bodyUserId, phone } = await request.json()
 
     if (!teamName?.trim()) {
       return NextResponse.json({ error: 'Team name is required' }, { status: 400 })
     }
+
+    const cleanPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null
 
     const supabase = await createClient()
     const { data: { user: sessionUser } } = await supabase.auth.getUser()
@@ -106,6 +108,8 @@ export async function POST(request: Request) {
       ? 'admin'
       : ((existingUser?.role === 'admin' || existingUser?.role === 'admin_scores') ? existingUser.role : 'captain')
 
+    const resolvedPhone = cleanPhone || targetUser?.user_metadata?.phone || null
+
     // Upsert user profile — service role ignores RLS
     const { error: userErr } = await admin
       .from('users')
@@ -115,6 +119,7 @@ export async function POST(request: Request) {
         team_id: teamId,
         role: assignedRole,
         display_name: displayName?.trim() || teamName.trim(),
+        phone: resolvedPhone,
       }, { onConflict: 'user_id' })
 
     if (userErr) {
@@ -127,7 +132,33 @@ export async function POST(request: Request) {
           team_id: teamId,
           role: assignedRole,
           display_name: displayName?.trim() || teamName.trim(),
+          phone: resolvedPhone,
         }, { onConflict: 'user_id' })
+    }
+
+    // Also persist phone to config and auth metadata
+    if (resolvedPhone) {
+      const now = new Date().toISOString()
+      if (teamId) {
+        await admin.from('config').upsert({
+          key: `phone_team_${teamId}`,
+          value: JSON.stringify({ phone: resolvedPhone, updated_at: now, updated_by: targetUserId }),
+          updated_at: now,
+        })
+      }
+      await admin.from('config').upsert({
+        key: `phone_user_${targetUserId}`,
+        value: JSON.stringify({ phone: resolvedPhone, updated_at: now, updated_by: targetUserId }),
+        updated_at: now,
+      })
+      try {
+        await admin.auth.admin.updateUserById(targetUserId, {
+          user_metadata: {
+            ...targetUser?.user_metadata,
+            phone: resolvedPhone,
+          },
+        })
+      } catch (e) {}
     }
 
     return NextResponse.json({ success: true, team_id: team.team_id })

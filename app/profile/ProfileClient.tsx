@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, Shield, Lock, Edit3, KeyRound, Check, AlertCircle, ArrowLeft, FlaskConical, LogOut, Calendar, CreditCard } from 'lucide-react'
+import { User, Shield, Lock, Edit3, KeyRound, Check, AlertCircle, ArrowLeft, FlaskConical, LogOut, Calendar, CreditCard, Phone, MessageCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import styles from './page.module.css'
 
@@ -11,6 +11,7 @@ interface Props {
   user: {
     id: string
     email: string
+    phone?: string
     created_at: string
   }
   team: {
@@ -44,6 +45,13 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
   const [upiErr, setUpiErr] = useState('')
   const [upiSuccessMsg, setUpiSuccessMsg] = useState('')
 
+  // Phone contact state
+  const [phone, setPhone] = useState(user.phone || '')
+  const [isEditingPhone, setIsEditingPhone] = useState(!user.phone)
+  const [phoneLoading, setPhoneLoading] = useState(false)
+  const [phoneErr, setPhoneErr] = useState('')
+  const [phoneSuccessMsg, setPhoneSuccessMsg] = useState('')
+
   // Password change state
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [newPass, setNewPass] = useState('')
@@ -52,7 +60,7 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
   const [passErr, setPassErr] = useState('')
   const [passMsg, setPassMsg] = useState('')
 
-  // Load saved UPI info
+  // Load saved UPI & Phone info
   useEffect(() => {
     fetch('/api/team/upi')
       .then(res => res.json())
@@ -62,7 +70,19 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
         if (!data.upi_id && !data.upi_holder_name) setIsEditingUpi(true)
       })
       .catch(() => {})
-  }, [])
+
+    fetch('/api/team/phone')
+      .then(res => res.json())
+      .then(data => {
+        if (data.phone) {
+          setPhone(data.phone)
+          setIsEditingPhone(false)
+        } else if (!user.phone) {
+          setIsEditingPhone(true)
+        }
+      })
+      .catch(() => {})
+  }, [user.phone])
 
   // Sign out
   const handleSignOut = async () => {
@@ -127,6 +147,42 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
     } catch (err: any) {
       setUpiErr(err.message || 'Network error')
       setUpiLoading(false)
+    }
+  }
+
+  // Handle Phone Submit
+  async function handlePhoneSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setPhoneErr('')
+    setPhoneSuccessMsg('')
+
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10)
+    if (cleanPhone.length !== 10) {
+      setPhoneErr('Please enter a valid 10-digit mobile number.')
+      return
+    }
+
+    setPhoneLoading(true)
+
+    try {
+      const res = await fetch('/api/team/phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPhoneErr(data.error || 'Failed to save phone number.')
+        setPhoneLoading(false)
+        return
+      }
+      setPhone(data.phone)
+      setPhoneSuccessMsg('WhatsApp phone number saved successfully!')
+      setIsEditingPhone(false)
+      setPhoneLoading(false)
+    } catch (err: any) {
+      setPhoneErr(err.message || 'Network error')
+      setPhoneLoading(false)
     }
   }
 
@@ -278,6 +334,110 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
 
                 {renameError && <div className={styles.alertError}>{renameError}</div>}
                 {renameSuccessMsg && <div className={styles.alertSuccess}>✓ {renameSuccessMsg}</div>}
+              </div>
+            </div>
+
+            {/* Card 2: WhatsApp / Phone Number */}
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <Phone size={18} color="#facc15" />
+                <h2 className={styles.cardTitle}>WHATSAPP / PHONE NUMBER</h2>
+              </div>
+              <div className={styles.cardBody}>
+                {/* Information / Disclaimer Box */}
+                <div style={{
+                  background: 'rgba(34, 197, 94, 0.08)',
+                  border: '1px solid rgba(34, 197, 94, 0.25)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  gap: '10px',
+                  alignItems: 'flex-start',
+                  marginBottom: '1rem',
+                }}>
+                  <MessageCircle size={18} color="#22c55e" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1', lineHeight: '1.45' }}>
+                    <strong>Match Communication:</strong> Room ID, Password, slot notifications, and emergency tournament coordination are communicated directly via WhatsApp to your registered phone number.
+                  </div>
+                </div>
+
+                {!isEditingPhone && phone ? (
+                  <div className={styles.upiDisplayBlock}>
+                    <div className={styles.upiDisplayRow}>
+                      <span className={styles.upiDisplayLabel}>Registered WhatsApp Number</span>
+                      <span className={styles.upiDisplayVal} style={{ letterSpacing: '0.04em' }}>
+                        +91 {phone.length === 10 ? `${phone.slice(0, 5)} ${phone.slice(5)}` : phone}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditingPhone(true)
+                        setPhoneErr('')
+                        setPhoneSuccessMsg('')
+                      }}
+                      className={styles.editBtn}
+                      style={{ marginTop: '0.5rem', alignSelf: 'flex-start' }}
+                    >
+                      <Edit3 size={13} /> Update Phone Number
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handlePhoneSubmit} className={styles.formBlock}>
+                    <div className={styles.formGroup}>
+                      <label className={styles.fieldLabel}>WhatsApp Mobile Number (10 digits)</label>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <span style={{
+                          position: 'absolute',
+                          left: '12px',
+                          color: '#fbbf24',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          pointerEvents: 'none',
+                        }}>
+                          +91
+                        </span>
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={e => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 10)
+                            setPhone(val)
+                          }}
+                          placeholder="9876543210"
+                          maxLength={10}
+                          className={styles.inputField}
+                          style={{ paddingLeft: '46px' }}
+                          required
+                        />
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: '#71717a', marginTop: '4px' }}>
+                        Enter 10-digit Indian mobile number without 0 or +91
+                      </span>
+                    </div>
+
+                    <div className={styles.formActions}>
+                      <button type="submit" disabled={phoneLoading} className={styles.saveBtn}>
+                        {phoneLoading ? 'Saving...' : 'Save Phone Number'}
+                      </button>
+                      {phone && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingPhone(false)
+                            setPhoneErr('')
+                          }}
+                          className={styles.cancelBtn}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                )}
+
+                {phoneErr && <div className={styles.alertError}>{phoneErr}</div>}
+                {phoneSuccessMsg && <div className={styles.alertSuccess}>✓ {phoneSuccessMsg}</div>}
               </div>
             </div>
 
@@ -458,6 +618,12 @@ export default function ProfileClient({ user, team, isCaptain, isTestAccount }: 
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Account Role</span>
                   <span className={styles.infoVal}>{isCaptain ? 'Team Captain' : 'Player'}</span>
+                </div>
+                <div className={styles.infoItem}>
+                  <span className={styles.infoLabel}>WhatsApp / Phone</span>
+                  <span className={styles.infoVal} style={phone ? { color: '#fbbf24', fontWeight: 700 } : { color: '#ef4444' }}>
+                    {phone ? `+91 ${phone}` : 'Not Added'}
+                  </span>
                 </div>
               </div>
             </div>

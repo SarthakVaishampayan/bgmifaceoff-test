@@ -90,6 +90,7 @@ export default async function ProfilePage() {
       user={{
         id: user.id,
         email: user.email || '',
+        phone: userProfile?.phone || user.user_metadata?.phone || '',
         created_at: user.created_at || '',
       }}
       team={safeTeam}

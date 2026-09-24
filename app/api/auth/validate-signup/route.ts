@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
   try {
-    const { email, teamName } = await request.json()
+    const { email, teamName, phone } = await request.json()
 
     const cleanEmail = email?.trim()?.toLowerCase()
     const cleanTeamName = teamName?.trim()
@@ -14,6 +14,13 @@ export async function POST(request: Request) {
 
     if (!cleanTeamName || cleanTeamName.length < 2) {
       return NextResponse.json({ error: 'Team name must be at least 2 characters.' }, { status: 400 })
+    }
+
+    if (phone !== undefined) {
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10)
+      if (cleanPhone.length !== 10) {
+        return NextResponse.json({ error: 'Please enter a valid 10-digit mobile number.' }, { status: 400 })
+      }
     }
 
     const admin = await createAdminClient()

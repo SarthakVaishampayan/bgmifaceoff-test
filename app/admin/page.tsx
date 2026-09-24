@@ -12,8 +12,9 @@ export default async function AdminPage({
   searchParams?: Promise<{ tab?: string }> | { tab?: string }
 }) {
   const resolvedParams = searchParams ? await searchParams : {}
-  const validTabs = ['scores', 'upi_info', 'slots', 'users', 'payouts', 'bookings', 'pending_bookings', 'coupons', 'config', 'test_data']
-  const initialTab = validTabs.includes(resolvedParams?.tab || '') ? (resolvedParams?.tab as any) : undefined
+  const validTabs = ['scores', 'upi_info', 'slots', 'users', 'teams', 'payouts', 'bookings', 'pending_bookings', 'coupons', 'finances', 'config', 'test_data']
+  const rawTab = resolvedParams?.tab || ''
+  const initialTab = rawTab === 'teams' ? 'users' : validTabs.includes(rawTab) ? (rawTab as any) : undefined
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -73,9 +74,25 @@ export default async function AdminPage({
   let finalUserList: any[] = []
   if (role === 'admin') {
     try {
-      // 1. Get user records from public.users table
-      const { data: publicProfiles } = await admin.from('users').select('user_id, email, display_name, role, is_test_account')
+      // 1. Get user records from public.users table with phone and team_id
+      const { data: publicProfiles } = await admin
+        .from('users')
+        .select('user_id, email, phone, display_name, role, is_test_account, team_id, created_at')
       const profileMap = new Map((publicProfiles || []).map(p => [p.user_id, p]))
+      const teamMap = new Map((teams || []).map(t => [t.team_id, t.team_name]))
+
+      // Config phone fallback map
+      const phoneConfigMap = new Map<string, string>()
+      configRows?.forEach(row => {
+        if (row.key.startsWith('phone_')) {
+          try {
+            const p = JSON.parse(row.value)
+            if (p.phone) phoneConfigMap.set(row.key, p.phone)
+          } catch {
+            if (row.value) phoneConfigMap.set(row.key, row.value)
+          }
+        }
+      })
 
       // 2. Fetch all registered users from Supabase Auth service
       const { data: authData } = await admin.auth.admin.listUsers()
@@ -84,21 +101,39 @@ export default async function AdminPage({
       if (authUsers.length > 0) {
         finalUserList = authUsers.map(au => {
           const prof = profileMap.get(au.id)
+          const teamId = prof?.team_id
+          const teamName = (teamId && teamMap.get(teamId)) || prof?.display_name || au.user_metadata?.display_name || au.user_metadata?.full_name || 'No Team'
+          const rawPhone = prof?.phone || au.user_metadata?.phone || (teamId && phoneConfigMap.get(`phone_team_${teamId}`)) || phoneConfigMap.get(`phone_user_${au.id}`) || null
+          const cleanPhone = rawPhone ? String(rawPhone).replace(/\D/g, '').slice(-10) : null
+
           return {
             user_id: au.id,
             email: au.email || prof?.email || 'No email',
+            phone: cleanPhone,
+            team_id: teamId || null,
+            team_name: teamName,
             display_name: prof?.display_name || au.user_metadata?.display_name || au.user_metadata?.full_name || (au.email ? au.email.split('@')[0] : '—'),
             role: prof?.role || 'player',
             is_test_account: Boolean(prof?.is_test_account),
+            created_at: prof?.created_at || au.created_at,
           }
         })
       } else {
-        finalUserList = publicProfiles || []
+        finalUserList = (publicProfiles || []).map(p => ({
+          ...p,
+          phone: p.phone ? String(p.phone).replace(/\D/g, '').slice(-10) : null,
+          team_name: (p.team_id && teamMap.get(p.team_id)) || p.display_name || 'No Team',
+        }))
       }
     } catch (err) {
       console.error('Error listing auth users:', err)
-      const { data: fallbackUsers } = await admin.from('users').select('user_id, email, display_name, role, is_test_account')
-      finalUserList = fallbackUsers || []
+      const { data: fallbackUsers } = await admin.from('users').select('user_id, email, phone, display_name, role, is_test_account, team_id, created_at')
+      const teamMap = new Map((teams || []).map(t => [t.team_id, t.team_name]))
+      finalUserList = (fallbackUsers || []).map(p => ({
+        ...p,
+        phone: p.phone ? String(p.phone).replace(/\D/g, '').slice(-10) : null,
+        team_name: (p.team_id && teamMap.get(p.team_id)) || p.display_name || 'No Team',
+      }))
     }
   }
 

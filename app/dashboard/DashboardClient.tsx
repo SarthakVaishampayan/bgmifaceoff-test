@@ -61,6 +61,7 @@ interface Props {
   coupons?: Coupon[]
   isCaptain: boolean
   isTestAccount?: boolean
+  hasPhone?: boolean
 }
 
 function getSlotInfo(slots: any): SlotInfo {
@@ -72,7 +73,7 @@ function getSlotInfo(slots: any): SlotInfo {
 export default function DashboardClient({
   team, userEmail, bookings, slotBookingsMap = {}, teamMatches = [],
   globalWhatsappLink = 'https://chat.whatsapp.com/BGFS', leaderboardEntry, rank,
-  payouts, coupons = [], isCaptain, isTestAccount = false,
+  payouts, coupons = [], isCaptain, isTestAccount = false, hasPhone = true,
 }: Props) {
   const supabase = createClient()
   const unusedCoupons = coupons.filter(c => c.status === 'unused')
@@ -220,6 +221,47 @@ export default function DashboardClient({
             </div>
           </div>
         </div>
+
+        {/* ── PHONE NUMBER REMINDER BANNER ── */}
+        {!hasPhone && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(234, 88, 12, 0.08) 100%)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: '12px',
+            padding: '12px 18px',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.2rem' }}>📱</span>
+              <div>
+                <strong style={{ color: '#fbbf24', fontSize: '0.88rem' }}>Add Your WhatsApp Mobile Number</strong>
+                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#cbd5e1' }}>
+                  Registered squads must link their WhatsApp number to receive match room credentials and official notices.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/profile"
+              style={{
+                background: '#fbbf24',
+                color: '#111111',
+                fontWeight: 800,
+                fontSize: '0.78rem',
+                padding: '6px 14px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Add Phone Number →
+            </Link>
+          </div>
+        )}
 
         {/* ── FREE SLOT REWARD BANNER ── */}
         {unusedCoupons.length > 0 && (

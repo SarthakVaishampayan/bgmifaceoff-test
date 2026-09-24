@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate, formatTime, formatNumericDateTime } from '@/lib/utils/formatDate'
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
-import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert } from 'lucide-react'
+import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert, Phone, ExternalLink } from 'lucide-react'
 import styles from './page.module.css'
 
 type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'pending_bookings' | 'coupons' | 'finances' | 'config' | 'users'
@@ -143,7 +143,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
     { id: 'coupons', label: 'Coupons', superOnly: true },
     { id: 'finances', label: '💵 Finances', superOnly: true },
     { id: 'config', label: 'Config', superOnly: true },
-    { id: 'users', label: 'Users & Passwords', superOnly: true },
+    { id: 'users', label: 'Teams', superOnly: true },
   ]
 
   const visibleTabs = isSuperAdmin ? allTabs : allTabs.filter(t => !t.superOnly)
@@ -8315,7 +8315,7 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
   )
 }
 
-// ── USERS & ROLES TAB ─────────────────────────────────────────────
+// ── TEAMS & ACCOUNTS MANAGEMENT TAB ──────────────────────────────────
 function UsersTab({
   users,
   onUpdateRole,
@@ -8331,24 +8331,30 @@ function UsersTab({
   const [searching, setSearching] = useState(false)
   const [lookupResults, setLookupResults] = useState<any[] | null>(null)
   const [lookupError, setLookupError] = useState('')
-  const [selectedUserForReset, setSelectedUserForReset] = useState<any | null>(null)
+  const [selectedTeam, setSelectedTeam] = useState<any | null>(null)
   const [tempPassword, setTempPassword] = useState('user12345')
   const [resetting, setResetting] = useState(false)
   const [resetSuccess, setResetSuccess] = useState<any | null>(null)
   const [copiedWhatsapp, setCopiedWhatsapp] = useState(false)
+  const [copiedUpi, setCopiedUpi] = useState(false)
+  const [copiedEmail, setCopiedEmail] = useState(false)
+  const [bookingsFilter, setBookingsFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming')
 
   const [tableSearch, setTableSearch] = useState('')
   const filteredUsers = useMemo(() => {
     if (!tableSearch.trim()) return users
     const q = tableSearch.toLowerCase().trim()
+    const cleanNum = q.replace(/\D/g, '')
     return users.filter(u =>
       (u.email && u.email.toLowerCase().includes(q)) ||
       (u.display_name && u.display_name.toLowerCase().includes(q)) ||
-      (u.role && u.role.toLowerCase().includes(q))
+      (u.team_name && u.team_name.toLowerCase().includes(q)) ||
+      (u.role && u.role.toLowerCase().includes(q)) ||
+      (cleanNum.length >= 3 && u.phone && String(u.phone).includes(cleanNum))
     )
   }, [users, tableSearch])
 
-  // Handle Team Lookup
+  // Handle Team Lookup (by Team Name, Phone, or Email)
   async function handleLookup(e?: React.FormEvent) {
     if (e) e.preventDefault()
     if (!lookupQuery.trim()) return
@@ -8356,7 +8362,7 @@ function UsersTab({
     setLookupError('')
     setLookupResults(null)
     setResetSuccess(null)
-    setSelectedUserForReset(null)
+    setSelectedTeam(null)
 
     try {
       const res = await fetch('/api/admin/users/lookup', {
@@ -8366,14 +8372,16 @@ function UsersTab({
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to find user')
+        throw new Error(data.error || 'Failed to find team')
       }
       if (!data.users || data.users.length === 0) {
-        setLookupError('No account found matching that email or team name. Please check spelling.')
+        setLookupError('No team found matching that name, phone number (+91), or email. Please check your query.')
       } else {
         setLookupResults(data.users)
         if (data.users.length === 1) {
-          setSelectedUserForReset(data.users[0])
+          const t = data.users[0]
+          setSelectedTeam(t)
+          setBookingsFilter(t.upcoming_bookings && t.upcoming_bookings.length > 0 ? 'upcoming' : 'all')
         }
       }
     } catch (err: any) {
@@ -8383,9 +8391,10 @@ function UsersTab({
     }
   }
 
-  // Pre-fill lookup from table row click
-  function selectUserFromTable(u: any) {
-    setLookupQuery(u.email || '')
+  // Pre-fill dossier from table row click
+  function selectTeamFromTable(u: any) {
+    const query = u.team_name || u.email || u.phone || ''
+    setLookupQuery(query)
     setLookupResults(null)
     setResetSuccess(null)
     setLookupError('')
@@ -8393,32 +8402,50 @@ function UsersTab({
     fetch('/api/admin/users/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: u.email }),
+      body: JSON.stringify({ query: u.email || u.team_name || u.phone }),
     })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.users && data.users.length > 0) {
-          setSelectedUserForReset(data.users[0])
+          const exact = data.users.find((x: any) => x.user_id === u.user_id) || data.users[0]
+          setSelectedTeam(exact)
+          setBookingsFilter(exact.upcoming_bookings && exact.upcoming_bookings.length > 0 ? 'upcoming' : 'all')
         } else {
-          setSelectedUserForReset({
+          setSelectedTeam({
             user_id: u.user_id,
             email: u.email,
+            phone: u.phone || null,
             display_name: u.display_name,
             role: u.role,
-            team_name: u.display_name || 'Team',
+            team_name: u.team_name || u.display_name || 'Team',
+            is_test_account: Boolean(u.is_test_account),
+            upi_id: null,
+            upi_holder_name: null,
             bookings: [],
+            upcoming_bookings: [],
+            past_bookings: [],
+            stats: { total_bookings: 0, upcoming_count: 0, past_count: 0, total_spent: 0 },
           })
+          setBookingsFilter('all')
         }
       })
       .catch(() => {
-        setSelectedUserForReset({
+        setSelectedTeam({
           user_id: u.user_id,
           email: u.email,
+          phone: u.phone || null,
           display_name: u.display_name,
           role: u.role,
-          team_name: u.display_name || 'Team',
+          team_name: u.team_name || u.display_name || 'Team',
+          is_test_account: Boolean(u.is_test_account),
+          upi_id: null,
+          upi_holder_name: null,
           bookings: [],
+          upcoming_bookings: [],
+          past_bookings: [],
+          stats: { total_bookings: 0, upcoming_count: 0, past_count: 0, total_spent: 0 },
         })
+        setBookingsFilter('all')
       })
 
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -8426,11 +8453,11 @@ function UsersTab({
 
   // Handle Password Reset
   async function handleResetPassword() {
-    if (!selectedUserForReset) return
-    const teamLabel = selectedUserForReset.team_name || selectedUserForReset.email
+    if (!selectedTeam) return
+    const teamLabel = selectedTeam.team_name || selectedTeam.email
     const pass = tempPassword.trim() || 'user12345'
 
-    if (!confirm(`CONFIRM PASSWORD RESET:\n\nAre you 100% sure you want to reset password for:\n"${teamLabel}" (${selectedUserForReset.email})\n\nNew Temporary Password: ${pass}\n\nOnly the login password will change. Team bookings, points, and all other data will remain untouched.`)) {
+    if (!confirm(`CONFIRM PASSWORD RESET:\n\nAre you 100% sure you want to reset password for:\n"${teamLabel}" (${selectedTeam.email})\n\nNew Temporary Password: ${pass}\n\nOnly the login password will change. Team bookings, points, and all other data will remain untouched.`)) {
       return
     }
 
@@ -8441,8 +8468,8 @@ function UsersTab({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          target_user_id: selectedUserForReset.user_id,
-          target_email: selectedUserForReset.email,
+          target_user_id: selectedTeam.user_id,
+          target_email: selectedTeam.email,
           new_password: pass,
         }),
       })
@@ -8465,12 +8492,42 @@ function UsersTab({
     setTimeout(() => setCopiedWhatsapp(false), 3500)
   }
 
+  function copyUpiId(upi: string) {
+    navigator.clipboard.writeText(upi)
+    setCopiedUpi(true)
+    setTimeout(() => setCopiedUpi(false), 3000)
+  }
+
+  function copyEmailText(email: string) {
+    navigator.clipboard.writeText(email)
+    setCopiedEmail(true)
+    setTimeout(() => setCopiedEmail(false), 3000)
+  }
+
+  // Determine which bookings to display based on filter
+  const displayedBookings = useMemo(() => {
+    if (!selectedTeam) return []
+    if (bookingsFilter === 'upcoming') {
+      return selectedTeam.upcoming_bookings || []
+    }
+    if (bookingsFilter === 'past') {
+      return selectedTeam.past_bookings || []
+    }
+    return selectedTeam.bookings || []
+  }, [selectedTeam, bookingsFilter])
+
   return (
     <div>
-      <h2 className={styles.tabTitle}>User &amp; Role Management</h2>
-      <p className={styles.tabDesc}>Assign admin roles, toggle test accounts, or securely verify teams and reset passwords.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h2 className={styles.tabTitle}>Teams &amp; Account Management</h2>
+          <p className={styles.tabDesc}>
+            Search any team by Name, Phone Number (+91), or Email to view contact info, WhatsApp, UPI payout details, upcoming and past match bookings, or reset login passwords.
+          </p>
+        </div>
+      </div>
 
-      {/* ── MANUAL PASSWORD RESET & TEAM LOOKUP TOOL ── */}
+      {/* ── UNIFIED TEAM DOSSIER LOOKUP TOOL ── */}
       <div style={{
         background: 'linear-gradient(180deg, #18181b 0%, #121214 100%)',
         border: '1px solid #3f3f46',
@@ -8482,8 +8539,8 @@ function UsersTab({
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.75rem' }}>
           <div style={{
-            width: '36px',
-            height: '36px',
+            width: '38px',
+            height: '38px',
             borderRadius: '8px',
             background: 'rgba(245, 158, 11, 0.15)',
             color: '#f59e0b',
@@ -8491,25 +8548,35 @@ function UsersTab({
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <KeyRound size={20} />
+            <Search size={20} />
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>
-              Manual Team Password Reset &amp; Identity Verification
+              Team Dossier &amp; Contact Finder
             </h3>
             <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Search by player email or team name $\rightarrow$ verify booked matches $\rightarrow$ safely reset password without email delivery delays.
+              Search across Team Names, Phone / WhatsApp Numbers, or Captain Emails
             </p>
           </div>
         </div>
 
         {/* Search Input Bar */}
         <form onSubmit={handleLookup} style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1', minWidth: '260px', background: '#202024', border: '1px solid #3f3f46', borderRadius: '8px', padding: '0.65rem 1rem' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flex: '1',
+            minWidth: '280px',
+            background: '#202024',
+            border: '1px solid #3f3f46',
+            borderRadius: '8px',
+            padding: '0.65rem 1rem',
+          }}>
             <Search size={16} color="var(--text-muted)" />
             <input
               type="text"
-              placeholder="Enter team email (e.g. captain@gmail.com) or team name..."
+              placeholder="Search by team name (e.g. OVERMIND), phone number (+91), or email..."
               value={lookupQuery}
               onChange={e => setLookupQuery(e.target.value)}
               style={{
@@ -8517,15 +8584,16 @@ function UsersTab({
                 border: 'none',
                 outline: 'none',
                 color: '#ffffff',
-                fontSize: '0.85rem',
+                fontSize: '0.88rem',
                 width: '100%',
               }}
             />
             {lookupQuery && (
               <button
                 type="button"
-                onClick={() => { setLookupQuery(''); setLookupResults(null); setSelectedUserForReset(null); setResetSuccess(null) }}
+                onClick={() => { setLookupQuery(''); setLookupResults(null); setSelectedTeam(null); setResetSuccess(null) }}
                 style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', padding: '2px' }}
+                title="Clear input"
               >
                 <X size={14} />
               </button>
@@ -8546,9 +8614,10 @@ function UsersTab({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              boxShadow: '0 4px 14px rgba(245, 158, 11, 0.3)',
             }}
           >
-            {searching ? <><RefreshCw size={14} className="spin" /> Searching...</> : <><Search size={14} /> Find Team</>}
+            {searching ? <><RefreshCw size={14} className="spin" /> Searching...</> : <><Search size={14} /> Search Team</>}
           </button>
         </form>
 
@@ -8560,7 +8629,7 @@ function UsersTab({
             background: 'rgba(239, 68, 68, 0.1)',
             border: '1px solid #ef4444',
             color: '#fca5a5',
-            fontSize: '0.8rem',
+            fontSize: '0.82rem',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -8571,16 +8640,19 @@ function UsersTab({
         )}
 
         {/* Multi-result selector */}
-        {lookupResults && lookupResults.length > 1 && !selectedUserForReset && (
-          <div style={{ marginTop: '1rem' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600 }}>
-              Multiple matching accounts found ({lookupResults.length}). Select the exact team:
+        {lookupResults && lookupResults.length > 1 && !selectedTeam && (
+          <div style={{ marginTop: '1.25rem' }}>
+            <div style={{ fontSize: '0.78rem', color: '#e4e4e7', marginBottom: '0.6rem', fontWeight: 700 }}>
+              Found {lookupResults.length} matching teams. Select one to view complete dossier:
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
               {lookupResults.map(r => (
                 <div
                   key={r.user_id}
-                  onClick={() => setSelectedUserForReset(r)}
+                  onClick={() => {
+                    setSelectedTeam(r)
+                    setBookingsFilter(r.upcoming_bookings && r.upcoming_bookings.length > 0 ? 'upcoming' : 'all')
+                  }}
                   style={{
                     background: '#202024',
                     border: '1px solid #3f3f46',
@@ -8593,9 +8665,15 @@ function UsersTab({
                   onMouseLeave={e => { e.currentTarget.style.borderColor = '#3f3f46'; e.currentTarget.style.background = '#202024' }}
                 >
                   <div style={{ fontWeight: 800, color: '#fbbf24', fontSize: '0.95rem' }}>{r.team_name}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#e4e4e7' }}>{r.email}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Role: {r.role} · Bookings: {r.bookings?.length || 0}
+                  <div style={{ fontSize: '0.75rem', color: '#e4e4e7', marginTop: '2px' }}>{r.email}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: '#a1a1aa', marginTop: '6px' }}>
+                    {r.phone ? (
+                      <span style={{ color: '#4ade80', fontWeight: 600 }}>📞 +91 {r.phone}</span>
+                    ) : (
+                      <span>No phone</span>
+                    )}
+                    <span>·</span>
+                    <span>Bookings: {r.bookings?.length || 0}</span>
                   </div>
                 </div>
               ))}
@@ -8603,199 +8681,470 @@ function UsersTab({
           </div>
         )}
 
-        {/* Identity Verification Card & Reset Action */}
-        {selectedUserForReset && (
+        {/* ── DETAILED TEAM DOSSIER CARD ── */}
+        {selectedTeam && (
           <div style={{
             marginTop: '1.25rem',
-            background: '#202024',
+            background: 'linear-gradient(180deg, #1c1917 0%, #18181b 100%)',
             border: '1px solid #f59e0b',
-            borderRadius: '10px',
-            padding: '1.25rem',
+            borderRadius: '12px',
+            padding: '1.35rem',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #2e2e34', paddingBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f59e0b', letterSpacing: '0.05em' }}>
-                🛡️ IDENTITY VERIFICATION CARD
-              </span>
+            {/* Header with Close */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #2e2e34', paddingBottom: '0.65rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#f59e0b', letterSpacing: '0.06em' }}>
+                  🛡️ TEAM DOSSIER &amp; COMPLETE PROFILE
+                </span>
+                <span className={`badge ${selectedTeam.role === 'admin' ? 'badge-gold' : 'badge-neutral'}`} style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                  {selectedTeam.role || 'player'}
+                </span>
+                {selectedTeam.is_test_account ? (
+                  <span className="badge badge-warning" style={{ background: '#f59e0b', color: '#000', fontWeight: 800, fontSize: '0.68rem', padding: '1px 6px' }}>
+                    🧪 Test Account
+                  </span>
+                ) : (
+                  <span className="badge badge-neutral" style={{ fontSize: '0.68rem', padding: '1px 6px', color: '#a1a1aa' }}>
+                    🟢 Real Team
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
-                onClick={() => setSelectedUserForReset(null)}
-                style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '0.75rem', cursor: 'pointer' }}
+                onClick={() => setSelectedTeam(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid #3f3f46',
+                  borderRadius: '6px',
+                  color: '#e4e4e7',
+                  fontSize: '0.75rem',
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
               >
-                Clear Selection
+                <X size={13} /> Close Dossier
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1rem' }}>
+            {/* Core Team Details Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+              gap: '1rem',
+              background: '#121214',
+              border: '1px solid #27272a',
+              borderRadius: '10px',
+              padding: '1rem 1.15rem',
+              marginBottom: '1.25rem',
+            }}>
+              {/* Team Name */}
               <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>TEAM NAME</span>
-                <strong style={{ color: '#fbbf24', fontSize: '1.1rem' }}>{selectedUserForReset.team_name}</strong>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>REGISTERED EMAIL</span>
-                <strong style={{ color: '#ffffff', fontSize: '0.9rem' }}>{selectedUserForReset.email}</strong>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>ACCOUNT ROLE</span>
-                <span className={`badge ${selectedUserForReset.role === 'admin' ? 'badge-gold' : 'badge-neutral'}`}>
-                  {selectedUserForReset.role || 'player'}
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
+                  TEAM NAME
                 </span>
+                <strong style={{ color: '#fbbf24', fontSize: '1.2rem', display: 'block', marginTop: '2px', wordBreak: 'break-word' }}>
+                  {selectedTeam.team_name}
+                </strong>
+                {selectedTeam.display_name && selectedTeam.display_name !== selectedTeam.team_name && (
+                  <span style={{ fontSize: '0.72rem', color: '#71717a' }}>Captain: {selectedTeam.display_name}</span>
+                )}
               </div>
+
+              {/* Contact / WhatsApp */}
               <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>REGISTERED ON</span>
-                <span style={{ color: '#a1a1aa', fontSize: '0.8rem' }}>
-                  {selectedUserForReset.created_at ? formatNumericDate(selectedUserForReset.created_at) : '—'}
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
+                  CONTACT / WHATSAPP
                 </span>
+                {selectedTeam.phone ? (
+                  <div style={{ marginTop: '3px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong style={{ color: '#4ade80', fontSize: '1.05rem', fontWeight: 800 }}>
+                        +91 {selectedTeam.phone}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                      <a
+                        href={`https://wa.me/91${selectedTeam.phone}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          background: '#16a34a',
+                          color: '#fff',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                        }}
+                      >
+                        <MessageCircle size={12} /> WhatsApp Chat
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#f87171', fontSize: '0.82rem', marginTop: '4px', fontWeight: 600 }}>
+                    ⚠️ No Phone Added Yet
+                  </div>
+                )}
+              </div>
+
+              {/* Registered Email */}
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
+                  REGISTERED EMAIL
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                  <strong style={{ color: '#ffffff', fontSize: '0.88rem', wordBreak: 'break-all' }}>
+                    {selectedTeam.email}
+                  </strong>
+                  <button
+                    type="button"
+                    onClick={() => copyEmailText(selectedTeam.email)}
+                    style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                    title="Copy Email"
+                  >
+                    {copiedEmail ? <Check size={13} color="#4ade80" /> : <Copy size={13} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Payout UPI ID */}
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
+                  PAYOUT UPI DETAILS
+                </span>
+                {selectedTeam.upi_id ? (
+                  <div style={{ marginTop: '3px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <strong style={{ color: '#38bdf8', fontSize: '0.95rem' }}>{selectedTeam.upi_id}</strong>
+                      <button
+                        type="button"
+                        onClick={() => copyUpiId(selectedTeam.upi_id)}
+                        style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                        title="Copy UPI ID"
+                      >
+                        {copiedUpi ? <Check size={13} color="#4ade80" /> : <Copy size={13} />}
+                      </button>
+                    </div>
+                    {selectedTeam.upi_holder_name && (
+                      <span style={{ fontSize: '0.72rem', color: '#a1a1aa', display: 'block' }}>
+                        Holder: {selectedTeam.upi_holder_name}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ color: '#f59e0b', fontSize: '0.82rem', marginTop: '4px', fontWeight: 600 }}>
+                    ⚠️ No UPI Registered
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Bookings cross-verification box */}
+            {/* ── ALL SLOTS BOOKED: FUTURE & HISTORY ── */}
             <div style={{
-              background: '#18181b',
-              border: '1px solid #2e2e34',
-              borderRadius: '8px',
-              padding: '0.75rem 1rem',
-              marginBottom: '1rem',
-              fontSize: '0.8rem',
+              background: '#121214',
+              border: '1px solid #27272a',
+              borderRadius: '10px',
+              padding: '1rem 1.15rem',
+              marginBottom: '1.25rem',
             }}>
-              <div style={{ color: '#93c5fd', fontWeight: 700, fontSize: '0.75rem', marginBottom: '4px' }}>
-                MATCH BOOKINGS CHECK (Cross-verify with player on WhatsApp):
+              {/* Bookings Header & Filter Bar */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '0.85rem' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>All Match Slots Booked</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                      ({selectedTeam.stats?.total_bookings ?? (selectedTeam.bookings?.length || 0)} Total)
+                    </span>
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Total Real Paid: ₹{selectedTeam.stats?.total_spent ?? 0}
+                  </span>
+                </div>
+
+                {/* Sub-tabs for Future vs Past */}
+                <div style={{ display: 'inline-flex', background: '#1c1917', border: '1px solid #3f3f46', borderRadius: '6px', padding: '2px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setBookingsFilter('upcoming')}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: bookingsFilter === 'upcoming' ? '#16a34a' : 'transparent',
+                      color: bookingsFilter === 'upcoming' ? '#fff' : '#a1a1aa',
+                    }}
+                  >
+                    🟢 Upcoming ({selectedTeam.upcoming_bookings?.length || 0})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBookingsFilter('past')}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: bookingsFilter === 'past' ? '#27272a' : 'transparent',
+                      color: bookingsFilter === 'past' ? '#facc15' : '#a1a1aa',
+                    }}
+                  >
+                    📜 Match History ({selectedTeam.past_bookings?.length || 0})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBookingsFilter('all')}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: bookingsFilter === 'all' ? '#27272a' : 'transparent',
+                      color: bookingsFilter === 'all' ? '#fff' : '#a1a1aa',
+                    }}
+                  >
+                    All ({selectedTeam.bookings?.length || 0})
+                  </button>
+                </div>
               </div>
-              {selectedUserForReset.bookings && selectedUserForReset.bookings.length > 0 ? (
-                <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#e4e4e7' }}>
-                  {selectedUserForReset.bookings.map((b: any, idx: number) => (
-                    <li key={idx} style={{ marginBottom: '2px' }}>
-                      <strong>{formatNumericDate(b.slot_date)} ({b.slot_time})</strong> — Room Slot #{b.room_slot_number || 5} ({b.payment_status})
-                    </li>
-                  ))}
-                </ul>
+
+              {/* Bookings Table / List */}
+              {displayedBookings && displayedBookings.length > 0 ? (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', fontSize: '0.78rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #27272a', textAlign: 'left', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '6px 8px' }}>Date &amp; Slot Time</th>
+                        <th style={{ padding: '6px 8px' }}>Room Slot</th>
+                        <th style={{ padding: '6px 8px' }}>Status</th>
+                        <th style={{ padding: '6px 8px' }}>Payment</th>
+                        <th style={{ padding: '6px 8px' }}>Coupon</th>
+                        <th style={{ padding: '6px 8px' }}>Booked At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedBookings.map((b: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #1f1f23' }}>
+                          <td style={{ padding: '6px 8px', color: '#fff', whiteSpace: 'nowrap' }}>
+                            <strong style={{ color: b.is_past ? '#a1a1aa' : '#4ade80' }}>
+                              {b.slot_date ? formatNumericDate(b.slot_date) : '—'}
+                            </strong>
+                            <span style={{ color: '#71717a', marginLeft: '6px' }}>{b.slot_time}</span>
+                          </td>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
+                            <span className="badge badge-gold" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>
+                              Slot #{b.room_slot_number || 5}
+                            </span>
+                          </td>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
+                            {b.is_past ? (
+                              <span style={{ color: '#a1a1aa', fontSize: '0.72rem' }}>Completed</span>
+                            ) : (
+                              <span style={{ color: '#4ade80', fontSize: '0.72rem', fontWeight: 700 }}>🟢 Upcoming</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
+                            <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                              ₹{b.amount_paid ?? 40}
+                            </span>
+                            {b.is_test_booking && (
+                              <span style={{ color: '#f59e0b', fontSize: '0.68rem', marginLeft: '4px' }}>[Test]</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: b.coupon_used ? '#4ade80' : '#71717a' }}>
+                            {b.coupon_used ? 'Yes' : 'No'}
+                          </td>
+                          <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: '#71717a', fontSize: '0.72rem' }}>
+                            {b.created_at ? formatNumericDate(b.created_at) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  No tournament match slots booked yet by this team.
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.25rem', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  {bookingsFilter === 'upcoming'
+                    ? 'No upcoming match slots booked for this team.'
+                    : bookingsFilter === 'past'
+                    ? 'No past match history found for this team.'
+                    : 'This team has not booked any match slots yet.'}
                 </div>
               )}
             </div>
 
-            {/* Password Reset Action Area */}
+            {/* ── PASSWORD RESET ACTION AREA ── */}
             <div style={{
-              display: 'flex',
-              gap: '1rem',
-              alignItems: 'flex-end',
-              flexWrap: 'wrap',
-              borderTop: '1px solid #2e2e34',
-              paddingTop: '1rem',
+              background: '#121214',
+              border: '1px solid #27272a',
+              borderRadius: '10px',
+              padding: '1rem 1.15rem',
             }}>
-              <div style={{ flex: '1', minWidth: '200px' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#e4e4e7', marginBottom: '4px' }}>
-                  NEW TEMPORARY PASSWORD
-                </label>
-                <input
-                  type="text"
-                  value={tempPassword}
-                  onChange={e => setTempPassword(e.target.value)}
-                  disabled={resetting}
-                  placeholder="user12345"
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f59e0b', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>
+                🔑 ONE-CLICK PASSWORD RESET
+              </div>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Directly reset login password for <strong>{selectedTeam.team_name}</strong>. Useful when captains forget their password or can&apos;t receive email reset links.
+              </p>
+
+              <div style={{
+                display: 'flex',
+                gap: '1rem',
+                alignItems: 'flex-end',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ flex: '1', minWidth: '200px' }}>
+                  <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#e4e4e7', marginBottom: '4px' }}>
+                    NEW TEMPORARY PASSWORD
+                  </label>
+                  <input
+                    type="text"
+                    value={tempPassword}
+                    onChange={e => setTempPassword(e.target.value)}
+                    disabled={resetting}
+                    placeholder="user12345"
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.85rem',
+                      background: '#18181b',
+                      border: '1px solid #3f3f46',
+                      borderRadius: '6px',
+                      color: '#facc15',
+                      fontWeight: 700,
+                      fontSize: '0.9rem',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resetting || selectedTeam.email?.toLowerCase() === 'admin@gmail.com'}
                   style={{
-                    width: '100%',
-                    padding: '0.6rem 0.85rem',
-                    background: '#18181b',
-                    border: '1px solid #3f3f46',
+                    padding: '0.65rem 1.5rem',
+                    background: resetting || selectedTeam.email?.toLowerCase() === 'admin@gmail.com' ? '#3f3f46' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    border: 'none',
                     borderRadius: '6px',
-                    color: '#facc15',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    outline: 'none',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    cursor: resetting || selectedTeam.email?.toLowerCase() === 'admin@gmail.com' ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
                   }}
-                />
+                >
+                  {resetting ? (
+                    <><RefreshCw size={14} className="spin" /> Resetting Password...</>
+                  ) : (
+                    <><KeyRound size={14} /> Reset Password for {selectedTeam.team_name}</>
+                  )}
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleResetPassword}
-                disabled={resetting || selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com'}
-                style={{
-                  padding: '0.65rem 1.5rem',
-                  background: resetting || selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com' ? '#3f3f46' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: '#ffffff',
-                  fontWeight: 800,
-                  fontSize: '0.85rem',
-                  cursor: resetting || selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com' ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                {resetting ? (
-                  <><RefreshCw size={14} className="spin" /> Resetting Password...</>
-                ) : (
-                  <><KeyRound size={14} /> Reset Password for {selectedUserForReset.team_name}</>
-                )}
-              </button>
+              {selectedTeam.email?.toLowerCase() === 'admin@gmail.com' && (
+                <div style={{ color: '#fbbf24', fontSize: '0.75rem', marginTop: '6px', fontWeight: 600 }}>
+                  🔒 Super Admin account is protected from manual password resets.
+                </div>
+              )}
             </div>
 
-            {selectedUserForReset.email?.toLowerCase() === 'admin@gmail.com' && (
-              <div style={{ color: '#fbbf24', fontSize: '0.75rem', marginTop: '6px', fontWeight: 600 }}>
-                🔒 Super Admin account is protected from manual password resets.
+            {/* Success Confirmation & Copy WhatsApp Reply Card */}
+            {resetSuccess && (
+              <div style={{
+                marginTop: '1.25rem',
+                background: 'rgba(34, 197, 94, 0.12)',
+                border: '1px solid #22c55e',
+                borderRadius: '10px',
+                padding: '1.25rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4ade80', fontWeight: 800, fontSize: '1rem', marginBottom: '0.5rem' }}>
+                  <CheckCircle size={20} />
+                  Password Successfully Reset!
+                </div>
+                <p style={{ margin: '0 0 1rem', color: '#bbf7d0', fontSize: '0.85rem' }}>
+                  The login password for <strong>{resetSuccess.team_name}</strong> ({resetSuccess.email}) was updated. Temporary password is:
+                  <span style={{ background: '#000', color: '#facc15', padding: '2px 8px', borderRadius: '4px', fontWeight: 800, marginLeft: '6px', fontSize: '0.95rem' }}>
+                    {resetSuccess.temp_password}
+                  </span>
+                </p>
+
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => copyWhatsAppMessage(resetSuccess)}
+                    style={{
+                      padding: '0.65rem 1.25rem',
+                      background: copiedWhatsapp ? '#16a34a' : '#22c55e',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: '#000',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                    }}
+                  >
+                    {copiedWhatsapp ? <><Check size={16} /> Copied to Clipboard!</> : <><Copy size={16} /> Copy WhatsApp Reply Message</>}
+                  </button>
+
+                  {selectedTeam.phone && (
+                    <a
+                      href={`https://wa.me/91${selectedTeam.phone}?text=${encodeURIComponent(`Hey captain! Your account password for ${resetSuccess.team_name} has been reset to:\n👉 ${resetSuccess.temp_password}\n\nSign in at:\nhttps://battlegroundsfaceoffseries.com/login\n\nPlease set your permanent password in Profile after login.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '0.65rem 1.25rem',
+                        background: '#128c7e',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        fontWeight: 800,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <MessageCircle size={16} /> Send via WhatsApp
+                    </a>
+                  )}
+                </div>
               </div>
             )}
           </div>
         )}
-
-        {/* Success Confirmation & Copy WhatsApp Reply Card */}
-        {resetSuccess && (
-          <div style={{
-            marginTop: '1.25rem',
-            background: 'rgba(34, 197, 94, 0.12)',
-            border: '1px solid #22c55e',
-            borderRadius: '10px',
-            padding: '1.25rem',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4ade80', fontWeight: 800, fontSize: '1rem', marginBottom: '0.5rem' }}>
-              <CheckCircle size={20} />
-              Password Successfully Reset!
-            </div>
-            <p style={{ margin: '0 0 1rem', color: '#bbf7d0', fontSize: '0.85rem' }}>
-              The account for <strong>{resetSuccess.team_name}</strong> ({resetSuccess.email}) was updated. Temporary login password is:
-              <span style={{ background: '#000', color: '#facc15', padding: '2px 8px', borderRadius: '4px', fontWeight: 800, marginLeft: '6px', fontSize: '0.95rem' }}>
-                {resetSuccess.temp_password}
-              </span>
-            </p>
-
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => copyWhatsAppMessage(resetSuccess)}
-                style={{
-                  padding: '0.65rem 1.25rem',
-                  background: copiedWhatsapp ? '#16a34a' : '#22c55e',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: '#000',
-                  fontWeight: 800,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
-                }}
-              >
-                {copiedWhatsapp ? <><Check size={16} /> Copied to Clipboard!</> : <><Copy size={16} /> Copy WhatsApp Reply Message</>}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ── ALL USERS TABLE ── */}
+      {/* ── ALL REGISTERED TEAMS TABLE ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.75rem', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#ffffff' }}>
-            All Registered Accounts ({filteredUsers.length}{tableSearch ? ` of ${users.length}` : ''})
+            All Registered Teams &amp; Accounts ({filteredUsers.length}{tableSearch ? ` of ${users.length}` : ''})
           </h3>
           <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            Quick lookup &amp; account controls
+            Quick lookup, contact details, role assignment, and dossier access
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#18181b', border: '1px solid #3f3f46', borderRadius: '6px', padding: '0.3rem 0.65rem' }}>
@@ -8811,7 +9160,7 @@ function UsersTab({
               outline: 'none',
               color: '#ffffff',
               fontSize: '0.75rem',
-              width: '180px',
+              width: '200px',
             }}
           />
           {tableSearch && (
@@ -8827,68 +9176,127 @@ function UsersTab({
       </div>
 
       <div className="table-wrapper">
-        <table style={{ width: '100%', minWidth: '820px', tableLayout: 'fixed', fontSize: '0.8rem' }}>
+        <table style={{ width: '100%', minWidth: '920px', tableLayout: 'fixed', fontSize: '0.8rem' }}>
           <colgroup>
-            <col style={{ width: '26%' }} />
-            <col style={{ width: '16%' }} />
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '10%' }} />
             <col style={{ width: '11%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '23%' }} />
           </colgroup>
           <thead>
             <tr>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem' }}>Team / Display Name</th>
               <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem' }}>Email</th>
-              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem' }}>Display Name</th>
-              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Current Role</th>
-              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Test Account</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Contact (WhatsApp)</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Role</th>
+              <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Mode</th>
               <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Change Role</th>
               <th style={{ padding: '0.45rem 0.65rem', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map(u => (
-              <tr key={u.user_id}>
-                <td style={{ padding: '0.4rem 0.65rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.email}>
-                  <strong style={{ fontSize: '0.82rem', color: '#fff' }}>{u.email}</strong>
-                </td>
-                <td style={{ padding: '0.4rem 0.65rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem', color: '#e4e4e7' }} title={u.display_name || ''}>
-                  {u.display_name || '—'}
-                </td>
-                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
-                  <span className={`badge ${u.role === 'admin' ? 'badge-gold' : u.role === 'admin_scores' ? 'badge-info' : 'badge-neutral'}`} style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
-                    {u.role || 'player'}
-                  </span>
-                </td>
-                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
-                  {u.is_test_account ? (
-                    <span className="badge badge-warning" style={{ background: '#f59e0b', color: '#000', fontWeight: 800, fontSize: '0.7rem', padding: '2px 6px' }}>
-                      🧪 Test ON
+            {filteredUsers.map(u => {
+              const teamDisplay = u.team_name || u.display_name || 'No Team'
+              return (
+                <tr key={u.user_id}>
+                  {/* Team / Display Name */}
+                  <td style={{ padding: '0.4rem 0.65rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={teamDisplay}>
+                    <button
+                      type="button"
+                      onClick={() => selectTeamFromTable(u)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#fbbf24',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        padding: 0,
+                        textAlign: 'left',
+                        textDecoration: 'underline',
+                        textDecorationColor: 'rgba(251, 191, 36, 0.4)',
+                      }}
+                      title="Click to view full dossier"
+                    >
+                      {teamDisplay}
+                    </button>
+                  </td>
+
+                  {/* Email */}
+                  <td style={{ padding: '0.4rem 0.65rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.email}>
+                    <span style={{ fontSize: '0.8rem', color: '#e4e4e7' }}>{u.email}</span>
+                  </td>
+
+                  {/* Contact / WhatsApp */}
+                  <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
+                    {u.phone ? (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ color: '#4ade80', fontSize: '0.78rem', fontWeight: 600 }}>
+                          +91 {u.phone}
+                        </span>
+                        <a
+                          href={`https://wa.me/91${u.phone}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: '#22c55e',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '1px 3px',
+                          }}
+                          title="Open WhatsApp chat"
+                        >
+                          <MessageCircle size={13} />
+                        </a>
+                      </div>
+                    ) : (
+                      <span style={{ color: '#71717a', fontSize: '0.75rem' }}>—</span>
+                    )}
+                  </td>
+
+                  {/* Role */}
+                  <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
+                    <span className={`badge ${u.role === 'admin' ? 'badge-gold' : u.role === 'admin_scores' ? 'badge-info' : 'badge-neutral'}`} style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                      {u.role || 'player'}
                     </span>
-                  ) : (
-                    <span className="badge badge-neutral" style={{ color: '#888', fontSize: '0.7rem', padding: '2px 6px' }}>
-                      Real
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
-                  <select
-                    className="form-input"
-                    style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem', width: 'auto', minWidth: '95px', height: '26px', opacity: u.email?.toLowerCase() === 'admin@gmail.com' ? 0.6 : 1 }}
-                    value={u.role || 'player'}
-                    disabled={u.email?.toLowerCase() === 'admin@gmail.com'}
-                    onChange={e => onUpdateRole(u.user_id, e.target.value)}
-                  >
-                    <option value="player">Player</option>
-                    <option value="captain">Captain</option>
-                    <option value="admin_scores">Score Admin</option>
-                    <option value="admin">Super Admin</option>
-                  </select>
-                </td>
-                <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
-                  <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'nowrap' }}>
-                    {/* Reset Password Action Button */}
-                    {u.email?.toLowerCase() !== 'admin@gmail.com' && (
+                  </td>
+
+                  {/* Mode */}
+                  <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
+                    {u.is_test_account ? (
+                      <span className="badge badge-warning" style={{ background: '#f59e0b', color: '#000', fontWeight: 800, fontSize: '0.68rem', padding: '1px 5px' }}>
+                        🧪 Test
+                      </span>
+                    ) : (
+                      <span className="badge badge-neutral" style={{ color: '#888', fontSize: '0.68rem', padding: '1px 5px' }}>
+                        Real
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Change Role */}
+                  <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
+                    <select
+                      className="form-input"
+                      style={{ padding: '0.15rem 0.35rem', fontSize: '0.72rem', width: 'auto', minWidth: '85px', height: '26px', opacity: u.email?.toLowerCase() === 'admin@gmail.com' ? 0.6 : 1 }}
+                      value={u.role || 'player'}
+                      disabled={u.email?.toLowerCase() === 'admin@gmail.com'}
+                      onChange={e => onUpdateRole(u.user_id, e.target.value)}
+                    >
+                      <option value="player">Player</option>
+                      <option value="captain">Captain</option>
+                      <option value="admin_scores">Score Admin</option>
+                      <option value="admin">Super Admin</option>
+                    </select>
+                  </td>
+
+                  {/* Actions */}
+                  <td style={{ padding: '0.4rem 0.65rem', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'nowrap' }}>
+                      {/* Dossier & Reset Password Button */}
                       <button
                         className="btn"
                         style={{
@@ -8906,52 +9314,56 @@ function UsersTab({
                           height: '26px',
                           whiteSpace: 'nowrap',
                         }}
-                        onClick={() => selectUserFromTable(u)}
-                        title="Reset this user's password"
+                        onClick={() => selectTeamFromTable(u)}
+                        title="View complete dossier and reset password"
                       >
-                        <KeyRound size={11} /> Reset Pass
+                        <KeyRound size={11} /> Dossier
                       </button>
-                    )}
 
-                    {onToggleTestMode && (
-                      <button
-                        className="btn"
-                        style={{
-                          background: u.is_test_account ? '#374151' : '#d97706',
-                          color: '#fff',
-                          padding: '0.2rem 0.45rem',
-                          fontSize: '0.7rem',
-                          borderRadius: '4px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          height: '26px',
-                          whiteSpace: 'nowrap',
-                        }}
-                        onClick={() => onToggleTestMode(u.user_id, u.is_test_account)}
-                      >
-                        {u.is_test_account ? 'Test OFF' : 'Test ON'}
-                      </button>
-                    )}
-                    {onDeleteUser && u.email?.toLowerCase() !== 'admin@gmail.com' && (
-                      <button
-                        className="btn"
-                        style={{ background: '#ef4444', color: '#fff', padding: '0.2rem 0.45rem', fontSize: '0.7rem', borderRadius: '4px', border: 'none', cursor: 'pointer', height: '26px', whiteSpace: 'nowrap' }}
-                        onClick={() => onDeleteUser(u.user_id)}
-                      >
-                        Delete
-                      </button>
-                    )}
-                    {u.email?.toLowerCase() === 'admin@gmail.com' && (
-                      <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700 }}>
-                        🔒 Protected
-                      </span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {onToggleTestMode && (
+                        <button
+                          className="btn"
+                          style={{
+                            background: u.is_test_account ? '#374151' : '#d97706',
+                            color: '#fff',
+                            padding: '0.2rem 0.45rem',
+                            fontSize: '0.7rem',
+                            borderRadius: '4px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            height: '26px',
+                            whiteSpace: 'nowrap',
+                          }}
+                          onClick={() => onToggleTestMode(u.user_id, u.is_test_account)}
+                          title="Toggle test mode"
+                        >
+                          {u.is_test_account ? 'Test OFF' : 'Test ON'}
+                        </button>
+                      )}
+
+                      {onDeleteUser && u.email?.toLowerCase() !== 'admin@gmail.com' && (
+                        <button
+                          className="btn"
+                          style={{ background: '#ef4444', color: '#fff', padding: '0.2rem 0.45rem', fontSize: '0.7rem', borderRadius: '4px', border: 'none', cursor: 'pointer', height: '26px', whiteSpace: 'nowrap' }}
+                          onClick={() => onDeleteUser(u.user_id)}
+                          title="Delete user"
+                        >
+                          Delete
+                        </button>
+                      )}
+
+                      {u.email?.toLowerCase() === 'admin@gmail.com' && (
+                        <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700 }}>
+                          🔒 Protected
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
             {filteredUsers.length === 0 && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>No matching accounts found</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>No matching accounts or teams found</td></tr>
             )}
           </tbody>
         </table>

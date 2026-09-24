@@ -324,6 +324,7 @@ export default async function DashboardPage() {
       coupons={couponsResult.data || []}
       isCaptain={safeTeam.captain_user_id === user.id}
       isTestAccount={isTestAccount}
+      hasPhone={Boolean(userProfile?.phone || user.user_metadata?.phone)}
     />
   )
 }
