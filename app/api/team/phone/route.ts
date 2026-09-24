@@ -122,10 +122,14 @@ export async function POST(request: Request) {
     }
 
     // 1. Update phone column on users table
-    await admin
-      .from('users')
-      .update({ phone: cleanPhone })
-      .eq('user_id', user.id)
+    try {
+      await admin
+        .from('users')
+        .update({ phone: cleanPhone })
+        .eq('user_id', user.id)
+    } catch (dbErr) {
+      console.warn('Could not update users.phone directly:', dbErr)
+    }
 
     // 2. Save to config table under team key
     if (teamId) {

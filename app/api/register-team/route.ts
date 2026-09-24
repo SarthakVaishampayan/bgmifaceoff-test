@@ -123,8 +123,8 @@ export async function POST(request: Request) {
       }, { onConflict: 'user_id' })
 
     if (userErr) {
-      // Try fallback upsert via user client
-      await supabase
+      // Try fallback without phone column if schema issue
+      const { error: retryErr } = await admin
         .from('users')
         .upsert({
           user_id: targetUserId,
@@ -132,8 +132,19 @@ export async function POST(request: Request) {
           team_id: teamId,
           role: assignedRole,
           display_name: displayName?.trim() || teamName.trim(),
-          phone: resolvedPhone,
         }, { onConflict: 'user_id' })
+
+      if (retryErr) {
+        await supabase
+          .from('users')
+          .upsert({
+            user_id: targetUserId,
+            email: targetUser?.email || '',
+            team_id: teamId,
+            role: assignedRole,
+            display_name: displayName?.trim() || teamName.trim(),
+          }, { onConflict: 'user_id' })
+      }
     }
 
     // Also persist phone to config and auth metadata
