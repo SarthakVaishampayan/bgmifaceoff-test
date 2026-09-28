@@ -8,8 +8,9 @@ import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate,
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
 import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert, Phone, ExternalLink } from 'lucide-react'
 import styles from './page.module.css'
+import SlotListTab from './SlotListTab'
 
-type AdminTab = 'scores' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'pending_bookings' | 'coupons' | 'finances' | 'config' | 'users'
+type AdminTab = 'scores' | 'slot_list' | 'slots' | 'payouts' | 'upi_info' | 'bookings' | 'pending_bookings' | 'coupons' | 'finances' | 'config' | 'users'
 
 /**
  * Sorts slots in descending order:
@@ -135,6 +136,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
 
   const allTabs: { id: AdminTab; label: string; superOnly?: boolean }[] = [
     { id: 'scores', label: 'Score Entry' },
+    { id: 'slot_list', label: '📋 Slot List', superOnly: false },
     { id: 'slots', label: 'Slots', superOnly: true },
     { id: 'upi_info', label: 'UPI Info', superOnly: false },
     { id: 'payouts', label: pendingPayoutsCount > 0 ? `Payouts (${pendingPayoutsCount})` : 'Payouts', superOnly: true },
@@ -329,6 +331,13 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
               config={configState}
+            />
+          )}
+          {tab === 'slot_list' && (
+            <SlotListTab
+              slots={slots}
+              supabase={supabase}
+              isSuperAdmin={isSuperAdmin}
             />
           )}
           {isSuperAdmin && tab === 'slots' && (

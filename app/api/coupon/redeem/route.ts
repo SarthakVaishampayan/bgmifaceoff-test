@@ -176,6 +176,7 @@ export async function POST(request: Request) {
       success: true,
       booking_id: bookingId,
       whatsapp_link: whatsappLink,
+      room_slot_number,
       slot_date: slot.date,
       slot_time: slot.time_label,
     })

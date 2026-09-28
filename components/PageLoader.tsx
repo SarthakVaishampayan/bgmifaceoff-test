@@ -81,8 +81,21 @@ export default function PageLoader() {
       const target = (e.target as HTMLElement).closest('a')
       if (!target) return
 
+      // Do NOT trigger loader for downloads or new tabs
+      if (target.hasAttribute('download') || target.getAttribute('target') === '_blank') return
+
       const href = target.getAttribute('href')
-      if (!href || href.startsWith('http') || href.startsWith('#') || href.startsWith('mailto:')) return
+      if (
+        !href ||
+        href.startsWith('http') ||
+        href.startsWith('https:') ||
+        href.startsWith('blob:') ||
+        href.startsWith('data:') ||
+        href.startsWith('javascript:') ||
+        href.startsWith('#') ||
+        href.startsWith('mailto:') ||
+        href.startsWith('tel:')
+      ) return
       if (href === pathname) return
 
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current)

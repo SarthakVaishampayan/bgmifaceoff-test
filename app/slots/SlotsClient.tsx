@@ -100,10 +100,21 @@ export default function SlotsClient({
     setSlotsList(slots)
   }, [slots])
 
-  const [bookedSlotsMap, setBookedSlotsMap] = useState<Record<string, number>>(userBookedSlotsMap)
+  const [bookedSlotsMap, setBookedSlotsMap] = useState<Record<string, number>>(userBookedSlotsMap || {})
   const [bookedSlotIds, setBookedSlotIds] = useState<string[]>(() => {
-    return Array.from(new Set([...userBookedSlotIds, ...Object.keys(userBookedSlotsMap)]))
+    return Array.from(new Set([...userBookedSlotIds, ...Object.keys(userBookedSlotsMap || {})]))
   })
+
+  // Sync state when server props update on navigation or re-render
+  useEffect(() => {
+    if (userBookedSlotsMap) {
+      setBookedSlotsMap(prev => ({ ...prev, ...userBookedSlotsMap }))
+    }
+  }, [userBookedSlotsMap])
+
+  useEffect(() => {
+    setBookedSlotIds(prev => Array.from(new Set([...prev, ...(userBookedSlotIds || []), ...Object.keys(userBookedSlotsMap || {})])))
+  }, [userBookedSlotIds, userBookedSlotsMap])
   const [bookingSlotId, setBookingSlotId] = useState<string | null>(null)
   const [confirmFreeSlot, setConfirmFreeSlot] = useState<Slot | null>(null)
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false)
@@ -624,7 +635,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
                 if (isAlreadyBooked) {
                   const matchTimes = getMatchTimes(slot.time_label)
-                  const roomSlotNum = bookedSlotsMap[slot.slot_id] || 5
+                  const roomSlotNum = bookedSlotsMap[slot.slot_id] ?? Object.entries(bookedSlotsMap).find(([k]) => k.toLowerCase() === slot.slot_id.toLowerCase())?.[1] ?? 5
 
                   return (
                     <div key={slot.slot_id} className={styles.slotCardBooked}>
