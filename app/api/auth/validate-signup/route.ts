@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Team name must be at least 2 characters.' }, { status: 400 })
     }
 
-    if (phone !== undefined) {
+    if (phone && String(phone).trim()) {
       const cleanPhone = String(phone).replace(/\D/g, '').slice(-10)
       if (cleanPhone.length !== 10) {
         return NextResponse.json({ error: 'Please enter a valid 10-digit mobile number.' }, { status: 400 })

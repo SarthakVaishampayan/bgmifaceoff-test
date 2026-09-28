@@ -21,7 +21,6 @@ export default function RegisterClient() {
 
   const [teamName, setTeamName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -34,20 +33,13 @@ export default function RegisterClient() {
     setLoading(true)
 
     const cleanEmail = email.trim().toLowerCase()
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10)
-
-    if (cleanPhone.length !== 10) {
-      setLoading(false)
-      setError('Please enter a valid 10-digit mobile number.')
-      return
-    }
 
     // Step 0: Pre-validate team name and email uniqueness BEFORE creating auth user
     try {
       const valRes = await fetch('/api/auth/validate-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, teamName: teamName.trim(), phone: cleanPhone }),
+        body: JSON.stringify({ email: cleanEmail, teamName: teamName.trim() }),
       })
       const valData = await valRes.json()
       if (!valRes.ok || !valData.valid) {
@@ -66,7 +58,7 @@ export default function RegisterClient() {
       email: cleanEmail,
       password,
       options: {
-        data: { display_name: teamName.trim(), team_name: teamName.trim(), phone: cleanPhone },
+        data: { display_name: teamName.trim(), team_name: teamName.trim() },
       },
     })
 
@@ -92,7 +84,7 @@ export default function RegisterClient() {
       const regRes = await fetch('/api/register-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamName: teamName.trim(), displayName: teamName.trim(), userId: user.id, phone: cleanPhone }),
+        body: JSON.stringify({ teamName: teamName.trim(), displayName: teamName.trim(), userId: user.id }),
       })
       const regData = await regRes.json()
 
@@ -191,41 +183,6 @@ export default function RegisterClient() {
             />
           </div>
 
-          <div className={styles.fieldGroup}>
-            <label className={styles.label} htmlFor="register-phone">
-              WHATSAPP / PHONE NUMBER *
-            </label>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <span style={{
-                position: 'absolute',
-                left: '14px',
-                color: '#fbbf24',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                pointerEvents: 'none',
-                userSelect: 'none',
-              }}>
-                +91
-              </span>
-              <input
-                id="register-phone"
-                type="tel"
-                className={styles.input}
-                style={{ paddingLeft: '48px' }}
-                placeholder="9876543210 (10 digits)"
-                value={phone}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 10)
-                  setPhone(val)
-                }}
-                maxLength={10}
-                required
-              />
-            </div>
-            <span style={{ fontSize: '0.72rem', color: '#71717a', marginTop: '4px' }}>
-              Required for receiving match room ID, password &amp; official WhatsApp coordination.
-            </span>
-          </div>
 
           <div className={styles.fieldGroup}>
             <label className={styles.label} htmlFor="register-password">
