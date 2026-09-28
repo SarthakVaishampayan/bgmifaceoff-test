@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Trophy, Medal, Award, Layers, ChevronDown, Check, Copy } from 'lucide-react'
 import { formatMonthDay, formatFullDate } from '@/lib/utils/formatDate'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
 interface LeaderboardRow {
@@ -243,7 +244,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
   const rosterCopyText = useMemo(() => {
     if (!selectedSlot || !slotRoster.length) return ''
     const dateFormatted = formatFullDate(selectedSlot.date)
-    const header = `${dateFormatted} — ${selectedSlot.time_label}`
+    const header = `${dateFormatted} — ${getSlotWindowOnly(selectedSlot.time_label)}`
     const lines = slotRoster.map(r => r.team_name)
     return `${header}\n\n${lines.join('\n')}`
   }, [selectedSlot, slotRoster])
@@ -539,7 +540,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
 
                 {selectedSlot && (
                   <div className={styles.slotInfoBadge}>
-                    ⚡ {formatMonthDay(selectedSlot.date)} • {selectedSlot.time_label} • 3 MATCHES
+                    ⚡ {formatMonthDay(selectedSlot.date)} • {getSlotWindowOnly(selectedSlot.time_label)} • 3 MATCHES
                   </div>
                 )}
               </div>
@@ -779,7 +780,7 @@ function CustomSlotDropdown({
   const getLabel = (s?: SlotItem) => {
     if (!s) return 'No slots created yet'
     const formattedDate = formatFullDate(s.date)
-    return `${formattedDate} — ${s.time_label} ${s.status === 'completed' ? '✓ (Completed)' : ''}`
+    return `${formattedDate} — ${getSlotWindowOnly(s.time_label)} ${s.status === 'completed' ? '✓ (Completed)' : ''}`
   }
 
   return (

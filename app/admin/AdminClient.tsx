@@ -2257,9 +2257,10 @@ const FIXED_DAILY_SLOTS = [
 
 function parseMatchTimeFromLabel(timeLabelStr: string, matchNum: number): string {
   if (!timeLabelStr) return ''
-  const regex = new RegExp(`(?:match\\s*${matchNum}|m${matchNum})\\D*(\\d{1,2}:?\\d{2}?\\s*(?:AM|PM))`, 'i')
+  const regex = new RegExp(`(?:match\\s*${matchNum}|m${matchNum})\\s*[:=-]?\\s*(\\d{1,2}(?::\\d{2})?\\s*(?:AM|PM))`, 'i')
   const hit = timeLabelStr.match(regex)
-  return hit ? hit[1].trim() : ''
+  if (!hit) return ''
+  return hit[1].trim().replace(/\s*(AM|PM)/i, ' $1').toUpperCase()
 }
 
 function buildTimeLabel(baseWindow: string, m1?: string, m2?: string, m3?: string): string {
@@ -2268,7 +2269,7 @@ function buildTimeLabel(baseWindow: string, m1?: string, m2?: string, m3?: strin
   if (m2?.trim()) parts.push(`Match 2: ${m2.trim()}`)
   if (m3?.trim()) parts.push(`Match 3: ${m3.trim()}`)
 
-  const windowStr = baseWindow.trim() || '1:00 PM – 3:00 PM'
+  const windowStr = (baseWindow.split('(')[0] || '').trim() || '1:00 PM – 3:00 PM'
   if (parts.length > 0) {
     return `${windowStr} (${parts.join(', ')})`
   }
@@ -2308,6 +2309,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
   const defaultFirstPrize = parseInt(config?.slot_first_prize || '160', 10)
   const defaultSecondPrize = parseInt(config?.slot_second_prize || '80', 10)
   const defaultThirdPrize = parseInt(config?.slot_third_prize || '60', 10)
+  const defaultEntryFee = parseInt(config?.slot_entry_fee || '50', 10)
 
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed' | 'not_open' | 'completed'>('all')
   const [msg, setMsg] = useState('')
@@ -2446,7 +2448,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
     const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
     const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : (existing?.whatsapp_link || null)
-    const entryFee = form.entry_fee || existing?.entry_fee || 40
+    const entryFee = form.entry_fee || existing?.entry_fee || defaultEntryFee
     const capacity = form.capacity || existing?.capacity || 20
     const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
     const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
@@ -2579,7 +2581,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       const m3 = form.m3_time ?? parseMatchTimeFromLabel('', 3)
       const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
       const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : null
-      const entryFee = form.entry_fee || 40
+      const entryFee = form.entry_fee || defaultEntryFee
       const capacity = form.capacity || 20
       const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : defaultFirstPrize
       const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : defaultSecondPrize
@@ -2650,7 +2652,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
     const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
     const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : (existing?.whatsapp_link || null)
-    const entryFee = form.entry_fee || existing?.entry_fee || 40
+    const entryFee = form.entry_fee || existing?.entry_fee || defaultEntryFee
     const capacity = form.capacity || existing?.capacity || 20
     const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
     const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
@@ -2751,7 +2753,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       const m3 = form.m3_time
       const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
       const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : null
-      const entryFee = form.entry_fee || 40
+      const entryFee = form.entry_fee || defaultEntryFee
       const capacity = form.capacity || 20
 
       let insertPayload: any = {
@@ -3039,7 +3041,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                   const currentM2 = form.m2_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 2)
                   const currentM3 = form.m3_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 3)
                   const currentWhatsapp = form.whatsapp_link ?? existingSlot?.whatsapp_link ?? ''
-                  const currentFee = form.entry_fee ?? existingSlot?.entry_fee ?? 40
+                  const currentFee = form.entry_fee ?? existingSlot?.entry_fee ?? defaultEntryFee
                   const currentCap = form.capacity ?? existingSlot?.capacity ?? 20
                   const currentFirstPrize = form.first_prize ?? existingSlot?.first_prize ?? defaultFirstPrize
                   const currentSecondPrize = form.second_prize ?? existingSlot?.second_prize ?? defaultSecondPrize
@@ -3973,7 +3975,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                               type="number"
                               className="form-input"
                               style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                              defaultValue={extraSlot.entry_fee || 40}
+                              defaultValue={extraSlot.entry_fee || defaultEntryFee}
                               onBlur={async (e) => {
                                 const newFee = parseInt(e.target.value) || 0
                                 const { data } = await supabase.from('slots').update({ entry_fee: newFee }).eq('slot_id', extraSlot.slot_id).select().single()
@@ -8187,7 +8189,7 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
     { key: 'whatsapp_invite_link', label: 'WhatsApp Community Link', placeholder: 'https://chat.whatsapp.com/...', type: 'text' },
     { key: 'cycle_start_date', label: 'Cycle Start Date', placeholder: '2026-09-21', type: 'date' },
     { key: 'cycle_end_date', label: 'Cycle End Date', placeholder: '2026-10-16', type: 'date' },
-    { key: 'slot_entry_fee', label: 'Default Slot Entry Fee (₹)', placeholder: '40', type: 'number' },
+    { key: 'slot_entry_fee', label: 'Default Slot Entry Fee (₹)', placeholder: '50', type: 'number' },
     { key: 'slot_first_prize', label: 'Default 1st Place Cash Prize (₹)', placeholder: '160', type: 'number' },
     { key: 'slot_second_prize', label: 'Default 2nd Place Cash Prize (₹)', placeholder: '80', type: 'number' },
     { key: 'slot_third_prize', label: 'Default 3rd Place Cash Prize (₹)', placeholder: '60', type: 'number' },

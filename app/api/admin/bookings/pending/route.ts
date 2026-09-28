@@ -110,7 +110,7 @@ export async function GET() {
         slot_date: slot?.date || '—',
         slot_time: slot?.time_label || '—',
         slot_status: slot?.status || 'open',
-        slot_entry_fee: slot?.entry_fee ?? 40,
+        slot_entry_fee: slot?.entry_fee ?? 50,
         amount_paid: b.amount_paid || 0,
         created_at: b.created_at,
         age_minutes: ageMinutes,

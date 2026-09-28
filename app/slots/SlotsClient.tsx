@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck, Calendar, AlertCircle, Trophy, CreditCard } from 'lucide-react'
-import { isSlotPastOrEnded, getFirstMatchStartMinutes, getSlotStartMinutes } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getFirstMatchStartMinutes, getSlotStartMinutes, getSlotWindowOnly, parseMatchTime } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
 interface Slot {
@@ -68,12 +68,16 @@ function formatMinutesToTimeString(totalMinutes: number): string {
 }
 
 function getMatchTimes(timeLabel: string): MatchTimeItem[] {
+  const m1Custom = parseMatchTime(timeLabel, 1)
+  const m2Custom = parseMatchTime(timeLabel, 2)
+  const m3Custom = parseMatchTime(timeLabel, 3)
+
   const startMinutes = parseStartTimeToMinutes(timeLabel)
 
   return [
-    { name: 'MATCH 1', time: formatMinutesToTimeString(startMinutes), map: 'Erangel' },
-    { name: 'MATCH 2', time: formatMinutesToTimeString(startMinutes + 40), map: 'Rondo' },
-    { name: 'MATCH 3', time: formatMinutesToTimeString(startMinutes + 80), map: 'Miramar' },
+    { name: 'MATCH 1', time: m1Custom || formatMinutesToTimeString(startMinutes), map: 'Erangel' },
+    { name: 'MATCH 2', time: m2Custom || formatMinutesToTimeString(startMinutes + 40), map: 'Rondo' },
+    { name: 'MATCH 3', time: m3Custom || formatMinutesToTimeString(startMinutes + 80), map: 'Miramar' },
   ]
 }
 
@@ -304,7 +308,7 @@ function loadRazorpayScript(): Promise<boolean> {
             }
             return s
           }))
-          setSuccessToast(`✅ Slot for ${slot.time_label} registered! You are alloted Room Slot #${allocatedRoomSlot}.`)
+          setSuccessToast(`✅ Slot for ${getSlotWindowOnly(slot.time_label)} registered! You are alloted Room Slot #${allocatedRoomSlot}.`)
           setBookingSlotId(null)
           return
         }
@@ -317,7 +321,7 @@ function loadRazorpayScript(): Promise<boolean> {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               bookingId: createData.booking_id,
-              amount: slot.entry_fee || 40,
+              amount: (slot.entry_fee !== undefined && slot.entry_fee !== null) ? slot.entry_fee : effectiveEntryFee,
             }),
           })
 
@@ -331,7 +335,7 @@ function loadRazorpayScript(): Promise<boolean> {
                 amount: orderData.amount,
                 currency: orderData.currency,
                 name: 'Battlegrounds Faceoff Series',
-                description: `Slot Registration: ${slot.time_label}`,
+                description: `Slot Registration: ${getSlotWindowOnly(slot.time_label)}`,
                 order_id: orderData.orderId,
                 handler: async function (response: any) {
                   // Show loader during server signature verification & slot allocation
@@ -355,7 +359,7 @@ function loadRazorpayScript(): Promise<boolean> {
                       const rSlot = verifyData.room_slot_number || 5
                       setBookedSlotIds(prev => Array.from(new Set([...prev, slot.slot_id])))
                       setBookedSlotsMap(prev => ({ ...prev, [slot.slot_id]: rSlot }))
-                      setSuccessToast(`Slot for ${slot.time_label} booked! You are alloted Room Slot #${rSlot}. Join WhatsApp group below.`)
+                      setSuccessToast(`Slot for ${getSlotWindowOnly(slot.time_label)} booked! You are alloted Room Slot #${rSlot}. Join WhatsApp group below.`)
                     } else {
                       alert(verifyData.error || 'Payment verification failed. Please contact support.')
                     }
@@ -436,7 +440,7 @@ function loadRazorpayScript(): Promise<boolean> {
       window.dispatchEvent(new Event('app:hideLoader'))
       setBookedSlotIds(prev => Array.from(new Set([...prev, slot.slot_id])))
       setBookedSlotsMap(prev => ({ ...prev, [slot.slot_id]: allocatedRoomSlot }))
-      setSuccessToast(`Slot for ${slot.time_label} registered! You are alloted Room Slot #${allocatedRoomSlot}. Join WhatsApp group below.`)
+      setSuccessToast(`Slot for ${getSlotWindowOnly(slot.time_label)} registered! You are alloted Room Slot #${allocatedRoomSlot}. Join WhatsApp group below.`)
       setBookingSlotId(null)
 
       setTimeout(() => setSuccessToast(null), 5000)
@@ -458,7 +462,16 @@ function loadRazorpayScript(): Promise<boolean> {
   function fmtDateHeader(dStr: string) {
     const d = new Date(dStr + 'T00:00:00')
     if (isNaN(d.getTime())) return dStr
-    return `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    const fullDate = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+
+    // Qualifiers started on Monday, 21 Sep 2026 (Day 1)
+    const startDate = new Date('2026-09-21T00:00:00')
+    const diffDays = Math.round((d.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (diffDays >= 0) {
+      const dayNum = diffDays + 1
+      return `Qualifier Day ${dayNum} (${fullDate})`
+    }
+    return fullDate
   }
 
   // ─────────────────────────────────────────────
@@ -542,16 +555,9 @@ function loadRazorpayScript(): Promise<boolean> {
         {/* Page header */}
         <div className={styles.pageHeader}>
           <div>
-            <h1 className={styles.title}>MATCH SLOTS</h1>
+            <h1 className={styles.title}>QUALIFIER SLOTS</h1>
             <p className={styles.subtitle}>
-              3 Matches per Slot · {effectiveEntryFee === 1 ? (
-                <span>
-                  <span style={{ textDecoration: 'line-through', color: '#71717a', marginRight: '4px' }}>₹50</span>
-                  <span style={{ color: '#fbbf24', fontWeight: 800 }}>₹1</span>
-                </span>
-              ) : (
-                `₹${effectiveEntryFee}`
-              )} Entry · Max 20 Teams
+              Your best 6 slots decide your Finals spot. Top 16 qualify.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -646,7 +652,7 @@ function loadRazorpayScript(): Promise<boolean> {
                       </div>
 
                       <div className={styles.bookedCenter}>
-                        <div className={styles.bookedTime}>{slot.time_label}</div>
+                        <div className={styles.bookedTime}>{getSlotWindowOnly(slot.time_label)}</div>
 
                         <div className={styles.matchCellsGrid}>
                           {matchTimes.map((m, idx) => (
@@ -772,7 +778,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
                     {/* Time Label (Large) */}
                     <div className={styles.cardTime}>
-                      {slot.time_label}
+                      {getSlotWindowOnly(slot.time_label)}
                     </div>
 
                     {slot.is_grand_finals && (
@@ -890,10 +896,10 @@ function loadRazorpayScript(): Promise<boolean> {
             </p>
 
             <div className={styles.modalSlotPreview}>
-              <div className={styles.previewTime}>{confirmFreeSlot.time_label}</div>
+              <div className={styles.previewTime}>{getSlotWindowOnly(confirmFreeSlot.time_label)}</div>
               <div className={styles.previewDate}>{fmtDateHeader(confirmFreeSlot.date)}</div>
               <div className={styles.previewFee}>
-                Entry Fee: <span style={{ textDecoration: 'line-through' }}>₹{confirmFreeSlot.entry_fee || entryFee}</span>{' '}
+                Entry Fee: <span style={{ textDecoration: 'line-through' }}>₹{(confirmFreeSlot.entry_fee !== undefined && confirmFreeSlot.entry_fee !== null) ? confirmFreeSlot.entry_fee : effectiveEntryFee}</span>{' '}
                 <strong style={{ color: '#22c55e' }}>₹0 FREE (Reward Applied)</strong>
               </div>
             </div>
@@ -1029,10 +1035,10 @@ function loadRazorpayScript(): Promise<boolean> {
                 </div>
               </div>
               <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '0.95rem', marginTop: '4px' }}>
-                B2B 3 Chicken Dinners + 50 Kills = ₹570
+                B2B 3 Chicken Dinners + 55 Kills = ₹570
               </div>
               <div style={{ fontSize: '0.72rem', color: '#a1a1aa', marginTop: '3px' }}>
-                Squad bonus: Win all 3 matches of the slot back-to-back with 50+ total team finishes.
+                Squad bonus: Win all 3 matches of the slot back-to-back with 55+ total team finishes.
               </div>
             </div>
 

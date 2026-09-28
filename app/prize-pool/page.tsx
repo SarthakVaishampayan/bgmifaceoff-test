@@ -142,10 +142,10 @@ export default async function PrizePoolPage() {
             </div>
           </div>
           <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '1.05rem', marginTop: '4px' }}>
-            B2B 3 Chicken Dinners + 50 Kills = ₹570
+            B2B 3 Chicken Dinners + 55 Kills = ₹570
           </div>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: '#a1a1aa', lineHeight: '1.5' }}>
-            Dominate all 3 matches of the slot back-to-back with 50+ total team finishes to unlock the ₹570 jackpot prize!
+            Dominate all 3 matches of the slot back-to-back with 55+ total team finishes to unlock the ₹570 jackpot prize!
           </p>
         </div>
       </section>

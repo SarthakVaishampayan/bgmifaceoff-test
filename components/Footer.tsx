@@ -42,7 +42,7 @@ export default function Footer() {
       <nav className={styles.navLinks}>
         <Link href="/about" className={styles.navLink}>ABOUT</Link>
         <Link href="/leaderboard" className={styles.navLink}>LEADERBOARD</Link>
-        <Link href="/slots" className={styles.navLink}>SLOT REGISTRATION</Link>
+        <Link href="/slots" className={styles.navLink}>REGISTRATION</Link>
         <Link href="/contact" className={styles.navLink}>SUPPORT</Link>
         <Link href="/terms" className={styles.navLink}>TERMS</Link>
         <Link href="/privacy-policy" className={styles.navLink}>PRIVACY POLICY</Link>

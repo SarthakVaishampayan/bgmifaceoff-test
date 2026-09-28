@@ -161,3 +161,29 @@ export function isSlotPastOrEnded(
 }
 
 export const isSlotRegistrationClosed = isSlotPastOrEnded
+
+/**
+ * Strips out any custom match timings annotation (e.g. "(Match 1: 1:12 PM...)")
+ * to return strictly the slot window label.
+ * E.g. "5:00 PM – 7:00 PM (Match 1: 1:12 PM, Match 2: 1:52 PM, Match 3: 2:32 PM)" -> "5:00 PM – 7:00 PM"
+ * E.g. "9:00 PM – 11:00 PM" -> "9:00 PM – 11:00 PM"
+ */
+export function getSlotWindowOnly(timeLabelStr: string): string {
+  if (!timeLabelStr) return ''
+  return timeLabelStr.split('(')[0].trim()
+}
+
+/**
+ * Extracts a specific match time string if specified in the time label.
+ * E.g. for "5:00 PM – 7:00 PM (Match 1: 1:12 PM, Match 2: 1:52 PM, Match 3: 2:32 PM)"
+ * parseMatchTime(timeLabelStr, 1) -> "1:12 PM"
+ * parseMatchTime(timeLabelStr, 2) -> "1:52 PM"
+ * parseMatchTime(timeLabelStr, 3) -> "2:32 PM"
+ */
+export function parseMatchTime(timeLabelStr: string, matchNum: number): string {
+  if (!timeLabelStr) return ''
+  const regex = new RegExp(`(?:match\\s*${matchNum}|m${matchNum})\\s*[:=-]?\\s*(\\d{1,2}(?::\\d{2})?\\s*(?:AM|PM))`, 'i')
+  const hit = timeLabelStr.match(regex)
+  if (!hit) return ''
+  return hit[1].trim().replace(/\s*(AM|PM)/i, ' $1').toUpperCase()
+}

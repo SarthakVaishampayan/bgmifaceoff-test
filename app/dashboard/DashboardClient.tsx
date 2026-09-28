@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Calendar, TrendingUp, FlaskConical, Trophy, MessageCircle, Award } from 'lucide-react'
 import { formatShortDate } from '@/lib/utils/formatDate'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 import { createClient } from '@/lib/supabase/client'
 import styles from './page.module.css'
 
@@ -65,8 +66,8 @@ interface Props {
 }
 
 function getSlotInfo(slots: any): SlotInfo {
-  if (!slots) return { slot_id: '', date: new Date().toISOString().split('T')[0], time_label: 'Tournament Slot', status: 'open', entry_fee: 40, is_grand_finals: false }
-  if (Array.isArray(slots)) return slots[0] || { slot_id: '', date: new Date().toISOString().split('T')[0], time_label: 'Tournament Slot', status: 'open', entry_fee: 40, is_grand_finals: false }
+  if (!slots) return { slot_id: '', date: new Date().toISOString().split('T')[0], time_label: 'Tournament Slot', status: 'open', entry_fee: 50, is_grand_finals: false }
+  if (Array.isArray(slots)) return slots[0] || { slot_id: '', date: new Date().toISOString().split('T')[0], time_label: 'Tournament Slot', status: 'open', entry_fee: 50, is_grand_finals: false }
   return slots as SlotInfo
 }
 
@@ -308,7 +309,7 @@ export default function DashboardClient({
                         <div key={b.booking_id} className={styles.slotItem}>
                           <div className={styles.slotTop}>
                             <div>
-                              <span className={styles.slotDate}>📅 {formatDate(b.slotData?.date || '')} • {b.slotData?.time_label}</span>
+                              <span className={styles.slotDate}>📅 {formatDate(b.slotData?.date || '')} • {getSlotWindowOnly(b.slotData?.time_label || '')}</span>
                               <span className={styles.slotRoom}>Room Slot #{b.room_slot_number || 5}</span>
                             </div>
                             <span className={b.payment_status === 'paid' ? styles.badgePaid : styles.badgePending}>
@@ -342,7 +343,7 @@ export default function DashboardClient({
                         <div key={b.booking_id} className={styles.slotItem}>
                           <div className={styles.slotTop}>
                             <div>
-                              <span className={styles.slotDate}>{formatDate(b.slotData?.date || '')} • {b.slotData?.time_label}</span>
+                              <span className={styles.slotDate}>{formatDate(b.slotData?.date || '')} • {getSlotWindowOnly(b.slotData?.time_label || '')}</span>
                               <span className={styles.slotRoom}>Room Slot #{b.room_slot_number || 5}</span>
                             </div>
                             <span className={styles.badgeCompleted}>COMPLETED</span>

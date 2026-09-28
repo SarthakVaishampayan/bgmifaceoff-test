@@ -188,7 +188,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         booking_id: existingBooking.booking_id,
-        amount: slot.entry_fee ?? 40,
+        amount: slot.entry_fee ?? 50,
       })
     }
 
@@ -227,7 +227,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       booking_id: booking.booking_id,
-      amount: slot.entry_fee ?? 40,
+      amount: slot.entry_fee ?? 50,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 })

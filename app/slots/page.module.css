@@ -141,7 +141,7 @@
 .dayHeader {
   font-size: 1.05rem;
   font-weight: 900;
-  text-transform: uppercase;
+  text-transform: none;
   color: #fbbf24;
   letter-spacing: 0.05em;
   margin-bottom: 1.25rem;

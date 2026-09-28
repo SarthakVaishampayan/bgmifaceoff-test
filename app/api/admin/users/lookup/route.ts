@@ -299,7 +299,7 @@ export async function POST(request: Request) {
                 slot_time: slot.time_label || '—',
                 room_slot_number: b.room_slot_number || 5,
                 payment_status: b.payment_status || 'paid',
-                amount_paid: b.amount_paid ?? slot.entry_fee ?? 40,
+                amount_paid: b.amount_paid ?? slot.entry_fee ?? 50,
                 coupon_used: Boolean(b.coupon_used),
                 is_test_booking: Boolean(b.is_test_booking),
                 slot_status: slotStatus,
