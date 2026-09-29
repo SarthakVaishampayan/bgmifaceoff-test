@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getPlacementPoints, getPositionPoints, getKillPoints } from '@/lib/scoring'
 import { formatShortDate, formatMonthDay, formatFullLongDate, formatNumericDate, formatTime, formatNumericDateTime } from '@/lib/utils/formatDate'
-import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
-import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert, Phone, ExternalLink } from 'lucide-react'
+import { isSlotPastOrEnded, getSlotStartMinutes, getSlotWindowOnly } from '@/lib/utils/slotTime'
+import { Copy, Check, Eye, CreditCard, AlertCircle, X, CheckCircle, ChevronDown, Repeat, Search, Calendar, RefreshCw, KeyRound, Edit3, MessageCircle, Trash2, ShieldAlert, Phone, ExternalLink, Plus } from 'lucide-react'
 import styles from './page.module.css'
 import SlotListTab from './SlotListTab'
 
@@ -374,6 +374,8 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               setBookings={setBookingsList}
               slots={slots}
               setSlots={setSlots}
+              teams={teams}
+              supabase={supabase}
             />
           )}
           {isSuperAdmin && tab === 'pending_bookings' && (
@@ -963,7 +965,7 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
     }
 
     const slotObj = sortedSlots.find((s: any) => s.slot_id === selectedSlot)
-    const slotTitle = slotObj ? `${formatShortDate(slotObj.date)} • ${slotObj.time_label}` : 'Selected Slot'
+    const slotTitle = slotObj ? `${formatShortDate(slotObj.date)} • ${getSlotWindowOnly(slotObj.time_label)}` : 'Selected Slot'
     const sortedBooked = [...bookedTeams].sort((a, b) => (a.room_slot_number || 5) - (b.room_slot_number || 5))
 
     const templateObj = {
@@ -1385,7 +1387,7 @@ Return ONLY the raw JSON block without markdown wrap.`
                     const isLive = publishedSlotIds.includes(s.slot_id)
                     return (
                       <option key={s.slot_id} value={s.slot_id}>
-                        {formatShortDate(s.date)} • {s.time_label} {isLive ? '📊 (Live on Table)' : '📝 (Draft)'} {s.status === 'completed' ? '🟣 (Done)' : '🔒 (Closed)'}
+                        {formatShortDate(s.date)} • {getSlotWindowOnly(s.time_label)} {isLive ? '📊 (Live on Table)' : '📝 (Draft)'} {s.status === 'completed' ? '🟣 (Done)' : '🔒 (Closed)'}
                       </option>
                     )
                   })}
@@ -1810,7 +1812,7 @@ Return ONLY the raw JSON block without markdown wrap.`
           selectedSlot={selectedSlot}
           slotTitle={(() => {
             const slotObj = sortedSlots.find((s: any) => s.slot_id === selectedSlot)
-            return slotObj ? `${formatShortDate(slotObj.date)} • ${slotObj.time_label}` : 'Selected Slot'
+            return slotObj ? `${formatShortDate(slotObj.date)} • ${getSlotWindowOnly(slotObj.time_label)}` : 'Selected Slot'
           })()}
           bookedTeams={bookedTeams}
           onApplyScores={handleApplyJsonScores}
@@ -1857,7 +1859,7 @@ Return ONLY the raw JSON block without markdown wrap.`
                 </h3>
                 <div style={{ fontSize: '0.75rem', color: '#888', marginTop: '2px' }}>
                   {sortedSlots.find((s: any) => s.slot_id === selectedSlot)
-                    ? `For Slot: ${formatShortDate(sortedSlots.find((s: any) => s.slot_id === selectedSlot).date)} • ${sortedSlots.find((s: any) => s.slot_id === selectedSlot).time_label}`
+                    ? `For Slot: ${formatShortDate(sortedSlots.find((s: any) => s.slot_id === selectedSlot).date)} • ${getSlotWindowOnly(sortedSlots.find((s: any) => s.slot_id === selectedSlot).time_label)}`
                     : 'Add on-spot team to selected slot'}
                 </div>
               </div>
@@ -2281,24 +2283,21 @@ const FIXED_DAILY_SLOTS = [
 ]
 
 function parseMatchTimeFromLabel(timeLabelStr: string, matchNum: number): string {
-  if (!timeLabelStr) return ''
-  const regex = new RegExp(`(?:match\\s*${matchNum}|m${matchNum})\\s*[:=-]?\\s*(\\d{1,2}(?::\\d{2})?\\s*(?:AM|PM))`, 'i')
-  const hit = timeLabelStr.match(regex)
-  if (!hit) return ''
-  return hit[1].trim().replace(/\s*(AM|PM)/i, ' $1').toUpperCase()
+  return ''
+}
+
+function sanitizeMatchTime(timeStr: string, baseWindow: string): string {
+  if (!timeStr?.trim()) return ''
+  let cleaned = timeStr.trim().replace(/\s*(AM|PM)/i, ' $1').toUpperCase()
+  const isOvernight = /1[01]:\d{2}\s*PM/i.test(baseWindow) || /1[01]\s*PM/i.test(baseWindow)
+  if (isOvernight) {
+    cleaned = cleaned.replace(/^12:(\d{2})\s*PM$/i, '12:$1 AM')
+  }
+  return cleaned
 }
 
 function buildTimeLabel(baseWindow: string, m1?: string, m2?: string, m3?: string): string {
-  const parts: string[] = []
-  if (m1?.trim()) parts.push(`Match 1: ${m1.trim()}`)
-  if (m2?.trim()) parts.push(`Match 2: ${m2.trim()}`)
-  if (m3?.trim()) parts.push(`Match 3: ${m3.trim()}`)
-
-  const windowStr = (baseWindow.split('(')[0] || '').trim() || '1:00 PM – 3:00 PM'
-  if (parts.length > 0) {
-    return `${windowStr} (${parts.join(', ')})`
-  }
-  return windowStr
+  return (baseWindow.split('(')[0] || '').trim() || '1:00 PM – 3:00 PM'
 }
 
 function normalizeStartTime(timeStr: string): string {
@@ -2357,6 +2356,30 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     }
   }
 
+  async function persistSlotMatchTimes(slotId: string, timings: { m1?: string; m2?: string; m3?: string; close_time?: string }) {
+    try {
+      let currentMap: Record<string, any> = {}
+      if (config?.slot_match_times_map) {
+        try { currentMap = JSON.parse(config.slot_match_times_map) } catch {}
+      }
+      currentMap[slotId] = {
+        ...(currentMap[slotId] || {}),
+        ...timings,
+      }
+      const item = currentMap[slotId]
+      if (!item.m1 && !item.m2 && !item.m3 && !item.close_time) {
+        delete currentMap[slotId]
+      }
+      const mapJson = JSON.stringify(currentMap)
+      await supabase.from('config').upsert([{ key: 'slot_match_times_map', value: mapJson }], { onConflict: 'key' })
+      if (setConfig) {
+        setConfig((prev: any) => ({ ...prev, slot_match_times_map: mapJson }))
+      }
+    } catch (e) {
+      console.error('Failed to persist slot match times to config:', e)
+    }
+  }
+
   // Compute standard 4-state slot status
   function computeSlotStatus(
     existingSlot: any,
@@ -2369,7 +2392,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     if (!existingSlot) {
       return 'not_open'
     }
-    const isAutoPast = isSlotPastOrEnded(dateStr, timeLabelStr)
+    const defaultCloseMin = parseInt(config?.default_slot_close_minutes || '13', 10)
+    const isAutoPast = isSlotPastOrEnded(dateStr, timeLabelStr, existingSlot?.status, existingSlot?.close_time, defaultCloseMin)
     const isFullCapacity = (existingSlot.teams_booked_count || 0) >= (existingSlot.capacity || 20)
     const isExplicitClosed = existingSlot.status === 'closed' || existingSlot.status === 'full'
 
@@ -2388,6 +2412,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     m1_time?: string
     m2_time?: string
     m3_time?: string
+    close_time?: string
     whatsapp_link?: string
     entry_fee?: number
     capacity?: number
@@ -2467,17 +2492,18 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     const form = getForm(preset.id)
 
     const baseLabel = form.time_label ?? (existing?.time_label ? existing.time_label.split('(')[0].trim() : preset.defaultLabel)
-    const m1 = form.m1_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 1)
-    const m2 = form.m2_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 2)
-    const m3 = form.m3_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 3)
-
-    const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
+    const timeLabel = getSlotWindowOnly(baseLabel) || preset.defaultLabel
     const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : (existing?.whatsapp_link || null)
     const entryFee = form.entry_fee || existing?.entry_fee || defaultEntryFee
     const capacity = form.capacity || existing?.capacity || 20
     const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
     const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
     const thirdPrize = (form.third_prize !== undefined && form.third_prize !== '') ? Number(form.third_prize) : (existing?.third_prize ?? defaultThirdPrize)
+
+    const m1 = form.m1_time !== undefined ? form.m1_time.trim() : (existing?.m1_time || '')
+    const m2 = form.m2_time !== undefined ? form.m2_time.trim() : (existing?.m2_time || '')
+    const m3 = form.m3_time !== undefined ? form.m3_time.trim() : (existing?.m3_time || '')
+    const closeTime = form.close_time !== undefined ? form.close_time.trim() : (existing?.close_time || '')
 
     if (existing) {
       let updatePayload: any = {
@@ -2516,7 +2542,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
+        await persistSlotMatchTimes(data.slot_id, { m1, m2, m3, close_time: closeTime })
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize, m1_time: m1, m2_time: m2, m3_time: m3, close_time: closeTime }
         setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? enriched : s))
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
@@ -2548,7 +2575,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
+        await persistSlotMatchTimes(data.slot_id, { m1, m2, m3, close_time: closeTime })
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize, m1_time: m1, m2_time: m2, m3_time: m3, close_time: closeTime }
         setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ ${preset.name} (${selectedDate}) OPENED for registrations!`)
@@ -2601,10 +2629,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       // If slot not yet saved in DB, create it directly as closed (status: 'full')
       const form = getForm(preset.id)
       const baseLabel = form.time_label ?? preset.defaultLabel
-      const m1 = form.m1_time ?? parseMatchTimeFromLabel('', 1)
-      const m2 = form.m2_time ?? parseMatchTimeFromLabel('', 2)
-      const m3 = form.m3_time ?? parseMatchTimeFromLabel('', 3)
-      const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
+      const timeLabel = getSlotWindowOnly(baseLabel) || preset.defaultLabel
       const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : null
       const entryFee = form.entry_fee || defaultEntryFee
       const capacity = form.capacity || 20
@@ -2671,17 +2696,18 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     const form = getForm(preset.id)
 
     const baseLabel = form.time_label ?? (existing?.time_label ? existing.time_label.split('(')[0].trim() : preset.defaultLabel)
-    const m1 = form.m1_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 1)
-    const m2 = form.m2_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 2)
-    const m3 = form.m3_time ?? parseMatchTimeFromLabel(existing?.time_label || '', 3)
-
-    const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
+    const timeLabel = getSlotWindowOnly(baseLabel) || preset.defaultLabel
     const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : (existing?.whatsapp_link || null)
     const entryFee = form.entry_fee || existing?.entry_fee || defaultEntryFee
     const capacity = form.capacity || existing?.capacity || 20
     const firstPrize = (form.first_prize !== undefined && form.first_prize !== '') ? Number(form.first_prize) : (existing?.first_prize ?? defaultFirstPrize)
     const secondPrize = (form.second_prize !== undefined && form.second_prize !== '') ? Number(form.second_prize) : (existing?.second_prize ?? defaultSecondPrize)
     const thirdPrize = (form.third_prize !== undefined && form.third_prize !== '') ? Number(form.third_prize) : (existing?.third_prize ?? defaultThirdPrize)
+
+    const m1 = form.m1_time !== undefined ? form.m1_time.trim() : (existing?.m1_time || '')
+    const m2 = form.m2_time !== undefined ? form.m2_time.trim() : (existing?.m2_time || '')
+    const m3 = form.m3_time !== undefined ? form.m3_time.trim() : (existing?.m3_time || '')
+    const closeTime = form.close_time !== undefined ? form.close_time.trim() : (existing?.close_time || '')
 
     if (existing) {
       let updatePayload: any = {
@@ -2719,7 +2745,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
+        await persistSlotMatchTimes(data.slot_id, { m1, m2, m3, close_time: closeTime })
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize, m1_time: m1, m2_time: m2, m3_time: m3, close_time: closeTime }
         setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? enriched : s))
       }
       setMsg(`✅ Details saved for ${preset.name}!`)
@@ -2751,7 +2778,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
       if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
       if (data && setSlots) {
-        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize }
+        await persistSlotMatchTimes(data.slot_id, { m1, m2, m3, close_time: closeTime })
+        const enriched = { ...data, first_prize: firstPrize, second_prize: secondPrize, third_prize: thirdPrize, m1_time: m1, m2_time: m2, m3_time: m3, close_time: closeTime }
         setSlots((prev: any[]) => [...prev, enriched])
       }
       setMsg(`✅ Created and saved details for ${preset.name}!`)
@@ -2773,10 +2801,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
 
     if (!existing) {
       const baseLabel = form.time_label ?? preset.defaultLabel
-      const m1 = form.m1_time
-      const m2 = form.m2_time
-      const m3 = form.m3_time
-      const timeLabel = buildTimeLabel(baseLabel, m1, m2, m3)
+      const timeLabel = getSlotWindowOnly(baseLabel) || preset.defaultLabel
       const whatsappLink = form.whatsapp_link !== undefined ? form.whatsapp_link.trim() : null
       const entryFee = form.entry_fee || defaultEntryFee
       const capacity = form.capacity || 20
@@ -3054,17 +3079,19 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                   const isExpanded = !!expandedSlots[preset.id]
 
                   const currentLabel = form.time_label ?? (existingSlot?.time_label ? existingSlot.time_label.split('(')[0].trim() : preset.defaultLabel)
+                  const defaultCloseMin = parseInt(config?.default_slot_close_minutes || '13', 10)
                   const slotStatus = computeSlotStatus(existingSlot, selectedDate, currentLabel)
-                  const isAutoClosed = isSlotPastOrEnded(selectedDate, currentLabel)
+                  const isAutoClosed = isSlotPastOrEnded(selectedDate, currentLabel, existingSlot?.status, existingSlot?.close_time, defaultCloseMin)
                   const isFullCapacity = (existingSlot?.teams_booked_count || 0) >= (existingSlot?.capacity || 20)
                   const isCompleted = slotStatus === 'completed'
                   const isOpen = slotStatus === 'open'
                   const isClosed = slotStatus === 'closed'
                   const isNotOpen = slotStatus === 'not_open'
 
-                  const currentM1 = form.m1_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 1)
-                  const currentM2 = form.m2_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 2)
-                  const currentM3 = form.m3_time ?? parseMatchTimeFromLabel(existingSlot?.time_label || '', 3)
+                  const currentM1 = form.m1_time ?? existingSlot?.m1_time ?? ''
+                  const currentM2 = form.m2_time ?? existingSlot?.m2_time ?? ''
+                  const currentM3 = form.m3_time ?? existingSlot?.m3_time ?? ''
+                  const currentCloseTime = form.close_time ?? existingSlot?.close_time ?? ''
                   const currentWhatsapp = form.whatsapp_link ?? existingSlot?.whatsapp_link ?? ''
                   const currentFee = form.entry_fee ?? existingSlot?.entry_fee ?? defaultEntryFee
                   const currentCap = form.capacity ?? existingSlot?.capacity ?? 20
@@ -3360,11 +3387,9 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           <div style={{ background: '#181818', border: '1px solid #282828', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                ⏱️ MATCH TIMINGS & SCHEDULE
+                                ⏱️ MATCH TIMINGS &amp; SCHEDULE
                               </span>
-                              <span style={{ fontSize: '0.68rem', color: '#888888' }}>
-                                Leave blank for defaults
-                              </span>
+                              <span style={{ fontSize: '0.65rem', color: '#888888' }}>Leave blank for defaults</span>
                             </div>
 
                             <div>
@@ -3375,54 +3400,66 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                 type="text"
                                 className="form-input"
                                 style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                                value={currentLabel}
-                                onChange={e => updatePresetFormField(preset.id, 'time_label', e.target.value)}
+                                value={getSlotWindowOnly(currentLabel)}
+                                onChange={e => updatePresetFormField(preset.id, 'time_label', getSlotWindowOnly(e.target.value))}
                                 placeholder="e.g. 1:00 PM – 3:00 PM"
                               />
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(85px, 1fr))', gap: '0.4rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.45rem' }}>
                               <div>
-                                <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                <label style={{ fontSize: '0.68rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
                                   Match 1 (Erangel):
                                 </label>
                                 <input
                                   type="text"
                                   className="form-input"
-                                  style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
+                                  style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
                                   value={currentM1}
                                   onChange={e => updatePresetFormField(preset.id, 'm1_time', e.target.value)}
-                                  placeholder="1:12 PM"
+                                  placeholder="e.g. 1:12 PM"
                                 />
                               </div>
-
                               <div>
-                                <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                <label style={{ fontSize: '0.68rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
                                   Match 2 (Rondo):
                                 </label>
                                 <input
                                   type="text"
                                   className="form-input"
-                                  style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
+                                  style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
                                   value={currentM2}
                                   onChange={e => updatePresetFormField(preset.id, 'm2_time', e.target.value)}
-                                  placeholder="1:52 PM"
+                                  placeholder="e.g. 1:52 PM"
                                 />
                               </div>
-
                               <div>
-                                <label style={{ fontSize: '0.66rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                <label style={{ fontSize: '0.68rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
                                   Match 3 (Miramar):
                                 </label>
                                 <input
                                   type="text"
                                   className="form-input"
-                                  style={{ padding: '0.35rem 0.45rem', fontSize: '0.75rem' }}
+                                  style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
                                   value={currentM3}
                                   onChange={e => updatePresetFormField(preset.id, 'm3_time', e.target.value)}
-                                  placeholder="2:32 PM"
+                                  placeholder="e.g. 2:32 PM"
                                 />
                               </div>
+                            </div>
+
+                            <div>
+                              <label style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                                Slot Close Time / Cutoff:
+                              </label>
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
+                                value={currentCloseTime}
+                                onChange={e => updatePresetFormField(preset.id, 'close_time', e.target.value)}
+                                placeholder="e.g. 13m or 1:13 PM (blank for config default)"
+                              />
                             </div>
                           </div>
 
@@ -3711,7 +3748,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           Custom Slot
                         </span>
                         <h4 style={{ margin: '2px 0 0 0', fontSize: '1.08rem', fontWeight: 900, color: '#ffffff' }}>
-                          {extraSlot.time_label}
+                          {getSlotWindowOnly(extraSlot.time_label)}
                         </h4>
                       </div>
 
@@ -3841,7 +3878,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           if (data && setSlots) {
                             setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
                           }
-                          setMsg(`✅ Custom Slot (${extraSlot.time_label}) OPENED for booking`)
+                          setMsg(`✅ Custom Slot (${getSlotWindowOnly(extraSlot.time_label)}) OPENED for booking`)
                         }}
                       >
                         {isExtraOpen ? '🟢 Open' : isExtraClosed ? '🔓 Re-Open' : '🔓 Open Slot'}
@@ -3873,7 +3910,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           if (data && setSlots) {
                             setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
                           }
-                          setMsg(`✅ Custom Slot (${extraSlot.time_label}) CLOSED to new registrations`)
+                          setMsg(`✅ Custom Slot (${getSlotWindowOnly(extraSlot.time_label)}) CLOSED to new registrations`)
                         }}
                       >
                         {isExtraClosed ? '🔒 Closed' : '🔒 Close Slot'}
@@ -3906,7 +3943,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                           if (setSlots) {
                             setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== extraSlot.slot_id))
                           }
-                          setMsg(`✅ Custom Slot (${extraSlot.time_label}) turned disabled / NOT OPEN`)
+                          setMsg(`✅ Custom Slot (${getSlotWindowOnly(extraSlot.time_label)}) turned disabled / NOT OPEN`)
                         }}
                       >
                         🚫 Not Open
@@ -3955,9 +3992,9 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                             type="text"
                             className="form-input"
                             style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}
-                            defaultValue={extraSlot.time_label}
+                            defaultValue={getSlotWindowOnly(extraSlot.time_label)}
                             onBlur={async (e) => {
-                              const newLabel = e.target.value.trim()
+                              const newLabel = getSlotWindowOnly(e.target.value.trim())
                               if (!newLabel || newLabel === extraSlot.time_label) return
                               const { data, error } = await supabase.from('slots').update({ time_label: newLabel }).eq('slot_id', extraSlot.slot_id).select().single()
                               if (error) { setMsg('❌ ' + error.message); return }
@@ -3965,6 +4002,78 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
                                 setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
                               }
                               setMsg(`✅ Updated time label to ${newLabel}`)
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.45rem' }}>
+                          <div>
+                            <label style={{ fontSize: '0.68rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              Match 1 (Erangel):
+                            </label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
+                              defaultValue={extraSlot.m1_time || ''}
+                              placeholder="e.g. 1:12 PM"
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim()
+                                await persistSlotMatchTimes(extraSlot.slot_id, { m1: val })
+                                if (setSlots) setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === extraSlot.slot_id ? { ...s, m1_time: val } : s))
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.68rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              Match 2 (Rondo):
+                            </label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
+                              defaultValue={extraSlot.m2_time || ''}
+                              placeholder="e.g. 1:52 PM"
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim()
+                                await persistSlotMatchTimes(extraSlot.slot_id, { m2: val })
+                                if (setSlots) setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === extraSlot.slot_id ? { ...s, m2_time: val } : s))
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.68rem', color: '#aaaaaa', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                              Match 3 (Miramar):
+                            </label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
+                              defaultValue={extraSlot.m3_time || ''}
+                              placeholder="e.g. 2:32 PM"
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim()
+                                await persistSlotMatchTimes(extraSlot.slot_id, { m3: val })
+                                if (setSlots) setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === extraSlot.slot_id ? { ...s, m3_time: val } : s))
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 700, marginBottom: '2px', display: 'block' }}>
+                            Slot Close Time / Cutoff:
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.78rem' }}
+                            defaultValue={extraSlot.close_time || ''}
+                            placeholder="e.g. 13m or 1:13 PM (blank for config default)"
+                            onBlur={async (e) => {
+                              const val = e.target.value.trim()
+                              await persistSlotMatchTimes(extraSlot.slot_id, { close_time: val })
+                              if (setSlots) setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === extraSlot.slot_id ? { ...s, close_time: val } : s))
                             }}
                           />
                         </div>
@@ -4154,7 +4263,7 @@ function PayoutSlipModal({
 
   const slipCode = `BGFS-PAY-${(slip.payout_id || '').slice(0, 8).toUpperCase()}`
   const dateFormatted = slip.paid_at ? formatNumericDate(slip.paid_at) : '—'
-  const slotFormatted = slip.slots ? `${formatShortDate(slip.slots.date)} • ${slip.slots.time_label}` : '—'
+  const slotFormatted = slip.slots ? `${formatShortDate(slip.slots.date)} • ${getSlotWindowOnly(slip.slots.time_label)}` : '—'
   const displayPlace = slip.place || (slip.amount === 60 ? '3rd' : null)
 
   function copySlipText() {
@@ -4576,7 +4685,7 @@ function PayoutsTab({
                   <tr key={p.payout_id}>
                     <td><strong>{p.teams?.team_name}</strong></td>
                     <td style={{ fontSize: '0.85rem', color: '#bbb' }}>
-                      {p.slots ? `${formatShortDate(p.slots.date)} • ${p.slots.time_label}` : '—'}
+                      {p.slots ? `${formatShortDate(p.slots.date)} • ${getSlotWindowOnly(p.slots.time_label)}` : '—'}
                     </td>
                     <td>
                       {p.place || p.amount === 60 ? (
@@ -4662,7 +4771,7 @@ function PayoutsTab({
                     </td>
                     <td><strong>{p.teams?.team_name}</strong></td>
                     <td style={{ fontSize: '0.85rem', color: '#bbb' }}>
-                      {p.slots ? `${formatShortDate(p.slots.date)} • ${p.slots.time_label}` : '—'}
+                      {p.slots ? `${formatShortDate(p.slots.date)} • ${getSlotWindowOnly(p.slots.time_label)}` : '—'}
                     </td>
                     <td>
                       {p.place || p.amount === 60 ? (
@@ -4782,7 +4891,7 @@ function PayoutsTab({
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '0.78rem', color: '#888' }}>Slot:</span>
                     <span style={{ color: '#ccc', fontSize: '0.82rem' }}>
-                      {formatShortDate(payoutTarget.slots.date)} • {payoutTarget.slots.time_label}
+                      {formatShortDate(payoutTarget.slots.date)} • {getSlotWindowOnly(payoutTarget.slots.time_label)}
                     </span>
                   </div>
                 )}
@@ -4933,7 +5042,7 @@ function PayoutsTab({
                   {editingSlip.teams?.team_name || 'Team'}
                 </div>
                 <div style={{ fontSize: '0.78rem', color: '#888', marginTop: '3px' }}>
-                  {editingSlip.slots ? `${formatShortDate(editingSlip.slots.date)} • ${editingSlip.slots.time_label}` : '—'}
+                  {editingSlip.slots ? `${formatShortDate(editingSlip.slots.date)} • ${getSlotWindowOnly(editingSlip.slots.time_label)}` : '—'}
                 </div>
                 <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#666', marginTop: '2px' }}>
                   Ref: BGFS-PAY-{(editingSlip.payout_id || '').slice(0, 8).toUpperCase()}
@@ -5236,7 +5345,7 @@ function UpiInfoTab({
           ) : (
             completedSlots.map((s: any) => (
               <option key={s.slot_id} value={s.slot_id}>
-                📅 {formatShortDate(s.date)} • {s.time_label} {s.is_grand_finals ? '★ GRAND FINALS' : ''}
+                📅 {formatShortDate(s.date)} • {getSlotWindowOnly(s.time_label)} {s.is_grand_finals ? '★ GRAND FINALS' : ''}
               </option>
             ))
           )}
@@ -5418,6 +5527,31 @@ function UpiInfoTab({
                                 title="Mark this team as paid out"
                               >
                                 <CheckCircle size={13} color="#ffffff" strokeWidth={2.5} /> Mark as Paid Out
+                              </button>
+                            )}
+
+                            {t.upi_id && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  fontSize: '0.75rem',
+                                  padding: '5px 10px',
+                                  background: copiedField === `upi_${t.team_id}` ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                                  borderColor: copiedField === `upi_${t.team_id}` ? '#22c55e' : 'rgba(255, 255, 255, 0.2)',
+                                  color: copiedField === `upi_${t.team_id}` ? '#4ade80' : '#ffffff',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                  fontWeight: 600,
+                                }}
+                                onClick={() => copyText(t.upi_id, `upi_${t.team_id}`)}
+                                title={`Copy UPI ID: ${t.upi_id}`}
+                              >
+                                {copiedField === `upi_${t.team_id}` ? <Check size={12} color="#4ade80" /> : <Copy size={12} />}
+                                {copiedField === `upi_${t.team_id}` ? 'Copied!' : 'Copy UPI ID'}
                               </button>
                             )}
                           </div>
@@ -5678,11 +5812,35 @@ function UpiInfoTab({
                     #{payoutTarget.rank} Place ({payoutTarget.total_points} pts)
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                   <span style={{ fontSize: '0.78rem', color: '#888' }}>UPI ID:</span>
-                  <span style={{ fontFamily: 'monospace', color: payoutTarget.upi_id ? '#4ade80' : '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
-                    {payoutTarget.upi_id || 'Not Provided'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontFamily: 'monospace', color: payoutTarget.upi_id ? '#4ade80' : '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
+                      {payoutTarget.upi_id || 'Not Provided'}
+                    </span>
+                    {payoutTarget.upi_id && (
+                      <button
+                        type="button"
+                        style={{
+                          background: copiedField === 'modal_upi' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.08)',
+                          border: `1px solid ${copiedField === 'modal_upi' ? '#22c55e' : 'rgba(255,255,255,0.2)'}`,
+                          borderRadius: '4px',
+                          color: copiedField === 'modal_upi' ? '#4ade80' : '#fff',
+                          padding: '2px 8px',
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontWeight: 600,
+                        }}
+                        onClick={() => copyText(payoutTarget.upi_id, 'modal_upi')}
+                      >
+                        {copiedField === 'modal_upi' ? <Check size={11} color="#4ade80" /> : <Copy size={11} />}
+                        {copiedField === 'modal_upi' ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {payoutTarget.upi_holder_name && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -5811,7 +5969,7 @@ function MigrateSlotModal({
 }) {
   const teamName = booking.teams?.team_name || 'Selected Team'
   const currentSlotDate = booking.slots?.date ? formatNumericDate(booking.slots.date) : '—'
-  const currentSlotTime = booking.slots?.time_label || '—'
+  const currentSlotTime = getSlotWindowOnly(booking.slots?.time_label || '') || '—'
   const currentRoomSlot = booking.room_slot_number || 5
 
   // Filter valid upcoming target slots:
@@ -6007,7 +6165,7 @@ function MigrateSlotModal({
               const isSlotFull = s.status === 'full' || freeSpots <= 0
               return (
                 <option key={s.slot_id} value={s.slot_id} disabled={isSlotFull}>
-                  {formatNumericDate(s.date)} · {s.time_label} {isSlotFull ? '(FULL - 0 spots)' : `(${freeSpots} spots left)`}
+                  {formatNumericDate(s.date)} · {getSlotWindowOnly(s.time_label)} {isSlotFull ? '(FULL - 0 spots)' : `(${freeSpots} spots left)`}
                 </option>
               )
             })}
@@ -6112,22 +6270,561 @@ function MigrateSlotModal({
   )
 }
 
+// ── ADD BOOKING MODAL ─────────────────────────────────────────────
+function AddBookingModal({
+  slots,
+  teams = [],
+  supabase,
+  onClose,
+  onSuccess,
+}: {
+  slots: any[]
+  teams?: any[]
+  supabase?: any
+  onClose: () => void
+  onSuccess: (data: any) => void
+}) {
+  const [allTeams, setAllTeams] = useState<any[]>(teams)
+  const [isFalseTeam, setIsFalseTeam] = useState(false)
+  const [selectedTeamId, setSelectedTeamId] = useState('')
+  const [falseTeamName, setFalseTeamName] = useState('')
+  const [teamSearch, setTeamSearch] = useState('')
+  const [selectedSlotId, setSelectedSlotId] = useState(slots[0]?.slot_id || '')
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  useEffect(() => {
+    if ((!allTeams || allTeams.length === 0) && supabase) {
+      supabase
+        .from('teams')
+        .select('team_id, team_name')
+        .order('team_name')
+        .then(({ data }: any) => {
+          if (data) setAllTeams(data)
+        })
+    }
+  }, [allTeams, supabase])
+
+  const filteredTeams = useMemo(() => {
+    if (!teamSearch.trim()) return allTeams
+    const q = teamSearch.toLowerCase().trim()
+    return allTeams.filter(t => (t.team_name || '').toLowerCase().includes(q))
+  }, [allTeams, teamSearch])
+
+  // Sort slots chronologically descending (newest first)
+  const sortedSlots = useMemo(() => {
+    return [...slots].sort((a, b) => {
+      const comp = String(b.date).localeCompare(String(a.date))
+      if (comp !== 0) return comp
+      return getSlotStartMinutes(a.time_label) - getSlotStartMinutes(b.time_label)
+    })
+  }, [slots])
+
+  const chosenSlot = useMemo(() => {
+    return slots.find(s => s.slot_id === selectedSlotId)
+  }, [slots, selectedSlotId])
+
+  async function handleConfirm(e: React.FormEvent) {
+    e.preventDefault()
+    setErrorMsg('')
+
+    if (!selectedSlotId) {
+      setErrorMsg('Please select a match slot.')
+      return
+    }
+
+    if (isFalseTeam) {
+      if (!falseTeamName.trim() || falseTeamName.trim().length < 2) {
+        setErrorMsg('Please enter a valid spot / false team name (at least 2 characters).')
+        return
+      }
+    } else {
+      if (!selectedTeamId) {
+        setErrorMsg('Please select a registered team from the list.')
+        return
+      }
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/bookings/create-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slot_id: selectedSlotId,
+          team_id: isFalseTeam ? undefined : selectedTeamId,
+          team_name: isFalseTeam ? falseTeamName.trim() : undefined,
+          is_false_team: isFalseTeam,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create booking')
+      }
+
+      onSuccess(data)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error creating booking')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(5px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#121214',
+          border: '1px solid #27272a',
+          borderRadius: '14px',
+          width: '100%',
+          maxWidth: '520px',
+          padding: '1.5rem',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={18} color="#22c55e" /> Add Manual Booking
+            </h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#a1a1aa' }}>
+              Book an offline/direct payment or spot team into any slot (works even if closed/full).
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer', padding: '4px' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Mode Selector Pill */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '1.25rem', background: '#1c1c1f', padding: '4px', borderRadius: '8px' }}>
+          <button
+            type="button"
+            onClick={() => { setIsFalseTeam(false); setErrorMsg('') }}
+            style={{
+              padding: '8px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              background: !isFalseTeam ? '#27272a' : 'transparent',
+              color: !isFalseTeam ? '#ffffff' : '#a1a1aa',
+              boxShadow: !isFalseTeam ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Registered Team
+          </button>
+          <button
+            type="button"
+            onClick={() => { setIsFalseTeam(true); setErrorMsg('') }}
+            style={{
+              padding: '8px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              background: isFalseTeam ? '#27272a' : 'transparent',
+              color: isFalseTeam ? '#facc15' : '#a1a1aa',
+              boxShadow: isFalseTeam ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Spot / False Team
+          </button>
+        </div>
+
+        <form onSubmit={handleConfirm}>
+          {/* Team Selection Section */}
+          {!isFalseTeam ? (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#e4e4e7', marginBottom: '6px' }}>
+                Select Registered Team *
+              </label>
+              <div style={{ marginBottom: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="Search team name..."
+                  value={teamSearch}
+                  onChange={e => setTeamSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '0.8rem',
+                    background: '#1c1c1f',
+                    border: '1px solid #3f3f46',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              <select
+                value={selectedTeamId}
+                onChange={e => setSelectedTeamId(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  fontSize: '0.82rem',
+                  background: '#1c1c1f',
+                  border: '1px solid #3f3f46',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">-- Choose a team ({filteredTeams.length} available) --</option>
+                {filteredTeams.map(t => (
+                  <option key={t.team_id} value={t.team_id}>
+                    {t.team_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#facc15', marginBottom: '6px' }}>
+                Spot / False Team Name *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Free Spot Entry / Offline Team Name"
+                value={falseTeamName}
+                onChange={e => setFalseTeamName(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  fontSize: '0.82rem',
+                  background: '#1c1c1f',
+                  border: '1px solid #3f3f46',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  outline: 'none',
+                }}
+              />
+              <span style={{ fontSize: '0.7rem', color: '#a1a1aa', display: 'block', marginTop: '4px' }}>
+                This team will be assigned a room slot and scored just like any other team.
+              </span>
+            </div>
+          )}
+
+          {/* Slot Selection */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#e4e4e7', marginBottom: '6px' }}>
+              Select Match Slot *
+            </label>
+            <select
+              value={selectedSlotId}
+              onChange={e => setSelectedSlotId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                fontSize: '0.82rem',
+                background: '#1c1c1f',
+                border: '1px solid #3f3f46',
+                borderRadius: '6px',
+                color: '#fff',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {sortedSlots.map(s => {
+                const windowTime = getSlotWindowOnly(s.time_label) || s.time_label
+                const count = s.teams_booked_count || 0
+                const cap = s.capacity || 20
+                const isFull = count >= cap
+                return (
+                  <option key={s.slot_id} value={s.slot_id}>
+                    {formatNumericDate(s.date)} • {windowTime} ({count}/{cap} teams{isFull ? ' - FULL' : ''}{s.status === 'closed' ? ' - CLOSED' : ''})
+                  </option>
+                )
+              })}
+            </select>
+            {chosenSlot && (
+              <div style={{ marginTop: '6px', fontSize: '0.72rem', color: '#a1a1aa' }}>
+                Status: <span style={{ color: chosenSlot.status === 'full' ? '#f87171' : '#4ade80', fontWeight: 700 }}>{chosenSlot.status || 'open'}</span> | Booked: <strong style={{ color: '#fff' }}>{chosenSlot.teams_booked_count || 0} / {chosenSlot.capacity || 20}</strong>
+              </div>
+            )}
+          </div>
+
+          {errorMsg && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              color: '#fca5a5',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              fontSize: '0.78rem',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
+              <AlertCircle size={14} color="#ef4444" style={{ flexShrink: 0 }} />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                padding: '8px 14px',
+                background: '#27272a',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#a1a1aa',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: '8px 16px',
+                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#fff',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 10px rgba(34, 197, 94, 0.3)',
+              }}
+            >
+              {loading ? <RefreshCw size={13} className="spin" /> : <Plus size={13} />}
+              {loading ? 'Creating Booking...' : 'Create Booking'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── CANCEL BOOKING MODAL ──────────────────────────────────────────
+function CancelBookingModal({
+  booking,
+  onClose,
+  onSuccess,
+}: {
+  booking: any
+  onClose: () => void
+  onSuccess: (data: any) => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const teamName = booking.teams?.team_name || 'Team'
+  const slotDate = booking.slots?.date ? formatNumericDate(booking.slots.date) : '—'
+  const slotTime = getSlotWindowOnly(booking.slots?.time_label || '') || booking.slots?.time_label || '—'
+  const roomSlot = booking.room_slot_number || 5
+
+  async function handleConfirmDelete() {
+    setLoading(true)
+    setErrorMsg('')
+
+    try {
+      const res = await fetch('/api/admin/bookings/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booking_id: booking.booking_id,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to cancel booking')
+      }
+
+      onSuccess(data)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error canceling booking')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(5px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#141416',
+          border: '1px solid #ef4444',
+          borderRadius: '14px',
+          width: '100%',
+          maxWidth: '460px',
+          padding: '1.5rem',
+          boxShadow: '0 25px 50px -12px rgba(239, 68, 68, 0.25)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+          <div style={{ background: 'rgba(239, 68, 68, 0.15)', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Trash2 size={20} color="#ef4444" />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#ffffff' }}>
+              Confirm Booking Cancellation
+            </h3>
+            <span style={{ fontSize: '0.74rem', color: '#f87171' }}>
+              This action cannot be undone
+            </span>
+          </div>
+        </div>
+
+        <div style={{ background: '#1c1c1f', border: '1px solid #27272a', borderRadius: '8px', padding: '0.85rem', marginBottom: '1.25rem', fontSize: '0.82rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ color: '#a1a1aa' }}>Team Name:</span>
+            <strong style={{ color: '#fff' }}>{teamName}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ color: '#a1a1aa' }}>Match Slot:</span>
+            <span style={{ color: '#e4e4e7' }}>{slotDate} • {slotTime}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ color: '#a1a1aa' }}>Vacating Room Slot:</span>
+            <span style={{ color: '#facc15', fontWeight: 800 }}>Slot #{roomSlot}</span>
+          </div>
+        </div>
+
+        <div style={{ fontSize: '0.75rem', color: '#a1a1aa', marginBottom: '1.25rem', lineHeight: 1.4 }}>
+          ⚠️ Canceling this booking will remove the team from the match slot, delete any recorded match points, and vacate <strong>Room Slot #{roomSlot}</strong>. The next team that books will receive this vacated room slot.
+        </div>
+
+        {errorMsg && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            color: '#fca5a5',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            fontSize: '0.78rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}>
+            <AlertCircle size={14} color="#ef4444" style={{ flexShrink: 0 }} />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            style={{
+              padding: '8px 14px',
+              background: '#27272a',
+              border: 'none',
+              borderRadius: '6px',
+              color: '#a1a1aa',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Keep Booking
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirmDelete}
+            disabled={loading}
+            style={{
+              padding: '8px 16px',
+              background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+              border: 'none',
+              borderRadius: '6px',
+              color: '#fff',
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 10px rgba(239, 68, 68, 0.35)',
+            }}
+          >
+            {loading ? <RefreshCw size={13} className="spin" /> : <Trash2 size={13} />}
+            {loading ? 'Canceling...' : 'Yes, Cancel Booking'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── BOOKINGS TAB ─────────────────────────────────────────────────
 function BookingsTab({
   bookings,
   setBookings,
   slots,
   setSlots,
+  teams = [],
+  supabase,
 }: {
   bookings: any[]
   setBookings: React.Dispatch<React.SetStateAction<any[]>>
   slots: any[]
   setSlots: React.Dispatch<React.SetStateAction<any[]>>
+  teams?: any[]
+  supabase?: any
 }) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDate, setFilterDate] = useState('all')
   const [migrationTarget, setMigrationTarget] = useState<any | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [cancelingTarget, setCancelingTarget] = useState<any | null>(null)
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   const realBookings = bookings.filter(b => !b.is_test_booking)
@@ -6210,12 +6907,87 @@ function BookingsTab({
     }, 5000)
   }
 
+  function handleAddSuccess(data: any) {
+    if (data.booking) {
+      setBookings(prev => [data.booking, ...prev])
+    }
+    if (data.booking?.slot_id) {
+      setSlots(prev => prev.map(s => {
+        if (s.slot_id === data.booking.slot_id) {
+          const newCount = (s.teams_booked_count || 0) + 1
+          return {
+            ...s,
+            teams_booked_count: newCount,
+            status: newCount >= (s.capacity || 20) ? 'full' : s.status,
+          }
+        }
+        return s
+      }))
+    }
+    setFeedbackMsg({ text: data.message, type: 'success' })
+    setShowAddModal(false)
+    router.refresh()
+
+    setTimeout(() => {
+      setFeedbackMsg(null)
+    }, 5000)
+  }
+
+  function handleCancelSuccess(data: any) {
+    if (data.booking_id) {
+      setBookings(prev => prev.filter(b => b.booking_id !== data.booking_id))
+    }
+    if (data.slot_id) {
+      setSlots(prev => prev.map(s => {
+        if (s.slot_id === data.slot_id) {
+          const newCount = Math.max(0, (s.teams_booked_count || 1) - 1)
+          return {
+            ...s,
+            teams_booked_count: newCount,
+            status: s.status === 'full' ? 'open' : s.status,
+          }
+        }
+        return s
+      }))
+    }
+    setFeedbackMsg({ text: data.message, type: 'success' })
+    setCancelingTarget(null)
+    router.refresh()
+
+    setTimeout(() => {
+      setFeedbackMsg(null)
+    }, 5000)
+  }
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2 className={styles.tabTitle}>Bookings</h2>
-          <p className={styles.tabDesc}>All slot bookings with 1-click safe slot migration. Test account bookings are isolated.</p>
+          <p className={styles.tabDesc}>All slot bookings with 1-click safe slot migration &amp; manual direct booking management.</p>
+        </div>
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            style={{
+              padding: '0.65rem 1.25rem',
+              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+              border: '1px solid rgba(74, 222, 128, 0.5)',
+              borderRadius: '8px',
+              color: '#ffffff',
+              fontSize: '0.85rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 10px rgba(34, 197, 94, 0.25)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Plus size={16} /> Add Booking
+          </button>
         </div>
       </div>
 
@@ -6383,7 +7155,7 @@ function BookingsTab({
                   )}
                 </td>
                 <td>{b.slots?.date ? formatNumericDate(b.slots.date) : '—'}</td>
-                <td style={{ fontSize: '0.85rem' }}>{b.slots?.time_label || '—'}</td>
+                <td style={{ fontSize: '0.85rem' }}>{getSlotWindowOnly(b.slots?.time_label || '') || '—'}</td>
                 <td>
                   <span style={{
                     background: '#27272a',
@@ -6420,7 +7192,7 @@ function BookingsTab({
                     </div>
                   ) : null}
                 </td>
-                <td style={{ textAlign: 'right' }}>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button
                     type="button"
                     onClick={() => setMigrationTarget(b)}
@@ -6446,8 +7218,39 @@ function BookingsTab({
                       e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'
                       e.currentTarget.style.borderColor = 'rgba(245, 158, 11, 0.4)'
                     }}
+                    title="Migrate this team to another slot"
                   >
                     <Repeat size={13} /> Migrate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCancelingTarget(b)}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      color: '#f87171',
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease',
+                      marginLeft: '6px',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'
+                      e.currentTarget.style.borderColor = '#ef4444'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'
+                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'
+                    }}
+                    title="Cancel this booking and vacate room slot"
+                  >
+                    <Trash2 size={13} /> Delete
                   </button>
                 </td>
               </tr>
@@ -6470,6 +7273,26 @@ function BookingsTab({
           slots={slots}
           onClose={() => setMigrationTarget(null)}
           onSuccess={handleMigrationSuccess}
+        />
+      )}
+
+      {/* Add Booking Modal */}
+      {showAddModal && (
+        <AddBookingModal
+          slots={slots}
+          teams={teams}
+          supabase={supabase}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={handleAddSuccess}
+        />
+      )}
+
+      {/* Cancel Booking Modal */}
+      {cancelingTarget && (
+        <CancelBookingModal
+          booking={cancelingTarget}
+          onClose={() => setCancelingTarget(null)}
+          onSuccess={handleCancelSuccess}
         />
       )}
     </div>
@@ -6910,6 +7733,29 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+  const [teamSearchQuery, setTeamSearchQuery] = useState('')
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [tableSearchQuery, setTableSearchQuery] = useState('')
+
+  const filteredTeamsForIssue = useMemo(() => {
+    if (!teamSearchQuery.trim()) return teams.slice(0, 30)
+    const q = teamSearchQuery.toLowerCase().trim()
+    return teams.filter((t: any) => (t.team_name || '').toLowerCase().includes(q)).slice(0, 30)
+  }, [teams, teamSearchQuery])
+
+  const selectedTeamObj = useMemo(() => {
+    return teams.find((t: any) => t.team_id === issueTeam)
+  }, [teams, issueTeam])
+
+  const filteredCouponsList = useMemo(() => {
+    if (!tableSearchQuery.trim()) return list
+    const q = tableSearchQuery.toLowerCase().trim()
+    return list.filter((c: any) => {
+      const tName = (c.teams?.team_name || '').toLowerCase()
+      const code = (c.code || '').toLowerCase()
+      return tName.includes(q) || code.includes(q)
+    })
+  }, [list, tableSearchQuery])
 
   async function fetchCoupons() {
     setRefreshing(true)
@@ -6975,6 +7821,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
       setList(prev => [data.coupon, ...prev])
       setMsg(`✅ Free slot coupon issued! Code: ${data.coupon.code} — team can redeem this for ₹0 on any open slot.`)
       setIssueTeam('')
+      setTeamSearchQuery('')
     } catch (err: any) {
       setIssuing(false)
       setMsg('❌ ' + (err.message || 'Error issuing coupon'))
@@ -7026,20 +7873,107 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
         </div>
       </div>
 
-      {/* Issue Form */}
+      {/* Issue Form with Instant Team Search */}
       <form onSubmit={issueCoupon} className={styles.createSlotForm}>
-        <div className={styles.formRow}>
-          <div className="form-group" style={{ flex: 1 }}>
+        <div className={styles.formRow} style={{ alignItems: 'flex-start' }}>
+          <div className="form-group" style={{ flex: 1, position: 'relative' }}>
             <label className="form-label">Issue Manual Free Coupon To Team</label>
-            <select className="form-input" value={issueTeam} onChange={e => setIssueTeam(e.target.value)} required>
-              <option value="">Select team...</option>
-              {teams.map((t: any) => (
-                <option key={t.team_id} value={t.team_id}>{t.team_name}</option>
-              ))}
-            </select>
+            {selectedTeamObj ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#18181b',
+                border: '1px solid #22c55e',
+                borderRadius: '8px',
+                padding: '0.5rem 0.85rem',
+              }}>
+                <span style={{ fontWeight: 800, color: '#4ade80', fontSize: '0.88rem' }}>
+                  🎯 Selected: {selectedTeamObj.team_name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIssueTeam('')
+                    setTeamSearchQuery('')
+                  }}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    color: '#f87171',
+                    fontSize: '0.74rem',
+                    fontWeight: 800,
+                    borderRadius: '6px',
+                    padding: '3px 8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ✕ Change Team
+                </button>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="🔍 Type team name to search..."
+                  value={teamSearchQuery}
+                  onChange={e => {
+                    setTeamSearchQuery(e.target.value)
+                    setIsDropdownOpen(true)
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                />
+                {isDropdownOpen && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: '#18181b',
+                    border: '1px solid #3f3f46',
+                    borderRadius: '8px',
+                    marginTop: '4px',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    zIndex: 50,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                  }}>
+                    {filteredTeamsForIssue.length === 0 ? (
+                      <div style={{ padding: '0.65rem 0.85rem', color: '#888', fontSize: '0.8rem' }}>
+                        No teams matching "{teamSearchQuery}"
+                      </div>
+                    ) : (
+                      filteredTeamsForIssue.map((t: any) => (
+                        <div
+                          key={t.team_id}
+                          onClick={() => {
+                            setIssueTeam(t.team_id)
+                            setTeamSearchQuery('')
+                            setIsDropdownOpen(false)
+                          }}
+                          style={{
+                            padding: '0.55rem 0.85rem',
+                            fontSize: '0.82rem',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #27272a',
+                            transition: 'background 0.1s ease',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#27272a'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          {t.team_name}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={issuing}>
+          <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', paddingTop: '1.6rem' }}>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={issuing || !issueTeam}>
               {issuing ? 'Issuing...' : '+ Issue Free Coupon'}
             </button>
           </div>
@@ -7047,7 +7981,22 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
         {msg && <p className={`${styles.scoreMsg} ${msg.includes('✅') ? styles.scoreMsgOk : styles.scoreMsgErr}`}>{msg}</p>}
       </form>
 
-      <div className="table-wrapper" style={{ marginTop: '1.25rem' }}>
+      {/* Search and Count Bar for Table */}
+      <div style={{ marginTop: '1.5rem', marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#aaa' }}>
+          Showing {filteredCouponsList.length} of {list.length} Coupons
+        </div>
+        <input
+          type="text"
+          className="form-input"
+          style={{ maxWidth: '300px', padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
+          placeholder="🔍 Search coupons by team or code..."
+          value={tableSearchQuery}
+          onChange={e => setTableSearchQuery(e.target.value)}
+        />
+      </div>
+
+      <div className="table-wrapper" style={{ marginTop: '0.5rem' }}>
         <table>
           <thead>
             <tr>
@@ -7061,7 +8010,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
             </tr>
           </thead>
           <tbody>
-            {list.map((c: any) => {
+            {filteredCouponsList.map((c: any) => {
               const isUnused = c.status === 'unused'
               const originSlot = c.slots
               const usedBooking = c.bookings && c.bookings.length > 0 ? c.bookings[0] : null
@@ -7082,7 +8031,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
                           🏆 {c.code?.startsWith('FREE4TH') || (originSlot.date && originSlot.date >= '2026-09-22') ? '4th Place Reward' : '3rd Place Reward'}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: '#ccc' }}>
-                          📅 {originSlot.date ? formatNumericDate(originSlot.date) : ''} {originSlot.time_label ? `• ${originSlot.time_label}` : ''}
+                          📅 {originSlot.date ? formatNumericDate(originSlot.date) : ''} {originSlot.time_label ? `• ${getSlotWindowOnly(originSlot.time_label)}` : ''}
                         </div>
                       </div>
                     ) : (
@@ -7134,7 +8083,7 @@ function CouponsTab({ coupons: initialCoupons, teams }: { coupons: any[]; teams:
                         </div>
                         {usedSlot && (
                           <div style={{ fontSize: '0.72rem', color: '#aaa', marginTop: '2px' }}>
-                            Redeemed for: 📅 {formatNumericDate(usedSlot.date)} • {usedSlot.time_label}
+                            Redeemed for: 📅 {formatNumericDate(usedSlot.date)} • {getSlotWindowOnly(usedSlot.time_label)}
                           </div>
                         )}
                       </div>
@@ -8218,6 +9167,10 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
     { key: 'slot_first_prize', label: 'Default 1st Place Cash Prize (₹)', placeholder: '160', type: 'number' },
     { key: 'slot_second_prize', label: 'Default 2nd Place Cash Prize (₹)', placeholder: '80', type: 'number' },
     { key: 'slot_third_prize', label: 'Default 3rd Place Cash Prize (₹)', placeholder: '60', type: 'number' },
+    { key: 'default_slot_close_minutes', label: 'Default Slot Close Minutes (e.g. 13 = Slot Start + 13m)', placeholder: '13', type: 'number' },
+    { key: 'default_match1_offset', label: 'Default Match 1 Start Offset Minutes (e.g. 12 = Slot Start + 12m)', placeholder: '12', type: 'number' },
+    { key: 'default_match2_offset', label: 'Default Match 2 Start Offset Minutes (e.g. 52 = Slot Start + 52m)', placeholder: '52', type: 'number' },
+    { key: 'default_match3_offset', label: 'Default Match 3 Start Offset Minutes (e.g. 92 = Slot Start + 92m)', placeholder: '92', type: 'number' },
   ]
 
   const isMaintenanceOn = values['maintenance_mode'] === 'true'

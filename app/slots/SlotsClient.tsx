@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck, Calendar, AlertCircle, Trophy, CreditCard } from 'lucide-react'
-import { isSlotPastOrEnded, getFirstMatchStartMinutes, getSlotStartMinutes, getSlotWindowOnly, parseMatchTime } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getSlotStartMinutes, getSlotWindowOnly, computeSlotMatchTimes } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
 interface Slot {
@@ -19,6 +19,10 @@ interface Slot {
   status: 'open' | 'full' | 'completed'
   is_grand_finals: boolean
   whatsapp_link?: string
+  m1_time?: string
+  m2_time?: string
+  m3_time?: string
+  close_time?: string
 }
 
 interface FreeCoupon {
@@ -38,6 +42,10 @@ interface Props {
   firstPrize?: number
   secondPrize?: number
   thirdPrize?: number
+  defaultMatch1Offset?: number
+  defaultMatch2Offset?: number
+  defaultMatch3Offset?: number
+  defaultSlotCloseMinutes?: number
   isLoggedIn: boolean
   isTestAccount?: boolean
 }
@@ -50,35 +58,15 @@ interface MatchTimeItem {
   map: string
 }
 
-function parseStartTimeToMinutes(timeLabel: string): number {
-  return getFirstMatchStartMinutes(timeLabel)
-}
-
-function formatMinutesToTimeString(totalMinutes: number): string {
-  const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440
-  let hours = Math.floor(normalizedMinutes / 60)
-  const minutes = normalizedMinutes % 60
-
-  const period = hours >= 12 ? 'PM' : 'AM'
-  hours = hours % 12
-  if (hours === 0) hours = 12
-
-  const minStr = String(minutes).padStart(2, '0')
-  return `${hours}:${minStr} ${period}`
-}
-
-function getMatchTimes(timeLabel: string): MatchTimeItem[] {
-  const m1Custom = parseMatchTime(timeLabel, 1)
-  const m2Custom = parseMatchTime(timeLabel, 2)
-  const m3Custom = parseMatchTime(timeLabel, 3)
-
-  const startMinutes = parseStartTimeToMinutes(timeLabel)
-
-  return [
-    { name: 'MATCH 1', time: m1Custom || formatMinutesToTimeString(startMinutes), map: 'Erangel' },
-    { name: 'MATCH 2', time: m2Custom || formatMinutesToTimeString(startMinutes + 40), map: 'Rondo' },
-    { name: 'MATCH 3', time: m3Custom || formatMinutesToTimeString(startMinutes + 80), map: 'Miramar' },
-  ]
+function getMatchTimes(
+  slot: Slot,
+  offsets?: { m1?: number; m2?: number; m3?: number }
+): MatchTimeItem[] {
+  return computeSlotMatchTimes(
+    slot.time_label,
+    { m1: slot.m1_time, m2: slot.m2_time, m3: slot.m3_time },
+    offsets
+  )
 }
 
 export default function SlotsClient({
@@ -93,6 +81,10 @@ export default function SlotsClient({
   firstPrize = 200,
   secondPrize = 100,
   thirdPrize = 80,
+  defaultMatch1Offset = 12,
+  defaultMatch2Offset = 52,
+  defaultMatch3Offset = 92,
+  defaultSlotCloseMinutes = 13,
   isLoggedIn,
   isTestAccount = false,
 }: Props) {
@@ -156,11 +148,11 @@ export default function SlotsClient({
     } catch (e) {}
   }
 
-  // Filter slots based on date/time expiration (auto-closes 10 mins before start)
+  // Filter slots based on date/time expiration (auto-closes based on custom cutoff or default minutes)
   const filteredSlots = useMemo(() => {
     const list = slotsList.filter(slot => {
       if (!mounted) return true
-      const isPast = isSlotPastOrEnded(slot.date, slot.time_label, slot.status)
+      const isPast = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes)
       if (filterTab === 'upcoming') return !isPast
       if (filterTab === 'past') return isPast
       return true
@@ -631,7 +623,7 @@ function loadRazorpayScript(): Promise<boolean> {
                 const spotsLeft = Math.max(0, slot.capacity - slot.teams_booked_count)
 
                 // Strict expiration check
-                const isEnded = isSlotPastOrEnded(slot.date, slot.time_label, slot.status)
+                const isEnded = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes)
                 const isCompleted = isEnded || slot.status === 'completed'
                 const isFull = !isCompleted && (spotsLeft <= 0 || slot.status === 'full')
                 const isUrgent = !isFull && !isCompleted && !isAlreadyBooked && spotsLeft < 5
@@ -640,7 +632,7 @@ function loadRazorpayScript(): Promise<boolean> {
                 const currentFee = (slot.entry_fee !== undefined && slot.entry_fee !== null) ? slot.entry_fee : effectiveEntryFee
 
                 if (isAlreadyBooked) {
-                  const matchTimes = getMatchTimes(slot.time_label)
+                  const matchTimes = getMatchTimes(slot, { m1: defaultMatch1Offset, m2: defaultMatch2Offset, m3: defaultMatch3Offset })
                   const roomSlotNum = bookedSlotsMap[slot.slot_id] ?? Object.entries(bookedSlotsMap).find(([k]) => k.toLowerCase() === slot.slot_id.toLowerCase())?.[1] ?? 5
 
                   return (
@@ -733,7 +725,7 @@ function loadRazorpayScript(): Promise<boolean> {
                   )
                 }
 
-                const matchTimes = getMatchTimes(slot.time_label)
+                const matchTimes = getMatchTimes(slot, { m1: defaultMatch1Offset, m2: defaultMatch2Offset, m3: defaultMatch3Offset })
 
                 return (
                   <div

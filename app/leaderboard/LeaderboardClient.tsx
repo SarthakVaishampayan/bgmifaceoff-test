@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Trophy, Medal, Award, Layers, ChevronDown, Check, Copy } from 'lucide-react'
+import { Trophy, Medal, Award, Layers, ChevronDown, Check, Copy, Download } from 'lucide-react'
 import { formatMonthDay, formatFullDate } from '@/lib/utils/formatDate'
 import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
@@ -244,6 +244,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
   )
 
   const [copiedRoster, setCopiedRoster] = useState(false)
+  const [isDownloadingPoster, setIsDownloadingPoster] = useState(false)
 
   // Extract all teams registered in this slot ordered strictly by room slot number (Slot 5-24)
   const slotRoster = useMemo(() => {
@@ -270,6 +271,33 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     navigator.clipboard.writeText(rosterCopyText)
     setCopiedRoster(true)
     setTimeout(() => setCopiedRoster(false), 2000)
+  }
+
+  async function handleDownloadSlotList() {
+    if (!selectedSlot) return
+    setIsDownloadingPoster(true)
+    try {
+      const res = await fetch(`/api/admin/slots/generate-poster?slot_id=${selectedSlot.slot_id}`)
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}))
+        throw new Error(errJson.error || 'Failed to generate poster')
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `bgfs-slot-list-${selectedSlot.date || 'match'}.png`
+      a.style.display = 'none'
+      a.addEventListener('click', (e) => e.stopPropagation())
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err: any) {
+      alert(`Download failed: ${err.message || 'Error generating poster'}`)
+    } finally {
+      setIsDownloadingPoster(false)
+    }
   }
 
   function getRankBadgeClass(rank: number) {
@@ -739,13 +767,15 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
               )}
             </div>
 
-            {/* Copy Slot List Button */}
+            {/* Copy & Download Slot List Buttons */}
             {slotRoster.length > 0 && selectedSlot && (
               <div style={{
                 marginTop: '1.5rem',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
               }}>
                 <button
                   type="button"
@@ -768,6 +798,31 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
                 >
                   {copiedRoster ? <Check size={16} /> : <Copy size={16} />}
                   {copiedRoster ? 'Copied to Clipboard!' : 'Copy Slot List'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadSlotList}
+                  disabled={isDownloadingPoster}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: '#ffd000',
+                    color: '#000',
+                    border: 'none',
+                    fontWeight: 800,
+                    fontSize: '0.875rem',
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    cursor: isDownloadingPoster ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 14px rgba(255, 208, 0, 0.3)',
+                    transition: 'all 0.15s ease',
+                    opacity: isDownloadingPoster ? 0.7 : 1,
+                  }}
+                >
+                  <Download size={16} />
+                  {isDownloadingPoster ? 'Downloading...' : 'DOWNLOAD SLOT LIST'}
                 </button>
               </div>
             )}

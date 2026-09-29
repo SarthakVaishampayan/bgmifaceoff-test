@@ -1,6 +1,7 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 import { getNextAvailableRoomSlot } from '@/lib/utils/roomSlot'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 import { revalidatePath } from 'next/cache'
 import { NextResponse } from 'next/server'
 
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
         room_slot_number,
       },
       booking: newBooking,
-      message: `Team "${targetTeamName}" was successfully added to Slot ${slot.time_label || ''} as Room Slot #${room_slot_number}!`,
+      message: `Team "${targetTeamName}" was successfully added to Slot ${getSlotWindowOnly(slot.time_label) || ''} as Room Slot #${room_slot_number}!`,
     })
   } catch (err: any) {
     console.error('Add false team error:', err)

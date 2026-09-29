@@ -1,6 +1,7 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getNextAvailableRoomSlot } from '@/lib/utils/roomSlot'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 
 // POST /api/booking/confirm
 // ─────────────────────────────────────────────────────────────
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
       whatsapp_link: whatsappLink,
       room_slot_number,
       slot_date: slot.date,
-      slot_time: slot.time_label,
+      slot_time: getSlotWindowOnly(slot.time_label),
     })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 })

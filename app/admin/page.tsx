@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { syncPendingPayouts } from '@/lib/payouts/sync'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 import AdminClient from './AdminClient'
 
 export default async function AdminPage({
@@ -66,9 +67,20 @@ export default async function AdminPage({
     admin.from('config').select('key, value'),
   ])
 
-  const filteredPayouts = (payouts || []).filter(p => !p.slots?.date || p.slots.date >= '2026-09-16')
-  const filteredBookings = (bookings || []).filter(b => !b.slots?.date || b.slots.date >= '2026-09-16')
-  const filteredCoupons = (coupons || []).filter(c => !c.slots?.date || c.slots.date >= '2026-09-16')
+  const filteredPayouts = (payouts || []).map(p => ({
+    ...p,
+    slots: p.slots ? { ...p.slots, time_label: getSlotWindowOnly(p.slots.time_label) } : null,
+  })).filter(p => !p.slots?.date || p.slots.date >= '2026-09-16')
+
+  const filteredBookings = (bookings || []).map(b => ({
+    ...b,
+    slots: b.slots ? { ...b.slots, time_label: getSlotWindowOnly(b.slots.time_label) } : null,
+  })).filter(b => !b.slots?.date || b.slots.date >= '2026-09-16')
+
+  const filteredCoupons = (coupons || []).map(c => ({
+    ...c,
+    slots: c.slots ? { ...c.slots, time_label: getSlotWindowOnly(c.slots.time_label) } : null,
+  })).filter(c => !c.slots?.date || c.slots.date >= '2026-09-16')
 
   // Fetch complete user list combining Supabase Auth service & public.users table
   let finalUserList: any[] = []
@@ -145,17 +157,28 @@ export default async function AdminPage({
     try { slotPrizesMap = JSON.parse(config.slot_prizes_map) } catch {}
   }
 
+  let slotMatchTimesMap: Record<string, { m1?: string; m2?: string; m3?: string; close_time?: string }> = {}
+  if (config.slot_match_times_map) {
+    try { slotMatchTimesMap = JSON.parse(config.slot_match_times_map) } catch {}
+  }
+
   const defaultFirst = parseInt(config.slot_first_prize || '160', 10)
   const defaultSecond = parseInt(config.slot_second_prize || '80', 10)
   const defaultThird = parseInt(config.slot_third_prize || '60', 10)
 
   const enrichedSlots = (slots || []).map((s: any) => {
+    const times = slotMatchTimesMap[s.slot_id]
     return {
       ...s,
+      time_label: getSlotWindowOnly(s.time_label),
       first_prize: s.first_prize ?? slotPrizesMap[s.slot_id]?.first_prize ?? defaultFirst,
       second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
       third_prize: s.third_prize ?? slotPrizesMap[s.slot_id]?.third_prize ?? defaultThird,
       third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? 'Free Slot Pass',
+      m1_time: times?.m1,
+      m2_time: times?.m2,
+      m3_time: times?.m3,
+      close_time: times?.close_time,
     }
   })
 

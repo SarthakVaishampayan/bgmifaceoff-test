@@ -30,7 +30,19 @@ export default async function SlotsPage() {
     supabase
       .from('config')
       .select('key, value')
-      .in('key', ['whatsapp_invite_link', 'slot_entry_fee', 'slot_first_prize', 'slot_second_prize', 'slot_third_prize', 'slot_prizes_map']),
+      .in('key', [
+        'whatsapp_invite_link',
+        'slot_entry_fee',
+        'slot_first_prize',
+        'slot_second_prize',
+        'slot_third_prize',
+        'slot_prizes_map',
+        'slot_match_times_map',
+        'default_slot_close_minutes',
+        'default_match1_offset',
+        'default_match2_offset',
+        'default_match3_offset',
+      ]),
   ])
 
   let slots = slotsResult.data || []
@@ -43,12 +55,19 @@ export default async function SlotsPage() {
     try { slotPrizesMap = JSON.parse(configObj.slot_prizes_map) } catch {}
   }
 
+  let slotMatchTimesMap: Record<string, { m1?: string; m2?: string; m3?: string; close_time?: string }> = {}
+  if (configObj.slot_match_times_map) {
+    try { slotMatchTimesMap = JSON.parse(configObj.slot_match_times_map) } catch {}
+  }
+
   const defaultFirst = parseInt(configObj.slot_first_prize || '200', 10)
   const defaultSecond = parseInt(configObj.slot_second_prize || '100', 10)
   const defaultThird = parseInt(configObj.slot_third_prize || '80', 10)
   const defaultEntryFee = parseInt(configObj.slot_entry_fee || '50', 10)
+  const defaultCloseMin = parseInt(configObj.default_slot_close_minutes || '13', 10)
 
   slots = slots.map(s => {
+    const customTimes = slotMatchTimesMap[s.slot_id] || {}
     return {
       ...s,
       entry_fee: (s.entry_fee !== undefined && s.entry_fee !== null) ? s.entry_fee : defaultEntryFee,
@@ -56,6 +75,10 @@ export default async function SlotsPage() {
       second_prize: s.second_prize ?? slotPrizesMap[s.slot_id]?.second_prize ?? defaultSecond,
       third_prize: s.third_prize ?? slotPrizesMap[s.slot_id]?.third_prize ?? defaultThird,
       third_prize_text: s.third_prize_text ?? slotPrizesMap[s.slot_id]?.third_prize_text ?? 'Free Slot Pass',
+      m1_time: customTimes.m1 || null,
+      m2_time: customTimes.m2 || null,
+      m3_time: customTimes.m3 || null,
+      close_time: customTimes.close_time || null,
     }
   })
 
@@ -71,9 +94,9 @@ export default async function SlotsPage() {
     return aMins - bMins
   })
 
-  // Auto-close slots whose registration cutoff (10 mins before start) has passed
+  // Auto-close slots whose registration cutoff has passed
   const autoCloseSlotIds = slots
-    .filter(s => s.status === 'open' && isSlotPastOrEnded(s.date, s.time_label, s.status))
+    .filter(s => s.status === 'open' && isSlotPastOrEnded(s.date, s.time_label, s.status, (s as any).close_time, defaultCloseMin))
     .map(s => s.slot_id)
 
   if (autoCloseSlotIds.length > 0) {
@@ -203,6 +226,10 @@ export default async function SlotsPage() {
       firstPrize={parseInt(config.slot_first_prize || '200', 10)}
       secondPrize={parseInt(config.slot_second_prize || '100', 10)}
       thirdPrize={parseInt(config.slot_third_prize || '80', 10)}
+      defaultMatch1Offset={parseInt(config.default_match1_offset || '12', 10)}
+      defaultMatch2Offset={parseInt(config.default_match2_offset || '52', 10)}
+      defaultMatch3Offset={parseInt(config.default_match3_offset || '92', 10)}
+      defaultSlotCloseMinutes={parseInt(config.default_slot_close_minutes || '13', 10)}
       isLoggedIn={!!user}
       isTestAccount={isTestAccount}
     />

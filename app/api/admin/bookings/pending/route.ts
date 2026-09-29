@@ -1,6 +1,7 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 
 export async function GET() {
   try {
@@ -95,7 +96,7 @@ export async function GET() {
       }
 
       // Pre-fill WhatsApp message
-      const slotDesc = slot ? `${slot.date} (${slot.time_label})` : 'your slot'
+      const slotDesc = slot ? `${slot.date} (${getSlotWindowOnly(slot.time_label)})` : 'your slot'
       const waText = encodeURIComponent(
         `Hi ${team?.team_name || 'Captain'}! We saw a pending registration on BGFS for ${slotDesc}. Did your payment go through? If you completed the transfer, please reply with your screenshot so we can confirm your room slot!`
       )
@@ -108,7 +109,7 @@ export async function GET() {
         captain_name: captain?.display_name || team?.team_name || 'Captain',
         slot_id: b.slot_id,
         slot_date: slot?.date || '—',
-        slot_time: slot?.time_label || '—',
+        slot_time: getSlotWindowOnly(slot?.time_label || '') || '—',
         slot_status: slot?.status || 'open',
         slot_entry_fee: slot?.entry_fee ?? 50,
         amount_paid: b.amount_paid || 0,

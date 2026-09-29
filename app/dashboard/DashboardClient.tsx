@@ -113,7 +113,7 @@ export default function DashboardClient({
         slotMap.set(sId, {
           slotId: sId,
           date: b.slotData?.date || '',
-          timeLabel: b.slotData?.time_label || '',
+          timeLabel: getSlotWindowOnly(b.slotData?.time_label || ''),
           roomSlotNumber: b.room_slot_number,
           matches: [],
           totalPoints: 0,
@@ -132,7 +132,7 @@ export default function DashboardClient({
         entry = {
           slotId: sId,
           date: slotData.date || '',
-          timeLabel: slotData.time_label || '',
+          timeLabel: getSlotWindowOnly(slotData.time_label || ''),
           roomSlotNumber: null,
           matches: [],
           totalPoints: 0,
@@ -394,7 +394,7 @@ export default function DashboardClient({
                             </div>
                             <div>
                               <div className={styles.perfSlotDate}>
-                                📅 {formatDate(slot.date)} {slot.timeLabel && `• ${slot.timeLabel}`}
+                                📅 {formatDate(slot.date)} {slot.timeLabel && `• ${getSlotWindowOnly(slot.timeLabel)}`}
                               </div>
                               {slot.roomSlotNumber && (
                                 <div className={styles.perfSlotRoom}>

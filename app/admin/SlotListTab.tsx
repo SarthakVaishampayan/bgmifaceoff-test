@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Download, Plus, Edit2, Trash2, Check, X, RefreshCw, AlertCircle, Sparkles } from 'lucide-react'
-import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getSlotWindowOnly } from '@/lib/utils/slotTime'
 
 interface Slot {
   slot_id: string
@@ -327,7 +327,7 @@ export default function SlotListTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slot_id: selectedSlot,
-          time_override: currentSlotObj?.time_label,
+          time_override: getSlotWindowOnly(currentSlotObj?.time_label || '') || currentSlotObj?.time_label,
           date_override: formatDateLabel(currentSlotObj?.date || ''),
           teams_override: teamsOverride,
         }),
@@ -507,7 +507,7 @@ export default function SlotListTab({
                       <optgroup label="🔴 CLOSED SLOTS">
                         {closedSlots.map((s) => (
                           <option key={s.slot_id} value={s.slot_id}>
-                            {s.date} • {s.time_label} 🔴 [CLOSED] ({s.teams_booked_count || 0} teams)
+                            {s.date} • {getSlotWindowOnly(s.time_label)} 🔴 [CLOSED] ({s.teams_booked_count || 0} teams)
                           </option>
                         ))}
                       </optgroup>
@@ -516,7 +516,7 @@ export default function SlotListTab({
                       <optgroup label="🟢 OPEN SLOTS">
                         {openSlots.map((s) => (
                           <option key={s.slot_id} value={s.slot_id}>
-                            {s.date} • {s.time_label} 🟢 [OPEN] ({s.teams_booked_count || 0} teams)
+                            {s.date} • {getSlotWindowOnly(s.time_label)} 🟢 [OPEN] ({s.teams_booked_count || 0} teams)
                           </option>
                         ))}
                       </optgroup>
@@ -527,7 +527,7 @@ export default function SlotListTab({
                     const isClosed = s.status === 'closed' || isSlotPastOrEnded(s.date, s.time_label, s.status)
                     return (
                       <option key={s.slot_id} value={s.slot_id}>
-                        {s.date} • {s.time_label} {isClosed ? '🔴 [CLOSED]' : '🟢 [OPEN]'} ({s.teams_booked_count || 0} teams)
+                        {s.date} • {getSlotWindowOnly(s.time_label)} {isClosed ? '🔴 [CLOSED]' : '🟢 [OPEN]'} ({s.teams_booked_count || 0} teams)
                       </option>
                     )
                   })
@@ -1105,7 +1105,7 @@ export default function SlotListTab({
                   color: '#ffffff',
                 }}
               >
-                {currentSlotObj?.time_label || 'TIME'}
+                {getSlotWindowOnly(currentSlotObj?.time_label || 'TIME') || 'TIME'}
               </div>
 
               {/* Dynamic Date */}

@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 import { NextResponse } from 'next/server'
 import path from 'path'
 import fs from 'fs'
@@ -30,31 +31,50 @@ function formatDateLabel(dateStr: string): string {
 }
 
 // POST or GET /api/admin/slots/generate-poster
+export async function GET(request: Request) {
+  return handleGeneratePoster(request)
+}
+
 export async function POST(request: Request) {
+  return handleGeneratePoster(request)
+}
+
+async function handleGeneratePoster(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error: authErr } = await supabase.auth.getUser()
-    if (authErr || !user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    const url = new URL(request.url)
+    let body: any = {}
+    if (request.method === 'POST') {
+      body = await request.json().catch(() => ({}))
     }
-
-    const admin = await createAdminClient()
-    const isPermAdmin = isSuperAdminEmail(user.email)
-    const { data: userProfile } = await admin
-      .from('users')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (!isPermAdmin && userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
-      return NextResponse.json({ error: 'Admin privileges required' }, { status: 403 })
-    }
-
-    const body = await request.json().catch(() => ({}))
-    const { slot_id, time_override, date_override, teams_override } = body
+    const slot_id = body.slot_id || url.searchParams.get('slot_id')
+    const time_override = body.time_override || url.searchParams.get('time_override')
+    const date_override = body.date_override || url.searchParams.get('date_override')
+    const teams_override = body.teams_override
 
     if (!slot_id) {
       return NextResponse.json({ error: 'slot_id is required' }, { status: 400 })
+    }
+
+    const admin = await createAdminClient()
+
+    // If teams_override is used, verify admin privileges
+    if (teams_override) {
+      const supabase = await createClient()
+      const { data: { user }, error: authErr } = await supabase.auth.getUser()
+      if (authErr || !user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      }
+
+      const isPermAdmin = isSuperAdminEmail(user.email)
+      const { data: userProfile } = await admin
+        .from('users')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!isPermAdmin && userProfile?.role !== 'admin' && userProfile?.role !== 'admin_scores') {
+        return NextResponse.json({ error: 'Admin privileges required for custom overrides' }, { status: 403 })
+      }
     }
 
     // 1. Fetch slot info
@@ -92,7 +112,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const timeText = time_override || slot.time_label || 'TIME'
+    const rawTime = time_override || slot.time_label || 'TIME'
+    const timeText = getSlotWindowOnly(rawTime) || rawTime
     const dateText = date_override || formatDateLabel(slot.date)
 
     // Layout configuration

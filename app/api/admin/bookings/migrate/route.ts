@@ -2,6 +2,7 @@ import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 import { getNextAvailableRoomSlot } from '@/lib/utils/roomSlot'
+import { getSlotWindowOnly } from '@/lib/utils/slotTime'
 
 // POST /api/admin/bookings/migrate
 // Safely transfers a team's booking from their current slot to a new target slot.
@@ -166,7 +167,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Team "${teamName}" successfully migrated to ${newSlot.date} (${newSlot.time_label}). Assigned Room Slot #${assignedRoomSlot}.`,
+      message: `Team "${teamName}" successfully migrated to ${newSlot.date} (${getSlotWindowOnly(newSlot.time_label)}). Assigned Room Slot #${assignedRoomSlot}.`,
       booking_id,
       old_slot_id: booking.slot_id,
       new_slot_id,
@@ -174,7 +175,7 @@ export async function POST(request: Request) {
       new_slot: {
         slot_id: newSlot.slot_id,
         date: newSlot.date,
-        time_label: newSlot.time_label,
+        time_label: getSlotWindowOnly(newSlot.time_label),
         teams_booked_count: updatedTargetCount,
         status: updatedTargetStatus,
         capacity: targetCapacity,

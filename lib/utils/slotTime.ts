@@ -119,6 +119,38 @@ export function getFirstMatchStartMinutes(timeLabelStr: string): number {
   return getSlotStartMinutes(timeLabelStr) + 12
 }
 
+export function parseTimeToMinutes(timeStr: string): number | null {
+  if (!timeStr?.trim()) return null
+  const cleaned = timeStr.trim().toUpperCase()
+  const m = cleaned.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/)
+  if (!m) return null
+
+  let hours = parseInt(m[1], 10)
+  const minutes = m[2] ? parseInt(m[2], 10) : 0
+  const meridian = m[3]
+
+  if (meridian === 'PM' && hours < 12) {
+    hours += 12
+  } else if (meridian === 'AM' && hours === 12) {
+    hours = 0
+  }
+
+  return ((hours * 60 + minutes) % 1440 + 1440) % 1440
+}
+
+export function formatMinutesToTimeString(totalMinutes: number): string {
+  const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440
+  let hours = Math.floor(normalizedMinutes / 60)
+  const minutes = normalizedMinutes % 60
+
+  const period = hours >= 12 ? 'PM' : 'AM'
+  hours = hours % 12
+  if (hours === 0) hours = 12
+
+  const minStr = String(minutes).padStart(2, '0')
+  return `${hours}:${minStr} ${period}`
+}
+
 /**
  * Checks if a slot is closed or past.
  * Logic:
@@ -126,13 +158,14 @@ export function getFirstMatchStartMinutes(timeLabelStr: string): number {
  * 2. If slot date is earlier than today in IST -> closed.
  * 3. If slot date is later than today in IST -> not closed.
  * 4. If slot date is today:
- *    The slot AUTOMATICALLY CLOSES 10 minutes before the starting time of the slot.
- *    (e.g., for a 1:00 PM slot, cutoff is 12:50 PM; at 12:50 PM or later, it is closed).
+ *    Uses customCloseTime (specific time or minutes offset), or falls back to defaultCloseMinutes (default: 13).
  */
 export function isSlotPastOrEnded(
   dateStr: string,
   timeLabelStr: string,
-  status?: string
+  status?: string,
+  customCloseTime?: string | number | null,
+  defaultCloseMinutes: number | string = 13
 ): boolean {
   // If explicitly marked completed or closed by admin in DB
   if (status === 'completed' || status === 'closed') return true
@@ -154,10 +187,30 @@ export function isSlotPastOrEnded(
   const slotStartMinutes = getSlotStartMinutes(timeLabelStr)
   const currentMinutes = ist.hour * 60 + ist.minute
 
-  // Cutoff is strictly 13 minutes AFTER the slot starting time (e.g. 7:00 PM – 9:00 PM slot closes at 7:13 PM)
-  const cutoffMinutes = slotStartMinutes + 13
+  const fallbackOffset = parseInt(String(defaultCloseMinutes || '13'), 10) || 13
+  let cutoffMinutes = slotStartMinutes + fallbackOffset
 
-  return currentMinutes >= cutoffMinutes
+  if (customCloseTime !== undefined && customCloseTime !== null && String(customCloseTime).trim() !== '') {
+    const rawCustom = String(customCloseTime).trim()
+    if (/^\+?\d+$/.test(rawCustom)) {
+      cutoffMinutes = slotStartMinutes + parseInt(rawCustom.replace(/^\+/, ''), 10)
+    } else {
+      const parsedExact = parseTimeToMinutes(rawCustom)
+      if (parsedExact !== null) {
+        cutoffMinutes = parsedExact
+        // If slot starts in late evening (e.g. 11 PM) and cutoff is early morning (e.g. 12:15 AM)
+        if (slotStartMinutes > 12 * 60 && cutoffMinutes < 6 * 60) {
+          cutoffMinutes += 1440
+        }
+      }
+    }
+  }
+
+  const normalizedCurrent = (slotStartMinutes > 12 * 60 && currentMinutes < 6 * 60)
+    ? currentMinutes + 1440
+    : currentMinutes
+
+  return normalizedCurrent >= cutoffMinutes
 }
 
 export const isSlotRegistrationClosed = isSlotPastOrEnded
@@ -175,10 +228,6 @@ export function getSlotWindowOnly(timeLabelStr: string): string {
 
 /**
  * Extracts a specific match time string if specified in the time label.
- * E.g. for "5:00 PM – 7:00 PM (Match 1: 1:12 PM, Match 2: 1:52 PM, Match 3: 2:32 PM)"
- * parseMatchTime(timeLabelStr, 1) -> "1:12 PM"
- * parseMatchTime(timeLabelStr, 2) -> "1:52 PM"
- * parseMatchTime(timeLabelStr, 3) -> "2:32 PM"
  */
 export function parseMatchTime(timeLabelStr: string, matchNum: number): string {
   if (!timeLabelStr) return ''
@@ -186,4 +235,35 @@ export function parseMatchTime(timeLabelStr: string, matchNum: number): string {
   const hit = timeLabelStr.match(regex)
   if (!hit) return ''
   return hit[1].trim().replace(/\s*(AM|PM)/i, ' $1').toUpperCase()
+}
+
+export interface MatchScheduleItem {
+  name: string
+  time: string
+  map: string
+}
+
+/**
+ * Computes the 3 match timings for a slot:
+ * Prioritizes slot custom overrides (m1, m2, m3), then falls back to slotStartMinutes + configured offsets.
+ */
+export function computeSlotMatchTimes(
+  timeLabelStr: string,
+  overrides?: { m1?: string; m2?: string; m3?: string } | null,
+  offsets?: { m1?: number; m2?: number; m3?: number } | null
+): MatchScheduleItem[] {
+  const startMinutes = getSlotStartMinutes(timeLabelStr)
+  const off1 = offsets?.m1 ?? 12
+  const off2 = offsets?.m2 ?? 52
+  const off3 = offsets?.m3 ?? 92
+
+  const time1 = overrides?.m1?.trim() || formatMinutesToTimeString(startMinutes + off1)
+  const time2 = overrides?.m2?.trim() || formatMinutesToTimeString(startMinutes + off2)
+  const time3 = overrides?.m3?.trim() || formatMinutesToTimeString(startMinutes + off3)
+
+  return [
+    { name: 'MATCH 1', time: time1, map: 'Erangel' },
+    { name: 'MATCH 2', time: time2, map: 'Rondo' },
+    { name: 'MATCH 3', time: time3, map: 'Miramar' },
+  ]
 }
