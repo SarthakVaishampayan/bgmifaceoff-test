@@ -1,4 +1,3 @@
-import { Suspense } from 'react'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import LeaderboardClient from './LeaderboardClient'
 import { getPlacementPoints } from '@/lib/scoring'
@@ -11,7 +10,15 @@ export const metadata: Metadata = {
 
 export const revalidate = 30 // Cache for 30 seconds — reduces 7-query DB load on every visit
 
-export default async function LeaderboardPage() {
+export default async function LeaderboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ slot_id?: string; tab?: string }> | { slot_id?: string; tab?: string }
+}) {
+  const resolvedParams = searchParams ? await searchParams : {}
+  const initialSlotId = resolvedParams?.slot_id || null
+  const initialTab = resolvedParams?.tab === 'slot' ? 'slot' : 'overall'
+
   const supabase = await createAdminClient()
 
   // ALL queries in parallel — no dependencies between them
@@ -244,16 +251,54 @@ export default async function LeaderboardPage() {
     }
   } catch {}
 
+  const activeSlotIds = new Set(enrichedSlots.map((s: any) => s.slot_id))
+
+  // Trim matches to only what LeaderboardClient needs
+  const trimmedMatches = completedMatches.map((m: any) => ({
+    match_id: m.match_id,
+    team_id: m.team_id,
+    slot_id: m.slot_id,
+    match_number: m.match_number,
+    total_points: m.total_points,
+    placement: m.placement,
+    kills: m.kills,
+    placement_points: m.placement_points,
+    teams: m.teams ? { team_name: m.teams.team_name } : null,
+  }))
+
+  // Trim bookings to active slots and only needed fields
+  const trimmedBookings = filteredBookings
+    .filter((b: any) => activeSlotIds.has(b.slot_id))
+    .map((b: any) => ({
+      booking_id: b.booking_id,
+      team_id: b.team_id,
+      slot_id: b.slot_id,
+      room_slot_number: b.room_slot_number,
+      teams: b.teams ? { team_name: b.teams.team_name } : null,
+    }))
+
+  const trimmedSlots = enrichedSlots.map((s: any) => ({
+    slot_id: s.slot_id,
+    date: s.date,
+    time_label: s.time_label,
+    status: s.status,
+    teams_booked_count: s.teams_booked_count || 0,
+    first_prize: s.first_prize,
+    second_prize: s.second_prize,
+    third_prize: s.third_prize,
+    third_prize_text: s.third_prize_text,
+  }))
+
   return (
-    <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>Loading Leaderboard...</div>}>
-      <LeaderboardClient
-        rows={ranked}
-        allMatches={completedMatches}
-        slots={enrichedSlots}
-        bookings={filteredBookings as any[]}
-        slotWinnersMap={slotWinnersMap}
-        userTeamId={userTeamId}
-      />
-    </Suspense>
+    <LeaderboardClient
+      rows={ranked}
+      allMatches={trimmedMatches}
+      slots={trimmedSlots}
+      bookings={trimmedBookings}
+      slotWinnersMap={slotWinnersMap}
+      userTeamId={userTeamId}
+      initialSlotId={initialSlotId}
+      initialTab={initialTab}
+    />
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Trophy, Medal, Award, Layers, ChevronDown, Check, Copy, Download } from 'lucide-react'
 import { formatMonthDay, formatFullDate } from '@/lib/utils/formatDate'
@@ -43,6 +43,7 @@ interface SlotItem {
   first_prize?: number
   second_prize?: number
   third_prize?: number
+  third_prize_text?: string
 }
 
 interface BookingEntry {
@@ -60,22 +61,67 @@ interface Props {
   bookings?: BookingEntry[]
   slotWinnersMap?: Record<string, { m1?: string; m2?: string; m3?: string }>
   userTeamId?: string | null
+  initialSlotId?: string | null
+  initialTab?: 'overall' | 'slot'
 }
 
-export default function LeaderboardClient({ rows, allMatches, slots, bookings = [], slotWinnersMap = {}, userTeamId = null }: Props) {
+// Isolated URL search param sync component inside a non-blocking null fallback
+function UrlParamSync({
+  onParamsChange,
+}: {
+  onParamsChange: (slotId: string | null, tab: string | null) => void
+}) {
   const searchParams = useSearchParams()
-  const urlSlotId = searchParams ? searchParams.get('slot_id') : null
-  const urlTab = searchParams ? searchParams.get('tab') : null
+  const slotId = searchParams ? searchParams.get('slot_id') : null
+  const tab = searchParams ? searchParams.get('tab') : null
+
+  useEffect(() => {
+    onParamsChange(slotId, tab)
+  }, [slotId, tab, onParamsChange])
+
+  return null
+}
+
+export default function LeaderboardClient({
+  rows,
+  allMatches,
+  slots,
+  bookings = [],
+  slotWinnersMap = {},
+  userTeamId = null,
+  initialSlotId = null,
+  initialTab = 'overall',
+}: Props) {
+  const activeSlots = useMemo(() => {
+    return slots.filter(s => !s.date || s.date >= '2026-09-16')
+  }, [slots])
+
+  // Default to the latest completed slot that has published results, or fallback to first active slot
+  const defaultSlotId = useMemo(() => {
+    if (initialSlotId) return initialSlotId
+    const completedSlot = activeSlots.find(s => s.status === 'completed')
+    return completedSlot ? completedSlot.slot_id : (activeSlots[0]?.slot_id || '')
+  }, [initialSlotId, activeSlots])
 
   const [viewMode, setViewMode] = useState<'overall' | 'slot'>(
-    urlSlotId || urlTab === 'slot' ? 'slot' : 'overall'
+    initialSlotId || initialTab === 'slot' ? 'slot' : 'overall'
+  )
+  const [selectedSlotId, setSelectedSlotId] = useState<string>(
+    initialSlotId || defaultSlotId
   )
   const [search, setSearch] = useState('')
   const [mySlotsOnly, setMySlotsOnly] = useState(false)
 
-  const activeSlots = useMemo(() => {
-    return slots.filter(s => !s.date || s.date >= '2026-09-16')
-  }, [slots])
+  const handleParamsChange = useCallback((urlSlotId: string | null, urlTab: string | null) => {
+    if (urlSlotId) {
+      setSelectedSlotId(urlSlotId)
+      setViewMode('slot')
+    } else if (urlTab === 'slot') {
+      setViewMode('slot')
+    } else if (urlTab === 'overall') {
+      setViewMode('overall')
+    }
+  }, [])
 
   // Slots filtered by "My Slots" toggle
   const filteredSlots = useMemo(() => {
@@ -86,21 +132,7 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
     return activeSlots.filter(s => bookedSlotIds.has(s.slot_id))
   }, [activeSlots, mySlotsOnly, userTeamId, bookings])
 
-  // Default selected slot to the URL slot_id or most recent one
-  const [selectedSlotId, setSelectedSlotId] = useState<string>(
-    urlSlotId || (activeSlots.length > 0 ? activeSlots[0].slot_id : '')
-  )
-
   const isInitialMount = useRef(true)
-
-  useEffect(() => {
-    if (urlSlotId) {
-      setSelectedSlotId(urlSlotId)
-      setViewMode('slot')
-    } else if (urlTab === 'slot') {
-      setViewMode('slot')
-    }
-  }, [urlSlotId, urlTab])
 
   // Auto-select first slot only when user explicitly toggles My Slots
   useEffect(() => {
@@ -346,11 +378,20 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
           </div>
         </div>
 
+        {/* URL Param Sync in isolated suspense so it never blocks page render */}
+        <Suspense fallback={null}>
+          <UrlParamSync onParamsChange={handleParamsChange} />
+        </Suspense>
+
         {/* View Mode Switcher Tabs */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <div className={styles.tabGroup} role="tablist" aria-label="Leaderboard View Mode" style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
           <button
+            id="btn-overall-standings"
+            role="tab"
+            aria-selected={viewMode === 'overall'}
             type="button"
             onClick={() => setViewMode('overall')}
+            className={`${styles.tabBtn} ${viewMode === 'overall' ? styles.tabActive : ''}`}
             style={{
               flex: '1 1 240px',
               display: 'flex',
@@ -370,16 +411,23 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
               textTransform: 'uppercase',
               boxShadow: viewMode === 'overall' ? '0 2px 10px rgba(250, 204, 21, 0.25)' : 'none',
               transition: 'all 0.2s ease',
-              minHeight: '44px',
+              minHeight: '46px',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+              userSelect: 'none',
             }}
           >
-            <Trophy size={16} color={viewMode === 'overall' ? '#000000' : '#facc15'} />
-            <span>OVERALL STANDINGS (BEST 6 SLOTS)</span>
+            <Trophy size={16} color={viewMode === 'overall' ? '#000000' : '#facc15'} style={{ pointerEvents: 'none', flexShrink: 0 }} />
+            <span style={{ pointerEvents: 'none' }}>OVERALL STANDINGS (BEST 6 SLOTS)</span>
           </button>
 
           <button
+            id="btn-slot-results"
+            role="tab"
+            aria-selected={viewMode === 'slot'}
             type="button"
             onClick={() => setViewMode('slot')}
+            className={`${styles.tabBtn} ${viewMode === 'slot' ? styles.tabActive : ''}`}
             style={{
               flex: '1 1 240px',
               display: 'flex',
@@ -399,11 +447,14 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
               textTransform: 'uppercase',
               boxShadow: viewMode === 'slot' ? '0 2px 10px rgba(250, 204, 21, 0.25)' : 'none',
               transition: 'all 0.2s ease',
-              minHeight: '44px',
+              minHeight: '46px',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+              userSelect: 'none',
             }}
           >
-            <Layers size={16} color={viewMode === 'slot' ? '#000000' : '#facc15'} />
-            <span>SLOT RESULTS (3 MATCHES)</span>
+            <Layers size={16} color={viewMode === 'slot' ? '#000000' : '#facc15'} style={{ pointerEvents: 'none', flexShrink: 0 }} />
+            <span style={{ pointerEvents: 'none' }}>SLOT RESULTS (3 MATCHES)</span>
           </button>
         </div>
 
@@ -845,6 +896,20 @@ function CustomSlotDropdown({
   emptyMessage?: string
 }) {
   const [isOpen, setIsOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClickOutside = (e: MouseEvent | TouchEvent | PointerEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handleClickOutside)
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside)
+    }
+  }, [isOpen])
 
   const selectedSlot = slots.find(s => s.slot_id === selectedSlotId)
 
@@ -855,11 +920,13 @@ function CustomSlotDropdown({
   }
 
   return (
-    <div className={styles.customDropdownWrapper}>
+    <div ref={dropdownRef} className={styles.customDropdownWrapper}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={slots.length === 0}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
         style={{
           width: '100%',
           height: '46px',
@@ -881,9 +948,12 @@ function CustomSlotDropdown({
           outline: 'none',
           boxShadow: isOpen ? '0 0 12px rgba(250, 204, 21, 0.15)' : 'none',
           boxSizing: 'border-box',
+          touchAction: 'manipulation',
+          WebkitTapHighlightColor: 'transparent',
+          userSelect: 'none',
         }}
       >
-        <span style={{ color: slots.length === 0 ? '#888888' : '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ color: slots.length === 0 ? '#888888' : '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
           {slots.length === 0 ? (emptyMessage || 'No slots created yet') : getLabel(selectedSlot)}
         </span>
         <ChevronDown
@@ -893,32 +963,47 @@ function CustomSlotDropdown({
             flexShrink: 0,
             transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
             transition: 'transform 0.2s ease',
+            pointerEvents: 'none',
           }}
         />
       </button>
 
       {isOpen && slots.length > 0 && (
-        <>
-          <div className={styles.dropdownBackdrop} onClick={() => setIsOpen(false)} />
-          <ul className={styles.customDropdownMenu}>
-            {slots.map(s => {
-              const isSelected = s.slot_id === selectedSlotId
-              return (
-                <li
-                  key={s.slot_id}
-                  className={`${styles.customDropdownItem} ${isSelected ? styles.itemSelected : ''}`}
-                  onClick={() => {
+        <ul className={styles.customDropdownMenu} role="listbox">
+          {slots.map(s => {
+            const isSelected = s.slot_id === selectedSlotId
+            return (
+              <li
+                key={s.slot_id}
+                role="option"
+                aria-selected={isSelected}
+                tabIndex={0}
+                className={`${styles.customDropdownItem} ${isSelected ? styles.itemSelected : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelectSlot(s.slot_id)
+                  setIsOpen(false)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
                     onSelectSlot(s.slot_id)
                     setIsOpen(false)
-                  }}
-                >
-                  <span>{getLabel(s)}</span>
-                  {isSelected && <Check size={14} color="#facc15" />}
-                </li>
-              )
-            })}
-          </ul>
-        </>
+                  }
+                }}
+                style={{
+                  cursor: 'pointer',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
+                  minHeight: '44px',
+                }}
+              >
+                <span>{getLabel(s)}</span>
+                {isSelected && <Check size={14} color="#facc15" />}
+              </li>
+            )
+          })}
+        </ul>
       )}
     </div>
   )
