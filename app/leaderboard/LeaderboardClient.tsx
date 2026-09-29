@@ -205,14 +205,30 @@ export default function LeaderboardClient({ rows, allMatches, slots, bookings = 
 
     const hasMatches = matchesForSlot.length > 0
 
-    // Exact Tie-Breaker Ordering:
+    // Standard BGMI Tiebreaker Hierarchy:
     // 1. Total Points
-    // 2. Position Points (if Total Points are equal)
-    // 3. Chicken Dinners (#1 / WWCD) (if Total Points & Position Points are equal)
+    // 2. WWCD (Chicken Dinners)
+    // 3. Total Placement Points
+    // 4. Total Elimination (Kill) Points
+    // 5. Recent Match Performance
     const list = Object.values(teamMap).sort((a, b) => {
       if (b.total_points !== a.total_points) return b.total_points - a.total_points
-      if (b.total_position_points !== a.total_position_points) return b.total_position_points - a.total_position_points
       if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+      if (b.total_position_points !== a.total_position_points) return b.total_position_points - a.total_position_points
+      if (b.total_kills !== a.total_kills) return b.total_kills - a.total_kills
+      // Recent match performance (M3 -> M2 -> M1)
+      const matchesA = [a.m3, a.m2, a.m1].filter(Boolean)
+      const matchesB = [b.m3, b.m2, b.m1].filter(Boolean)
+      for (let i = 0; i < Math.max(matchesA.length, matchesB.length); i++) {
+        const mA = matchesA[i]
+        const mB = matchesB[i]
+        if (mA && mB) {
+          const placeA = mA.placement && mA.placement > 0 ? mA.placement : 999
+          const placeB = mB.placement && mB.placement > 0 ? mB.placement : 999
+          if (placeA !== placeB) return placeA - placeB
+          if ((mB.total_points || 0) !== (mA.total_points || 0)) return (mB.total_points || 0) - (mA.total_points || 0)
+        }
+      }
       return (a.room_slot_number || 99) - (b.room_slot_number || 99)
     })
 

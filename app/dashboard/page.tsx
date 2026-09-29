@@ -275,10 +275,12 @@ export default async function DashboardPage() {
 
   const computedRankedList = Object.entries(teamSlotTotals).map(([tId, slotMap]) => {
     const slotsPlayed = Object.values(slotMap)
+    // Standard BGMI Hierarchy: Total Points -> WWCD -> Position Points -> Kills
     slotsPlayed.sort((a, b) => {
       if (b.total_points !== a.total_points) return b.total_points - a.total_points
-      if (b.position_points !== a.position_points) return b.position_points - a.position_points
       if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+      if (b.position_points !== a.position_points) return b.position_points - a.position_points
+      if (b.kills !== a.kills) return b.kills - a.kills
       return 0
     })
     const top6 = slotsPlayed.slice(0, 6)
@@ -297,10 +299,16 @@ export default async function DashboardPage() {
     }
   })
 
+  // Standard BGMI Tiebreaker Hierarchy:
+  // 1. Total Points
+  // 2. WWCD (Chicken Dinners)
+  // 3. Total Placement Points
+  // 4. Total Elimination Points
   computedRankedList.sort((a, b) => {
     if (b.best_16_total !== a.best_16_total) return b.best_16_total - a.best_16_total
-    if (b.best_16_pos_points !== a.best_16_pos_points) return b.best_16_pos_points - a.best_16_pos_points
     if (b.best_16_wwcd !== a.best_16_wwcd) return b.best_16_wwcd - a.best_16_wwcd
+    if (b.best_16_pos_points !== a.best_16_pos_points) return b.best_16_pos_points - a.best_16_pos_points
+    if (b.total_kills !== a.total_kills) return b.total_kills - a.total_kills
     return 0
   })
 

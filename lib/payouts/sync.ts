@@ -187,8 +187,9 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
         const teamsMap = slotMatchesMap.get(slotId)!
         const sorted = Array.from(teamsMap.values()).sort((a, b) => {
           if (b.total_points !== a.total_points) return b.total_points - a.total_points
-          if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
           if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+          if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
+          if (b.total_kills !== a.total_kills) return b.total_kills - a.total_kills
           return 0
         })
         candidates = sorted.slice(0, isPastSlot ? 2 : 3)
@@ -337,8 +338,9 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
         const teamsMap = slotMatchesMap.get(slotId)!
         const sorted = Array.from(teamsMap.values()).sort((a, b) => {
           if (b.total_points !== a.total_points) return b.total_points - a.total_points
-          if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
           if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+          if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
+          if (b.total_kills !== a.total_kills) return b.total_kills - a.total_kills
           return 0
         })
 

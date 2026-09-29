@@ -541,6 +541,7 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
       matches_won: string[]
       is_scored: boolean
       match_id?: string
+      match_records?: any[]
     }> = {}
 
     bookedTeams.forEach(t => {
@@ -590,23 +591,47 @@ function ScoreEntryTab({ slots, teams, supabase, onSyncPayouts, selectedDate, se
       entry.total_pos_points += posPts
       entry.is_scored = true
       entry.match_id = m.match_id
+      if (!entry.match_records) entry.match_records = []
+      entry.match_records.push(m)
     })
 
     return map
   }, [bookedTeams, recordedMatches, match1Winner, match2Winner, match3Winner])
 
-  // Strict Tie-Breaker Ordering: 1. Total Points -> 2. Position Points -> 3. Chicken Dinners (#1 / WWCD)
+  // Standard BGMI Tiebreaker Hierarchy:
+  // 1. Total Points
+  // 2. WWCD (Chicken Dinners)
+  // 3. Total Placement Points
+  // 4. Total Elimination (Kill) Points
+  // 5. Recent Match Performance (last match placement / points)
   const slotStandingsList = useMemo(() => {
     return Object.values(teamSlotTotals)
       .filter(t => t.is_scored)
       .sort((a, b) => {
-        // 1st Priority: Total Points
+        // Priority 1: Total Points
         if (b.total_points !== a.total_points) return b.total_points - a.total_points
-        // 2nd Priority: Position Points
-        if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
-        // 3rd Priority: Chicken Dinners (#1 / WWCD)
+        // Priority 2: WWCD (Chicken Dinners)
         if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
-        return 0
+        // Priority 3: Total Placement Points
+        if (b.total_pos_points !== a.total_pos_points) return b.total_pos_points - a.total_pos_points
+        // Priority 4: Total Elimination (Kill) Points
+        if (b.total_kills !== a.total_kills) return b.total_kills - a.total_kills
+        // Priority 5: Recent Match Performance (last match placement / points)
+        if (a.match_records && b.match_records) {
+          const aSorted = [...a.match_records].sort((x, y) => (y.match_number || 1) - (x.match_number || 1))
+          const bSorted = [...b.match_records].sort((x, y) => (y.match_number || 1) - (x.match_number || 1))
+          for (let i = 0; i < Math.max(aSorted.length, bSorted.length); i++) {
+            const mA = aSorted[i]
+            const mB = bSorted[i]
+            if (mA && mB) {
+              const placeA = mA.placement && mA.placement > 0 ? mA.placement : 999
+              const placeB = mB.placement && mB.placement > 0 ? mB.placement : 999
+              if (placeA !== placeB) return placeA - placeB
+              if ((mB.total_points || 0) !== (mA.total_points || 0)) return (mB.total_points || 0) - (mA.total_points || 0)
+            }
+          }
+        }
+        return (a.room_slot_number || 99) - (b.room_slot_number || 99)
       })
       .map((item, idx) => ({ ...item, rank: idx + 1 }))
   }, [teamSlotTotals])
@@ -1691,7 +1716,7 @@ Return ONLY the raw JSON block without markdown wrap.`
               <span>🏆</span> Slot Team Standings &amp; Scores ({slotStandingsList.length} / {bookedTeams.length} Teams Scored)
             </h3>
             <span style={{ fontSize: '0.72rem', color: '#888888' }}>
-              Tie-Breaker Priority: 1. Total Points → 2. Position Points → 3. Chicken Dinners (#1)
+              Tie-Breaker Priority: 1. Total Points → 2. WWCD (🍗) → 3. Position Points → 4. Eliminations → 5. Recent Match
             </span>
           </div>
 

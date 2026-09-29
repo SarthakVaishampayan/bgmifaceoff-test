@@ -199,19 +199,37 @@ export async function GET(request: Request) {
       return t
     })
 
-    // Exact Tie-Breaker Ordering:
+    // Standard BGMI Tiebreaker Hierarchy:
     // 1. Total Points
-    // 2. Position Points
-    // 3. Chicken Dinners (#1 / WWCD)
+    // 2. WWCD (Chicken Dinners)
+    // 3. Total Placement Points
+    // 4. Total Elimination Points
+    // 5. Recent Match Performance
     rankedList.sort((a, b) => {
       if (b.total_points !== a.total_points) {
         return b.total_points - a.total_points
       }
+      if (b.wwcd !== a.wwcd) {
+        return b.wwcd - a.wwcd
+      }
       if (b.total_pos_points !== a.total_pos_points) {
         return b.total_pos_points - a.total_pos_points
       }
-      if (b.wwcd !== a.wwcd) {
-        return b.wwcd - a.wwcd
+      if (b.total_kills !== a.total_kills) {
+        return b.total_kills - a.total_kills
+      }
+      // Recent match check: matches sorted ascending by match_number, so check latest match first
+      const revA = [...a.matches].reverse()
+      const revB = [...b.matches].reverse()
+      for (let i = 0; i < Math.max(revA.length, revB.length); i++) {
+        const mA = revA[i]
+        const mB = revB[i]
+        if (mA && mB) {
+          const placeA = mA.placement > 0 ? mA.placement : 999
+          const placeB = mB.placement > 0 ? mB.placement : 999
+          if (placeA !== placeB) return placeA - placeB
+          if (mB.total_points !== mA.total_points) return mB.total_points - mA.total_points
+        }
       }
       return 0
     })

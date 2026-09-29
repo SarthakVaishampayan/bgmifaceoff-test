@@ -185,11 +185,12 @@ export default async function LeaderboardPage() {
 
   const computedStandings = Object.values(teamMetaMap).map(team => {
     const slotsPlayed = Object.values(teamSlotMap[team.team_id] || {})
-    // Sort team slots by: 1. Total Points -> 2. Position Points -> 3. WWCD
+    // Sort team slots by: 1. Total Points -> 2. WWCD -> 3. Position Points -> 4. Kills
     slotsPlayed.sort((a, b) => {
       if (b.total_points !== a.total_points) return b.total_points - a.total_points
-      if (b.position_points !== a.position_points) return b.position_points - a.position_points
       if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+      if (b.position_points !== a.position_points) return b.position_points - a.position_points
+      if (b.kills !== a.kills) return b.kills - a.kills
       return 0
     })
     const top6Slots = slotsPlayed.slice(0, 6)
@@ -213,14 +214,16 @@ export default async function LeaderboardPage() {
     }
   })
 
-  // Exact Tie-Breaker Ordering:
+  // Standard BGMI Tiebreaker Hierarchy:
   // 1. Total Points (best_6_total)
-  // 2. Position Points (if Total Points are equal)
-  // 3. Chicken Dinners (if Total Points & Position Points are equal)
+  // 2. WWCD (Chicken Dinners)
+  // 3. Total Placement Points (position_points)
+  // 4. Total Elimination Points (finishes)
   computedStandings.sort((a, b) => {
     if (b.best_16_total !== a.best_16_total) return b.best_16_total - a.best_16_total
-    if (b.position_points !== a.position_points) return b.position_points - a.position_points
     if (b.wwcd !== a.wwcd) return b.wwcd - a.wwcd
+    if (b.position_points !== a.position_points) return b.position_points - a.position_points
+    if (b.finishes !== a.finishes) return b.finishes - a.finishes
     return 0
   })
 
