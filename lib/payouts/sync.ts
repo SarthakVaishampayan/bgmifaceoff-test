@@ -214,14 +214,14 @@ export async function syncPendingPayouts(admin: SupabaseClient) {
         let prizeAmount = 0
         if (isPastSlot) {
           prizeAmount = index === 0
-            ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? 120)
-            : (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? 80)
+            ? (slot.first_prize || slotPrizesMap[slotId]?.first_prize || 120)
+            : (slot.second_prize || slotPrizesMap[slotId]?.second_prize || 80)
         } else {
           prizeAmount = index === 0
-            ? (slot.first_prize ?? slotPrizesMap[slotId]?.first_prize ?? defaultFirstPrize)
+            ? (slot.first_prize || slotPrizesMap[slotId]?.first_prize || defaultFirstPrize)
             : index === 1
-              ? (slot.second_prize ?? slotPrizesMap[slotId]?.second_prize ?? defaultSecondPrize)
-              : (slot.third_prize ?? slotPrizesMap[slotId]?.third_prize ?? defaultThirdPrize)
+              ? (slot.second_prize || slotPrizesMap[slotId]?.second_prize || defaultSecondPrize)
+              : (slot.third_prize || slotPrizesMap[slotId]?.third_prize || defaultThirdPrize)
         }
 
         const upiId = teamUpiMap.get(team.team_id) || (team.captain_user_id ? captainUpiMap.get(team.captain_user_id) : null) || null

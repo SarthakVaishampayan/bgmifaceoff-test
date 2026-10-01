@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Download, Plus, Edit2, Trash2, Check, X, RefreshCw, AlertCircle, Sparkles } from 'lucide-react'
 import { isSlotPastOrEnded, getSlotWindowOnly } from '@/lib/utils/slotTime'
+import { downloadSlotPoster } from '@/lib/utils/generateSlotPosterCanvas'
 
 interface Slot {
   slot_id: string
@@ -322,35 +323,18 @@ export default function SlotListTab({
         }
       })
 
-      const res = await fetch('/api/admin/slots/generate-poster', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slot_id: selectedSlot,
-          time_override: getSlotWindowOnly(currentSlotObj?.time_label || '') || currentSlotObj?.time_label,
-          date_override: formatDateLabel(currentSlotObj?.date || ''),
-          teams_override: teamsOverride,
-        }),
-      })
+      const timeText = getSlotWindowOnly(currentSlotObj?.time_label || '') || currentSlotObj?.time_label || 'TIME'
+      const dateText = formatDateLabel(currentSlotObj?.date || '')
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}))
-        throw new Error(errJson.error || 'Failed to generate poster')
-      }
+      await downloadSlotPoster({
+        timeText,
+        dateText,
+        teams: teamsOverride,
+      }, `bgfs-slot-list-${currentSlotObj?.date || 'match'}.png`)
 
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `bgfs-slot-list-${currentSlotObj?.date || 'match'}.png`
-      a.style.display = 'none'
-      a.addEventListener('click', (e) => e.stopPropagation())
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
       setFeedbackMsg({ text: '✅ Slot List poster downloaded successfully!', type: 'success' })
     } catch (err: any) {
+      console.error('Error generating canvas poster:', err)
       setFeedbackMsg({ text: `❌ ${err.message || 'Download failed'}`, type: 'error' })
     } finally {
       setIsDownloading(false)

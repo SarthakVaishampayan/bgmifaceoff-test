@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Trophy, Medal, Award, Layers, ChevronDown, Check, Copy, Download } from 'lucide-react'
 import { formatMonthDay, formatFullDate } from '@/lib/utils/formatDate'
 import { getSlotWindowOnly } from '@/lib/utils/slotTime'
+import { downloadSlotPoster, formatPosterDateLabel } from '@/lib/utils/generateSlotPosterCanvas'
 import styles from './page.module.css'
 
 interface LeaderboardRow {
@@ -309,22 +310,14 @@ export default function LeaderboardClient({
     if (!selectedSlot) return
     setIsDownloadingPoster(true)
     try {
-      const res = await fetch(`/api/admin/slots/generate-poster?slot_id=${selectedSlot.slot_id}`)
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}))
-        throw new Error(errJson.error || 'Failed to generate poster')
-      }
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `bgfs-slot-list-${selectedSlot.date || 'match'}.png`
-      a.style.display = 'none'
-      a.addEventListener('click', (e) => e.stopPropagation())
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      const timeText = getSlotWindowOnly(selectedSlot.time_label) || selectedSlot.time_label || 'TIME'
+      const dateText = formatPosterDateLabel(selectedSlot.date || '')
+
+      await downloadSlotPoster({
+        timeText,
+        dateText,
+        teams: slotRoster,
+      }, `bgfs-slot-list-${selectedSlot.date || 'match'}.png`)
     } catch (err: any) {
       alert(`Download failed: ${err.message || 'Error generating poster'}`)
     } finally {

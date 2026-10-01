@@ -366,6 +366,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               onPayoutSettled={(newPayout) => setPayouts(prev => [newPayout, ...prev.filter(p => p.payout_id !== newPayout.payout_id)])}
               onPayoutUpdated={(updated) => setPayouts(prev => prev.map(p => p.payout_id === updated.payout_id ? updated : p))}
               onSyncPayouts={refreshPayouts}
+              config={config}
             />
           )}
           {isSuperAdmin && tab === 'bookings' && (
@@ -4248,6 +4249,13 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
   )
 }
 
+function getPayoutStanding(p: any): string {
+  if (p?.place === '1st') return '1st'
+  if (p?.place === '2nd') return '2nd'
+  if (p?.place === '3rd') return '3rd'
+  return '3rd'
+}
+
 // ── OFFICIAL PAYOUT SLIP MODAL ───────────────────────────────────────
 function PayoutSlipModal({
   slip,
@@ -4264,7 +4272,7 @@ function PayoutSlipModal({
   const slipCode = `BGFS-PAY-${(slip.payout_id || '').slice(0, 8).toUpperCase()}`
   const dateFormatted = slip.paid_at ? formatNumericDate(slip.paid_at) : '—'
   const slotFormatted = slip.slots ? `${formatShortDate(slip.slots.date)} • ${getSlotWindowOnly(slip.slots.time_label)}` : '—'
-  const displayPlace = slip.place || (slip.amount === 60 ? '3rd' : null)
+  const displayPlace = getPayoutStanding(slip)
 
   function copySlipText() {
     const text = `=== BGFS OFFICIAL PAYOUT SLIP ===\nSlip Reference: ${slipCode}\nTeam: ${slip.teams?.team_name || 'N/A'}\nSlot: ${slotFormatted}\nStanding: ${displayPlace || 'Participant'}\nAmount: ₹${slip.amount}\nUPI ID: ${slip.upi_id || 'N/A'}\nStatus: ${slip.status === 'paid' ? 'PAID OUT' : 'PENDING'}\nPaid On: ${dateFormatted}\n=================================`
@@ -4429,11 +4437,13 @@ function PayoutsTab({
   onPayoutSettled,
   onPayoutUpdated,
   onSyncPayouts,
+  config,
 }: {
   payouts: any[];
   onPayoutSettled: (payout: any) => void;
   onPayoutUpdated?: (payout: any) => void;
   onSyncPayouts?: () => Promise<void> | void;
+  config?: any;
 }) {
   const [selectedSlip, setSelectedSlip] = useState<any | null>(null)
   const [payoutTarget, setPayoutTarget] = useState<any | null>(null)
@@ -4480,14 +4490,14 @@ function PayoutsTab({
       team_id: p.team_id,
       team_name: p.teams?.team_name || 'Team',
       rank: p.place === '1st' ? 1 : p.place === '2nd' ? 2 : 3,
-      place: p.place,
+      place: getPayoutStanding(p),
       total_points: p.total_points,
       amount: p.amount,
       upi_id: p.upi_id,
       slot_id: p.slot_id,
       slots: p.slots,
     })
-    setPayoutAmount(p.amount ? String(p.amount) : (p.place === '1st' ? '160' : p.place === '2nd' ? '80' : '60'))
+    setPayoutAmount(p.amount ? String(p.amount) : (p.place === '1st' ? (config?.slot_first_prize || '200') : p.place === '2nd' ? (config?.slot_second_prize || '100') : (config?.slot_third_prize || '80')))
     setPayoutUpiId(p.upi_id || '')
     setPayoutError('')
   }
@@ -4496,7 +4506,7 @@ function PayoutsTab({
     setEditingSlip(p)
     setEditAmount(String(p.amount ?? 0))
     setEditUpiId(p.upi_id || '')
-    setEditPlace(p.place || (p.amount === 60 ? '3rd' : ''))
+    setEditPlace(p.place || getPayoutStanding(p))
     setEditStatus(p.status || 'pending')
     setEditError('')
   }
@@ -4688,11 +4698,14 @@ function PayoutsTab({
                       {p.slots ? `${formatShortDate(p.slots.date)} • ${getSlotWindowOnly(p.slots.time_label)}` : '—'}
                     </td>
                     <td>
-                      {p.place || p.amount === 60 ? (
-                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : p.place === '2nd' ? 'badge-silver' : 'badge-bronze'}`}>
-                          {p.place || '3rd'}
-                        </span>
-                      ) : '—'}
+                      {(() => {
+                        const standing = getPayoutStanding(p)
+                        return (
+                          <span className={`badge ${standing === '1st' ? 'badge-gold' : standing === '2nd' ? 'badge-silver' : 'badge-bronze'}`}>
+                            {standing}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td>
                       <strong style={{ color: '#facc15', fontSize: '0.9rem' }}>₹{p.amount}</strong>
@@ -4774,11 +4787,14 @@ function PayoutsTab({
                       {p.slots ? `${formatShortDate(p.slots.date)} • ${getSlotWindowOnly(p.slots.time_label)}` : '—'}
                     </td>
                     <td>
-                      {p.place || p.amount === 60 ? (
-                        <span className={`badge ${p.place === '1st' ? 'badge-gold' : p.place === '2nd' ? 'badge-silver' : 'badge-bronze'}`}>
-                          {p.place || '3rd'}
-                        </span>
-                      ) : '—'}
+                      {(() => {
+                        const standing = getPayoutStanding(p)
+                        return (
+                          <span className={`badge ${standing === '1st' ? 'badge-gold' : standing === '2nd' ? 'badge-silver' : 'badge-bronze'}`}>
+                            {standing}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td><strong style={{ color: '#22c55e', fontSize: '0.95rem' }}>₹{p.amount}</strong></td>
                     <td>
