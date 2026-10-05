@@ -95,55 +95,96 @@ export async function POST(request: Request) {
       targetTeamName = teamObj.team_name
     }
 
-    // 3. Check if team is already booked in this slot
+    // 3. Check if team is already in this slot
     const { data: existingBooking } = await admin
       .from('bookings')
-      .select('booking_id, room_slot_number')
+      .select('booking_id, payment_status, room_slot_number')
       .eq('slot_id', slot_id)
       .eq('team_id', targetTeamId)
-      .eq('payment_status', 'paid')
       .maybeSingle()
 
-    if (existingBooking) {
+    if (existingBooking && existingBooking.payment_status === 'paid') {
       return NextResponse.json({
         error: `Team "${targetTeamName}" is already booked in this slot (Room Slot #${existingBooking.room_slot_number || 5}).`
       }, { status: 400 })
     }
 
     // 4. Assign next available room slot number (gaps filled starting from 5)
-    const room_slot_number = await getNextAvailableRoomSlot(admin, slot_id, targetTeamId)
+    const room_slot_number = (existingBooking?.room_slot_number && existingBooking.room_slot_number >= 5)
+      ? existingBooking.room_slot_number
+      : await getNextAvailableRoomSlot(admin, slot_id, targetTeamId)
 
-    // 5. Insert confirmed paid booking
+    // 5. Insert or update confirmed paid booking
     const paymentId = is_false_team ? 'FREE_SPOT_ENTRY' : 'MANUAL_DIRECT_BOOKING'
     const finalAmount = typeof amount_paid === 'number' ? amount_paid : (slot.entry_fee || 50)
 
-    const { data: newBooking, error: bookErr } = await admin
-      .from('bookings')
-      .insert({
-        slot_id,
-        team_id: targetTeamId,
-        payment_status: 'paid',
-        payment_id: paymentId,
-        room_slot_number,
-        coupon_used: false,
-        is_test_booking: false,
-        amount_paid: finalAmount,
-      })
-      .select(`
-        booking_id,
-        slot_id,
-        team_id,
-        room_slot_number,
-        payment_status,
-        payment_id,
-        amount_paid,
-        coupon_used,
-        is_test_booking,
-        created_at,
-        teams(team_id, team_name),
-        slots(slot_id, date, time_label, whatsapp_link, status, capacity, teams_booked_count)
-      `)
-      .single()
+    let newBooking: any = null
+    let bookErr: any = null
+
+    if (existingBooking) {
+      // Team already had an existing non-paid (e.g. pending/failed) booking: update it to confirmed paid
+      const updateRes = await admin
+        .from('bookings')
+        .update({
+          payment_status: 'paid',
+          payment_id: paymentId,
+          room_slot_number,
+          coupon_used: false,
+          is_test_booking: false,
+          amount_paid: finalAmount,
+        })
+        .eq('booking_id', existingBooking.booking_id)
+        .select(`
+          booking_id,
+          slot_id,
+          team_id,
+          room_slot_number,
+          payment_status,
+          payment_id,
+          amount_paid,
+          coupon_used,
+          is_test_booking,
+          created_at,
+          teams(team_id, team_name),
+          slots(slot_id, date, time_label, whatsapp_link, status, capacity, teams_booked_count)
+        `)
+        .single()
+
+      newBooking = updateRes.data
+      bookErr = updateRes.error
+    } else {
+      // Brand new booking insert
+      const insertRes = await admin
+        .from('bookings')
+        .insert({
+          slot_id,
+          team_id: targetTeamId,
+          payment_status: 'paid',
+          payment_id: paymentId,
+          room_slot_number,
+          coupon_used: false,
+          is_test_booking: false,
+          amount_paid: finalAmount,
+        })
+        .select(`
+          booking_id,
+          slot_id,
+          team_id,
+          room_slot_number,
+          payment_status,
+          payment_id,
+          amount_paid,
+          coupon_used,
+          is_test_booking,
+          created_at,
+          teams(team_id, team_name),
+          slots(slot_id, date, time_label, whatsapp_link, status, capacity, teams_booked_count)
+        `)
+        .single()
+
+      newBooking = insertRes.data
+      bookErr = insertRes.error
+    }
 
     if (bookErr || !newBooking) {
       return NextResponse.json({ error: bookErr?.message || 'Failed to create booking.' }, { status: 500 })

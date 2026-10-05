@@ -336,7 +336,8 @@ export default function LeaderboardClient({
     if (rank === 1) return styles.rank1
     if (rank === 2) return styles.rank2
     if (rank === 3) return styles.rank3
-    if (rank <= 16) return styles.qualifies
+    if (rank <= 8) return styles.qualifiesFinals
+    if (rank <= 16) return styles.qualifiesSemiFinals
     return ''
   }
 
@@ -481,8 +482,11 @@ export default function LeaderboardClient({
                           <td>
                             <div className={styles.teamNameCell}>
                               <span className={styles.teamNameText}>{row.team_name}</span>
-                              {row.rank <= 16 && (
+                              {row.rank <= 8 && (
                                 <span className={styles.qualifiedTag}>✓ FINALS QUALIFIED</span>
+                              )}
+                              {row.rank > 8 && row.rank <= 16 && (
+                                <span className={styles.semiQualifiedTag}>✓ SEMI FINALS QUALIFIED</span>
                               )}
                             </div>
                           </td>
@@ -505,12 +509,23 @@ export default function LeaderboardClient({
                           </td>
                         </tr>
 
-                        {/* Grand Finals Qualification Cutoff Line after Rank 16 */}
-                        {row.rank === 16 && idx < filteredOverall.length - 1 && (
-                          <tr key="cutoff-row" className={styles.cutoffRow}>
+                        {/* Finals Qualification Cutoff Line */}
+                        {row.rank === 8 && idx < filteredOverall.length - 1 && (
+                          <tr key="cutoff-finals-row" className={styles.cutoffRow}>
                             <td colSpan={7} style={{ padding: 0 }}>
                               <div className={styles.cutoffBanner}>
-                                🏆 TOP 16 GRAND FINALS QUALIFICATION CUTOFF 🏆
+                                <span>FINALS QUALIFIED</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* Semi Finals Qualification Cutoff Line */}
+                        {row.rank === 16 && idx < filteredOverall.length - 1 && (
+                          <tr key="cutoff-semi-row" className={styles.cutoffRow}>
+                            <td colSpan={7} style={{ padding: 0 }}>
+                              <div className={styles.cutoffBanner}>
+                                <span>SEMI FINALS QUALIFIED</span>
                               </div>
                             </td>
                           </tr>
@@ -540,8 +555,11 @@ export default function LeaderboardClient({
                         <div>
                           <div className={styles.mobileTeamNameRow}>
                             <span className={styles.mobileTeamName}>{row.team_name}</span>
-                            {row.rank <= 16 && (
-                              <span className={styles.mobileQualifiedTag}>QUALIFIED</span>
+                            {row.rank <= 8 && (
+                              <span className={styles.mobileQualifiedTag}>FINALS QUALIFIED</span>
+                            )}
+                            {row.rank > 8 && row.rank <= 16 && (
+                              <span className={styles.mobileSemiQualifiedTag}>SEMI FINALS QUALIFIED</span>
                             )}
                           </div>
                           <div className={styles.mobileTeamMeta}>
@@ -565,10 +583,17 @@ export default function LeaderboardClient({
                     </div>
                   </div>
 
-                  {/* Mobile Cutoff Banner */}
+                  {/* Mobile Cutoff Divider for Finals */}
+                  {row.rank === 8 && idx < filteredOverall.length - 1 && (
+                    <div key="cutoff-mobile-8" className={styles.cutoffBannerMobile}>
+                      <span>FINALS QUALIFIED</span>
+                    </div>
+                  )}
+
+                  {/* Mobile Cutoff Divider for Semi Finals */}
                   {row.rank === 16 && idx < filteredOverall.length - 1 && (
-                    <div key="cutoff-mobile" className={styles.cutoffBannerMobile}>
-                      🏆 TOP 16 GRAND FINALS QUALIFICATION CUTOFF 🏆
+                    <div key="cutoff-mobile-16" className={styles.cutoffBannerMobile}>
+                      <span>SEMI FINALS QUALIFIED</span>
                     </div>
                   )}
                 </Fragment>
