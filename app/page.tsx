@@ -90,19 +90,19 @@ export default async function LandingPage() {
             <div className={styles.gfContainer}>
               <div className={styles.gfHeaderRow}>
                 <span className={styles.gfTag}>// SEASON 1 CHAMPIONSHIP</span>
-                <span className={styles.gfSubTag}>GRAND FINALS POOL &amp; RECOGNITION</span>
+                <span className={styles.gfSubTag}>GRAND FINALS &amp; RECOGNITION</span>
               </div>
 
               <div className={styles.gfHeroSplit}>
-                {/* Left Block: Dominant Prize Amount + Trophy */}
+                {/* Left Block: Dominant Trophy & Championship Header */}
                 <div className={styles.gfAmountBlock}>
                   <div className={styles.gfAmountHeader}>
                     <Trophy size={36} color="#fbbf24" strokeWidth={2} className={styles.gfInlineTrophy} />
-                    <h2 className={styles.gfMainNumber}>₹20,000</h2>
+                    <h2 className={styles.gfMainNumber}>FINALS</h2>
                   </div>
-                  <div className={styles.gfAmountLabel}>Guaranteed Grand Finals Prize Pool</div>
+                  <div className={styles.gfAmountLabel}>Grand Finals Championship</div>
                   <p className={styles.gfAmountDesc}>
-                    Top 16 qualified squads fight for the Season 1 Championship title, prize money, and supreme esports bragging rights.
+                    16 Grand Finalist squads (Top 8 League + Top 6 Semis + 2 Wildcards) fight for the Season 1 Championship title and supreme esports bragging rights.
                   </p>
                 </div>
 
@@ -113,7 +113,7 @@ export default async function LandingPage() {
                     <div>
                       <strong className={styles.gfFeatureHeading}>Official Physical Trophy</strong>
                       <p className={styles.gfFeatureText}>
-                        Season 1 Champions win the physical BGFS Trophy + major share of the ₹20,000 pool.
+                        Season 1 Champions win the physical BGFS Trophy + championship glory and permanent recognition.
                       </p>
                     </div>
                   </div>
@@ -123,7 +123,7 @@ export default async function LandingPage() {
                     <div>
                       <strong className={styles.gfFeatureHeading}>100% Free Grand Finals Entry</strong>
                       <p className={styles.gfFeatureText}>
-                        Top 16 overall leaderboard teams advance directly with ₹0 additional entry fee.
+                        All 16 qualified finalists (Top 8 League + Top 6 Semi Finals + 2 Wildcards) advance with ₹0 additional entry fee.
                       </p>
                     </div>
                   </div>

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Trophy, Shield, Swords, Award, ArrowRight, Zap } from 'lucide-react'
+import { Trophy, Shield, Swords, Award, ArrowRight, Zap, Flame } from 'lucide-react'
 import styles from './Roadmap.module.css'
 
 export default function Roadmap() {
@@ -17,28 +17,40 @@ export default function Roadmap() {
       isActive: true,
     },
     {
-      dateMonth: '21 SEP – 16 OCT',
-      dateSub: 'LEAGUE PHASE',
+      dateMonth: '21 SEP – 04 OCT',
+      dateSub: 'QUALIFIER PHASE',
       icon: Swords,
       crestLabel: 'DAILY SLOTS',
-      acronym: 'DAILY LEAGUE SLOTS',
+      acronym: 'DAILY QUALIFIER SLOTS',
       subtitle: '3 MATCHES PER SLOT',
       details: 'Play unlimited slots • Best 6 Slots count • Instant UPI match rewards',
-      sideBadgeLabel: '21 SEP – 16 OCT',
+      sideBadgeLabel: '21 SEP – 04 OCT',
       sideBadgeSub: 'DAILY 3-MATCH SLOTS',
       isActive: true,
     },
     {
-      dateMonth: '16 OCT',
-      dateSub: 'OFFICIAL CUTOFF',
+      dateMonth: '04 OCT',
+      dateSub: 'LEADERBOARD LOCK',
       icon: Award,
       crestLabel: 'STANDINGS',
-      acronym: 'TOP 16 CUTOFF',
-      subtitle: 'LEADERBOARD LOCK',
-      details: 'Top 16 squads lock their qualifying spots • Verified Gold Qualified badges',
-      sideBadgeLabel: 'QUALIFIED BADGE',
-      sideBadgeSub: 'TOP 16 ADVANCE FREE',
-      isActive: false,
+      acronym: 'TOP 8 IN FINALS • 9–16 IN SEMIS',
+      subtitle: 'OFFICIAL STANDINGS LOCKED',
+      details: 'Top 8 squads directly qualify for Grand Finals • Teams 9–16 advance to Semi Finals',
+      sideBadgeLabel: 'TOP 8 TO FINALS',
+      sideBadgeSub: '9–16 TO SEMIS',
+      isActive: true,
+    },
+    {
+      dateMonth: '10 – 11 OCT',
+      dateSub: 'SEMI FINALS',
+      icon: Flame,
+      crestLabel: 'GROUP STAGE',
+      acronym: 'SEMI FINALS BATTLE',
+      subtitle: '6 MATCHES (2 ERANGEL, 2 MIRAMAR, 2 RONDO)',
+      details: 'Dynamic Groups • Teams 9–16 + Open Challenger Squads • Top 6 qualify for Finals',
+      sideBadgeLabel: 'TOP 6 ADVANCE',
+      sideBadgeSub: 'OPEN FOR ALL SQUADS',
+      isActive: true,
     },
     {
       dateMonth: '17 – 18 OCT',
@@ -47,9 +59,9 @@ export default function Roadmap() {
       crestLabel: 'FINALS CUP',
       acronym: 'GRAND FINALS',
       subtitle: 'SEASON 01 FINALE',
-      details: '₹20,000 Guaranteed Prize Pool • Physical BGFS Trophy • Winner Wall',
+      details: '16 Grand Finalists (Top 8 League + Top 6 Semis + 2 Wildcards) • Physical BGFS Trophy • Winner Wall',
       sideBadgeLabel: '17 – 18 OCT',
-      sideBadgeSub: '₹20,000 PRIZE POOL',
+      sideBadgeSub: 'GRAND FINALS CUP',
       isActive: false,
       isGrandFinale: true,
     },
@@ -70,7 +82,7 @@ export default function Roadmap() {
           <div className={styles.headerRight}>
             <div className={styles.statusIndicator}>
               <span className={styles.pulseDot} />
-              <span>REGISTRATIONS &amp; SLOTS OPEN</span>
+              <span>SEMI FINALS STAGE LIVE</span>
             </div>
           </div>
         </div>
@@ -124,14 +136,14 @@ export default function Roadmap() {
         {/* Broadcast Footer */}
         <div className={styles.broadcastFooter}>
           <div className={styles.footerLeftText}>
-            <h4 className={styles.footerTitle}>Season 01 Slot Registrations Are Live</h4>
+            <h4 className={styles.footerTitle}>Semi Finals Registrations Are Now Live</h4>
             <p className={styles.footerSubtitle}>
-              Create your squad account, lock your slot, and grind the daily leaderboard to reach the Grand Finals.
+              One last chance to qualify for the Grand Finals! Teams 9–16 &amp; open squads battle in dynamic groups across 6 matches for the Top 6 spots.
             </p>
           </div>
 
           <Link href="/slots" className={styles.footerCta}>
-            <span>BOOK A SLOT NOW</span>
+            <span>REGISTER FOR SEMI FINALS</span>
             <ArrowRight size={16} />
           </Link>
         </div>
@@ -139,3 +151,4 @@ export default function Roadmap() {
     </section>
   )
 }
+

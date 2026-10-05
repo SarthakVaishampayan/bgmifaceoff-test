@@ -76,7 +76,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   const todayStr = getTodayStr()
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
-  const [selectedDate, setSelectedDate] = useState(tomorrowStr)
+  const [selectedDate, setSelectedDate] = useState('2026-10-10')
   const [adminEmail, setAdminEmail] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -351,6 +351,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
               setSelectedDate={setSelectedDate}
               config={configState}
               setConfig={setConfigState}
+              bookings={bookingsList}
             />
           )}
           {tab === 'upi_info' && (
@@ -2326,7 +2327,7 @@ function getSlotStartTime(rawLabel: string): string {
 }
 
 // ── SLOTS MANAGEMENT TAB ──────────────────────────────────────────
-function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDate, setSelectedDate, config, setConfig }: any) {
+function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDate, setSelectedDate, config, setConfig, bookings = [] }: any) {
   const todayStr = getTodayStr()
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
@@ -2421,6 +2422,12 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     second_prize?: any
     third_prize?: any
   }>>({})
+
+  // Special Semi Finals (10-11 Oct) form state
+  const [semiFinalsForm, setSemiFinalsForm] = useState<{
+    whatsapp_link?: string
+    entry_fee?: number
+  }>({})
 
   // Local state to track which slot tiles are expanded (default: all collapsed)
   const [expandedSlots, setExpandedSlots] = useState<Record<number, boolean>>({})
@@ -2864,14 +2871,192 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     setLoadingPresetId(null)
   }
 
+  // ── SPECIAL SEMI FINALS (10–11 OCT 2026) SLOT HELPERS & ACTIONS ──
+  const semiFinalsSlot = slots.find((s: any) =>
+    s.date === '2026-10-10' ||
+    (s.time_label && s.time_label.toLowerCase().includes('semi finals'))
+  )
+
+  const semiFinalsBookings = useMemo(() => {
+    if (!semiFinalsSlot) return []
+    return (bookings || []).filter((b: any) => b.slot_id === semiFinalsSlot.slot_id)
+  }, [semiFinalsSlot, bookings])
+
+  const semiFinalsRegisteredCount = Math.max(
+    semiFinalsBookings.length,
+    semiFinalsSlot?.teams_booked_count || 0
+  )
+
+  const semiFinalsStatus: 'open' | 'closed' | 'not_open' | 'completed' = (() => {
+    if (!semiFinalsSlot) return 'not_open'
+    if (semiFinalsSlot.status === 'completed') return 'completed'
+    if (semiFinalsSlot.status === 'full' || semiFinalsSlot.status === 'closed') return 'closed'
+    if (semiFinalsSlot.status === 'open') return 'open'
+    return 'not_open'
+  })()
+
+  async function handleOpenSemiFinalsSlot() {
+    setLoadingPresetId(999)
+    setMsg('')
+    const whatsappLink = semiFinalsForm.whatsapp_link !== undefined ? semiFinalsForm.whatsapp_link.trim() : (semiFinalsSlot?.whatsapp_link || null)
+    const entryFee = semiFinalsForm.entry_fee !== undefined ? semiFinalsForm.entry_fee : (semiFinalsSlot?.entry_fee ?? defaultEntryFee)
+
+    if (semiFinalsSlot) {
+      const { data, error } = await supabase
+        .from('slots')
+        .update({
+          status: 'open',
+          whatsapp_link: whatsappLink,
+          entry_fee: entryFee,
+          capacity: 9999,
+        })
+        .eq('slot_id', semiFinalsSlot.slot_id)
+        .select()
+        .single()
+
+      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+      }
+      setMsg('✅ Semi Finals Stage (10–11 Oct 2026) is now OPEN for squad registrations!')
+    } else {
+      const { data, error } = await supabase
+        .from('slots')
+        .insert({
+          date: '2026-10-10',
+          time_label: 'Semi Finals Stage • 10–11 Oct 2026',
+          capacity: 9999,
+          teams_booked_count: 0,
+          entry_fee: entryFee,
+          status: 'open',
+          whatsapp_link: whatsappLink,
+          is_grand_finals: false,
+        })
+        .select()
+        .single()
+
+      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => [...prev, data])
+      }
+      setMsg('✅ Semi Finals Stage (10–11 Oct 2026) created and OPEN for squad registrations!')
+    }
+    setLoadingPresetId(null)
+  }
+
+  async function handleCloseSemiFinalsSlot() {
+    if (!semiFinalsSlot) return
+    setLoadingPresetId(999)
+    const { data, error } = await supabase
+      .from('slots')
+      .update({ status: 'full' })
+      .eq('slot_id', semiFinalsSlot.slot_id)
+      .select()
+      .single()
+
+    if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+    if (data && setSlots) {
+      setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+    }
+    setMsg('✅ Semi Finals Stage CLOSED to new registrations')
+    setLoadingPresetId(null)
+  }
+
+  async function handleMarkNotOpenSemiFinals() {
+    if (!semiFinalsSlot) return
+    setLoadingPresetId(999)
+    if ((semiFinalsSlot.teams_booked_count || 0) > 0) {
+      if (!confirm(`Warning: Semi Finals has ${semiFinalsSlot.teams_booked_count} registered teams. Changing to NOT OPEN will close new registrations. Proceed?`)) {
+        setLoadingPresetId(null)
+        return
+      }
+      const { data, error } = await supabase
+        .from('slots')
+        .update({ status: 'full' })
+        .eq('slot_id', semiFinalsSlot.slot_id)
+        .select()
+        .single()
+      if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+      if (data && setSlots) {
+        setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+      }
+      setMsg('⚠️ Semi Finals marked as closed (bookings exist).')
+      setLoadingPresetId(null)
+      return
+    }
+
+    const { error } = await supabase
+      .from('slots')
+      .delete()
+      .eq('slot_id', semiFinalsSlot.slot_id)
+
+    if (error) {
+      await supabase.from('slots').update({ status: 'full' }).eq('slot_id', semiFinalsSlot.slot_id)
+      setMsg('⚠️ Marked as closed.')
+    } else {
+      if (setSlots) {
+        setSlots((prev: any[]) => prev.filter((s: any) => s.slot_id !== semiFinalsSlot.slot_id))
+      }
+      setMsg('⚪ Semi Finals slot marked as Not Open.')
+    }
+    setLoadingPresetId(null)
+  }
+
+  async function handleToggleCompletedSemiFinals() {
+    if (!semiFinalsSlot) return
+    setLoadingPresetId(999)
+    const nextStatus = semiFinalsSlot.status === 'completed' ? 'open' : 'completed'
+    const { data, error } = await supabase
+      .from('slots')
+      .update({ status: nextStatus })
+      .eq('slot_id', semiFinalsSlot.slot_id)
+      .select()
+      .single()
+
+    if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+    if (data && setSlots) {
+      setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+    }
+    setMsg(nextStatus === 'completed' ? '🏆 Semi Finals marked as COMPLETED.' : '↩️ Semi Finals reverted to OPEN status.')
+    setLoadingPresetId(null)
+  }
+
+  async function handleSaveSemiFinalsDetails() {
+    if (!semiFinalsSlot) return
+    setLoadingPresetId(999)
+    const whatsappLink = semiFinalsForm.whatsapp_link !== undefined ? semiFinalsForm.whatsapp_link.trim() : (semiFinalsSlot?.whatsapp_link || null)
+    const entryFee = semiFinalsForm.entry_fee !== undefined ? semiFinalsForm.entry_fee : (semiFinalsSlot?.entry_fee ?? defaultEntryFee)
+
+    const { data, error } = await supabase
+      .from('slots')
+      .update({
+        whatsapp_link: whatsappLink,
+        entry_fee: entryFee,
+        capacity: 9999,
+      })
+      .eq('slot_id', semiFinalsSlot.slot_id)
+      .select()
+      .single()
+
+    if (error) { setMsg('❌ ' + error.message); setLoadingPresetId(null); return }
+    if (data && setSlots) {
+      setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
+    }
+    setMsg('✅ Semi Finals settings saved successfully!')
+    setLoadingPresetId(null)
+  }
 
   return (
     <div>
       <div className={styles.tabHeader} style={{ marginBottom: '1.25rem' }}>
         <div>
-          <h2 className={styles.tabTitle}>Daily Slots Management (6 Fixed Slots)</h2>
+          <h2 className={styles.tabTitle}>
+            {selectedDate > '2026-10-04' ? 'Semi Finals Stage Management (10–11 Oct 2026)' : 'Daily Slots Management (6 Fixed Slots)'}
+          </h2>
           <p className={styles.tabDesc}>
-            Select a date below to configure match schedules and open/close bookings. Once match scores are pushed via &apos;Update The Table&apos; in Score Entry, mark a slot as Done here to generate UPI payout slips (top 2) and 3rd-place coupon code.
+            {selectedDate > '2026-10-04'
+              ? 'Configure the special Semi Finals registration slot. Unlimited squad entries are permitted. Top 6 squads from Semi Finals qualify for Grand Finals.'
+              : 'Select a date below to configure match schedules and open/close bookings. Once match scores are pushed via \'Update The Table\' in Score Entry, mark a slot as Done here to generate UPI payout slips (top 2) and 3rd-place coupon code.'}
           </p>
         </div>
       </div>
@@ -2898,42 +3083,14 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
             type="button"
             className="btn btn-secondary btn-sm"
             style={{
-              background: selectedDate === todayStr ? '#fbbf24' : '#1e1e1e',
-              color: selectedDate === todayStr ? '#111111' : '#ffffff',
+              background: selectedDate === '2026-10-10' ? '#fbbf24' : '#1e1e1e',
+              color: selectedDate === '2026-10-10' ? '#111111' : '#ffffff',
               fontWeight: 800,
-              borderColor: selectedDate === todayStr ? '#fbbf24' : '#333333',
+              borderColor: selectedDate === '2026-10-10' ? '#fbbf24' : '#333333',
             }}
-            onClick={() => setSelectedDate(todayStr)}
+            onClick={() => setSelectedDate('2026-10-10')}
           >
-            Today ({formatMonthDay(todayStr)})
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            style={{
-              background: selectedDate === tomorrowStr ? '#fbbf24' : '#1e1e1e',
-              color: selectedDate === tomorrowStr ? '#111111' : '#ffffff',
-              fontWeight: 800,
-              borderColor: selectedDate === tomorrowStr ? '#fbbf24' : '#333333',
-            }}
-            onClick={() => setSelectedDate(tomorrowStr)}
-          >
-            Tomorrow ({formatMonthDay(tomorrowStr)})
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            style={{
-              background: selectedDate === dayAfterStr ? '#fbbf24' : '#1e1e1e',
-              color: selectedDate === dayAfterStr ? '#111111' : '#ffffff',
-              fontWeight: 800,
-              borderColor: selectedDate === dayAfterStr ? '#fbbf24' : '#333333',
-            }}
-            onClick={() => setSelectedDate(dayAfterStr)}
-          >
-            Day After ({formatMonthDay(dayAfterStr)})
+            🔥 Semi Finals (10–11 Oct)
           </button>
         </div>
 
@@ -2994,8 +3151,268 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
         </div>
       )}
 
-      {/* ── 6 FIXED SLOTS GRID ───────────────────────────────────── */}
-      {(() => {
+      {/* ── CONDITIONAL SLOTS VIEW: SEMI FINALS (date > 2026-10-04) OR 6 FIXED SLOTS (date <= 2026-10-04) ── */}
+      {selectedDate > '2026-10-04' ? (
+        <div
+          style={{
+            background: '#141417',
+            border: '1px solid rgba(251, 191, 36, 0.35)',
+            borderRadius: '14px',
+            padding: '1.25rem 1.5rem',
+            marginBottom: '1.5rem',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', borderBottom: '1px solid #222228', paddingBottom: '1rem' }}>
+            <div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '0.2rem 0.6rem', borderRadius: '6px', marginBottom: '0.4rem' }}>
+                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#fbbf24', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  🔥 SEMI FINALS STAGE • 10–11 OCT 2026
+                </span>
+              </div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f8fafc', margin: '0 0 0.3rem 0' }}>
+                Semi Finals Registration Slot
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
+                Dynamic Round Robin Groups • 6 Matches (2 Erangel, 2 Miramar, 2 Rondo) • Top 6 teams qualify for Grand Finals.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  background:
+                    semiFinalsStatus === 'open' ? 'rgba(34, 197, 94, 0.15)' :
+                    semiFinalsStatus === 'completed' ? 'rgba(168, 85, 247, 0.15)' :
+                    semiFinalsStatus === 'closed' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(113, 113, 122, 0.15)',
+                  color:
+                    semiFinalsStatus === 'open' ? '#4ade80' :
+                    semiFinalsStatus === 'completed' ? '#c084fc' :
+                    semiFinalsStatus === 'closed' ? '#f87171' : '#a1a1aa',
+                  border: `1px solid ${
+                    semiFinalsStatus === 'open' ? 'rgba(34, 197, 94, 0.35)' :
+                    semiFinalsStatus === 'completed' ? 'rgba(168, 85, 247, 0.35)' :
+                    semiFinalsStatus === 'closed' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(113, 113, 122, 0.35)'
+                  }`,
+                }}
+              >
+                {semiFinalsStatus === 'open' ? '🟢 OPEN (ACCEPTING BOOKINGS)' :
+                 semiFinalsStatus === 'completed' ? '🏆 COMPLETED (SCORES FINALIZED)' :
+                 semiFinalsStatus === 'closed' ? '🔒 CLOSED (NO NEW ENTRIES)' : '⚪ NOT OPEN'}
+              </span>
+
+              <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700 }}>
+                {semiFinalsRegisteredCount} Squads Registered (No Limit • Open Challenger)
+              </span>
+            </div>
+          </div>
+
+          {/* 1-Click Quick Action Buttons */}
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{
+                background: semiFinalsStatus === 'open' ? '#166534' : '#15803d',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: '0.76rem',
+                border: 'none',
+                padding: '0.45rem 0.95rem',
+              }}
+              onClick={handleOpenSemiFinalsSlot}
+              disabled={loadingPresetId === 999}
+            >
+              🔓 Open Slot
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{
+                background: semiFinalsStatus === 'closed' ? '#991b1b' : '#b91c1c',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: '0.76rem',
+                border: 'none',
+                padding: '0.45rem 0.95rem',
+              }}
+              onClick={handleCloseSemiFinalsSlot}
+              disabled={loadingPresetId === 999 || !semiFinalsSlot}
+            >
+              🔒 Close Slot
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{
+                background: '#27272a',
+                color: '#e4e4e7',
+                fontWeight: 700,
+                fontSize: '0.76rem',
+                border: '1px solid #3f3f46',
+                padding: '0.45rem 0.95rem',
+              }}
+              onClick={handleMarkNotOpenSemiFinals}
+              disabled={loadingPresetId === 999 || !semiFinalsSlot}
+            >
+              ⚪ Not Open
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{
+                background: semiFinalsStatus === 'completed' ? '#6b21a8' : '#7e22ce',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: '0.76rem',
+                border: 'none',
+                padding: '0.45rem 0.95rem',
+              }}
+              onClick={handleToggleCompletedSemiFinals}
+              disabled={loadingPresetId === 999 || !semiFinalsSlot}
+            >
+              🏆 {semiFinalsStatus === 'completed' ? 'Revert to Open' : 'Mark as Done'}
+            </button>
+          </div>
+
+          {/* Slot Settings: WhatsApp & Entry Fee (NO prizes, NO match times) */}
+          <div
+            style={{
+              background: '#0d0d10',
+              border: '1px solid #1f1f26',
+              borderRadius: '10px',
+              padding: '1rem',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '1rem',
+              alignItems: 'flex-end',
+            }}
+          >
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.35rem' }}>
+                WhatsApp Group Invite Link
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="https://chat.whatsapp.com/..."
+                style={{ fontSize: '0.8rem', padding: '0.45rem 0.75rem', width: '100%' }}
+                value={semiFinalsForm.whatsapp_link !== undefined ? semiFinalsForm.whatsapp_link : (semiFinalsSlot?.whatsapp_link || '')}
+                onChange={e => setSemiFinalsForm(prev => ({ ...prev, whatsapp_link: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.35rem' }}>
+                Entry Fee (₹)
+              </label>
+              <input
+                type="number"
+                className="form-input"
+                style={{ fontSize: '0.8rem', padding: '0.45rem 0.75rem', width: '100%' }}
+                value={semiFinalsForm.entry_fee !== undefined ? semiFinalsForm.entry_fee : (semiFinalsSlot?.entry_fee ?? defaultEntryFee)}
+                onChange={e => setSemiFinalsForm(prev => ({ ...prev, entry_fee: parseInt(e.target.value, 10) || 0 }))}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.35rem' }}>
+                Capacity Limit
+              </label>
+              <div style={{ fontSize: '0.8rem', color: '#22c55e', fontWeight: 800, padding: '0.45rem 0' }}>
+                ✓ Unlimited Squads (No Limit)
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.35rem' }}>
+                Teams Registered
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.25rem 0' }}>
+                <span
+                  style={{
+                    background: 'rgba(251, 191, 36, 0.15)',
+                    border: '1px solid rgba(251, 191, 36, 0.4)',
+                    color: '#fbbf24',
+                    fontSize: '1.15rem',
+                    fontWeight: 900,
+                    padding: '0.2rem 0.65rem',
+                    borderRadius: '8px',
+                    minWidth: '40px',
+                    textAlign: 'center',
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {semiFinalsRegisteredCount}
+                </span>
+                <span style={{ fontSize: '0.8rem', color: '#f8fafc', fontWeight: 700 }}>
+                  {semiFinalsRegisteredCount === 1 ? '1 Squad Registered' : `${semiFinalsRegisteredCount} Squads Registered`}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                style={{ width: '100%', padding: '0.5rem', fontWeight: 800, fontSize: '0.78rem' }}
+                onClick={handleSaveSemiFinalsDetails}
+                disabled={loadingPresetId === 999 || !semiFinalsSlot}
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+
+          {/* Registered Teams Tags */}
+          {semiFinalsBookings.length > 0 && (
+            <div style={{ marginTop: '1rem', background: '#09090b', border: '1px solid #272730', borderRadius: '8px', padding: '0.75rem 1rem' }}>
+              <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#fbbf24', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                📋 Registered Squads ({semiFinalsBookings.length})
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+                {semiFinalsBookings.map((b: any, idx: number) => {
+                  const teamName = b.team_name || b.teams?.team_name || `Squad #${idx + 1}`
+                  return (
+                    <span
+                      key={b.booking_id || idx}
+                      style={{
+                        background: '#18181c',
+                        border: '1px solid #33333d',
+                        borderRadius: '6px',
+                        padding: '0.25rem 0.6rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        color: '#f8fafc',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <span style={{ color: '#fbbf24', fontSize: '0.65rem' }}>#{idx + 1}</span>
+                      {teamName}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── 6 FIXED SLOTS GRID (For qualifier dates before 6 Oct 2026) ── */
+        (() => {
         const filteredFixedSlots = FIXED_DAILY_SLOTS.filter(preset => {
           if (statusFilter === 'all') return true
           const existingSlot = getExistingSlot(preset)
@@ -3646,12 +4063,16 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
             )}
           </>
         )
-      })()}
+      })()
+      )}
 
       {/* Additional / Custom Slots on this date if any exist */}
       {(() => {
         const matchedSlotIds = new Set(
-          FIXED_DAILY_SLOTS.map(p => getExistingSlot(p)?.slot_id).filter(Boolean)
+          [
+            ...FIXED_DAILY_SLOTS.map(p => getExistingSlot(p)?.slot_id),
+            semiFinalsSlot?.slot_id,
+          ].filter(Boolean)
         )
         const additionalSlots = slots.filter((s: any) => s.date === selectedDate && !matchedSlotIds.has(s.slot_id))
         const filteredAdditionalSlots = additionalSlots.filter((extraSlot: any) => {

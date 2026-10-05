@@ -8,8 +8,8 @@ import type { Metadata } from 'next'
 import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
 
 export const metadata: Metadata = {
-  title: 'Slot Booking | BGFS',
-  description: 'Book your match slots for Battlegrounds Faceoff Series.',
+  title: 'Semi Finals Registration | BGFS',
+  description: 'Book your match slots for Battlegrounds Faceoff Series Semi Finals (10-11 Oct). One last chance to qualify for the Grand Finals.',
 }
 
 interface FreeCoupon {

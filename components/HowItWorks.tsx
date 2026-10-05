@@ -214,7 +214,7 @@ export default function HowItWorks() {
       ],
       warning: {
         title: 'GRAND FINALS ACCESS',
-        desc: 'Top 16 squads on the final cutoff date compete for ₹20,000 + the physical BGFS Trophy.',
+        desc: 'Qualified finalists compete for the Championship title + the physical BGFS Trophy.',
       },
       ctaText: 'VIEW LIVE LEADERBOARD',
       ctaHref: '/leaderboard',

@@ -96,8 +96,13 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    if (slot.status === 'full' || slot.teams_booked_count >= slot.capacity) {
+    // Check slot capacity (Semi Finals has unlimited capacity / no limit)
+    const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
+    if (!isSemiFinals && (slot.status === 'full' || slot.teams_booked_count >= slot.capacity)) {
       return NextResponse.json({ error: 'This slot is full. Please choose another slot.' }, { status: 409 })
+    }
+    if (isSemiFinals && slot.status === 'full') {
+      return NextResponse.json({ error: 'Registration for the Semi Finals is currently closed.' }, { status: 409 })
     }
 
     // Check for duplicate booking

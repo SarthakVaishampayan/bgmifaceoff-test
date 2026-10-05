@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck, Calendar, AlertCircle, Trophy, CreditCard } from 'lucide-react'
+import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck, Calendar, AlertCircle, Trophy, CreditCard, Compass, Swords, Users, Target } from 'lucide-react'
 import { isSlotPastOrEnded, getSlotStartMinutes, getSlotWindowOnly, computeSlotMatchTimes } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
@@ -456,6 +456,13 @@ function loadRazorpayScript(): Promise<boolean> {
     if (isNaN(d.getTime())) return dStr
     const fullDate = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 
+    if (dStr === '2026-10-10' || dStr === '2026-10-11') {
+      return 'Semi Finals (10–11 Oct 2026)'
+    }
+    if (dStr > '2026-10-11') {
+      return `Finals Stage (${fullDate})`
+    }
+
     // Qualifiers started on Monday, 21 Sep 2026 (Day 1)
     const startDate = new Date('2026-09-21T00:00:00')
     const diffDays = Math.round((d.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
@@ -547,21 +554,16 @@ function loadRazorpayScript(): Promise<boolean> {
         {/* Page header */}
         <div className={styles.pageHeader}>
           <div>
-            <h1 className={styles.title}>QUALIFIER SLOTS</h1>
+            <div className={styles.stageLiveBadge}>
+              <span className={styles.pulseDot} />
+              <span>SEMI FINALS STAGE • 10–11 OCT 2026</span>
+            </div>
+            <h1 className={styles.title}>SEMI FINALS REGISTRATION</h1>
             <p className={styles.subtitle}>
-              Your best 6 slots decide your Finals spot. Top 16 qualify.
+              One last chance to qualify for the Grand Finals • Battle for the Top 6 spots.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className={styles.rulesBtnHeader}
-              onClick={() => setShowPrizeModal(true)}
-              style={{ background: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.4)', color: '#fbbf24' }}
-            >
-              <Trophy size={16} color="#fbbf24" />
-              <span>PRIZE POOL</span>
-            </button>
             <button
               type="button"
               className={styles.rulesBtnHeader}
@@ -578,34 +580,10 @@ function loadRazorpayScript(): Promise<boolean> {
           </div>
         </div>
 
-        {/* Filter Tabs */}
-        <div className={styles.filterRow}>
-          <button
-            className={`${styles.filterBtn} ${filterTab === 'upcoming' ? styles.filterBtnActive : ''}`}
-            onClick={() => setFilterTab('upcoming')}
-          >
-            OPEN / UPCOMING SLOTS
-          </button>
-          <button
-            className={`${styles.filterBtn} ${filterTab === 'past' ? styles.filterBtnActive : ''}`}
-            onClick={() => setFilterTab('past')}
-          >
-            PAST SLOTS
-          </button>
-          <button
-            className={`${styles.filterBtn} ${filterTab === 'all' ? styles.filterBtnActive : ''}`}
-            onClick={() => setFilterTab('all')}
-          >
-            ALL SLOTS
-          </button>
-        </div>
-
         {/* Empty state */}
         {Object.keys(slotsByDate).length === 0 && (
           <div className={styles.emptyState}>
-            {filterTab === 'upcoming'
-              ? 'No upcoming tournament slots available right now. Check back soon or view past slots!'
-              : 'No tournament slots found.'}
+            No upcoming tournament slots available right now. Check back soon!
           </div>
         )}
 
@@ -618,6 +596,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
             <div className={styles.slotGrid}>
               {dateSlots.map(slot => {
+                const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
                 const isAlreadyBooked = bookedSlotIds.some(id => String(id).trim().toLowerCase() === String(slot.slot_id).trim().toLowerCase())
                 const isBookingThis = bookingSlotId === slot.slot_id
                 const spotsLeft = Math.max(0, slot.capacity - slot.teams_booked_count)
@@ -625,8 +604,8 @@ function loadRazorpayScript(): Promise<boolean> {
                 // Strict expiration check
                 const isEnded = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes)
                 const isCompleted = isEnded || slot.status === 'completed'
-                const isFull = !isCompleted && (spotsLeft <= 0 || slot.status === 'full')
-                const isUrgent = !isFull && !isCompleted && !isAlreadyBooked && spotsLeft < 5
+                const isFull = !isCompleted && !isSemiFinals && (spotsLeft <= 0 || slot.status === 'full')
+                const isUrgent = !isFull && !isCompleted && !isAlreadyBooked && !isSemiFinals && spotsLeft < 5
 
                 const showFreeOption = Boolean(remainingCoupons.length > 0 && !isFull && !isCompleted && !isAlreadyBooked)
                 const currentFee = (slot.entry_fee !== undefined && slot.entry_fee !== null) ? slot.entry_fee : effectiveEntryFee
@@ -639,28 +618,47 @@ function loadRazorpayScript(): Promise<boolean> {
                     <div key={slot.slot_id} className={styles.slotCardBooked}>
                       <div className={styles.cardTopRow}>
                         <span className={styles.bookedBadge}>
-                          <Check size={10} /> REGISTERED
+                          <Check size={10} /> {isSemiFinals ? 'SEMI FINALS REGISTERED' : 'REGISTERED'}
                         </span>
                       </div>
 
                       <div className={styles.bookedCenter}>
-                        <div className={styles.bookedTime}>{getSlotWindowOnly(slot.time_label)}</div>
-
-                        <div className={styles.matchCellsGrid}>
-                          {matchTimes.map((m, idx) => (
-                            <div key={idx} className={styles.matchCellBooked}>
-                              <div className={styles.matchCellLabelBooked}>
-                                MATCH {idx + 1}
-                              </div>
-                              <div className={styles.matchCellTime}>
-                                {m.time}
-                              </div>
-                              <div className={styles.matchCellMap}>
-                                {m.map}
-                              </div>
-                            </div>
-                          ))}
+                        <div className={styles.bookedTime}>
+                          {isSemiFinals ? 'SEMI FINALS • 10–11 OCT 2026' : getSlotWindowOnly(slot.time_label)}
                         </div>
+
+                        {isSemiFinals ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', margin: '0.65rem 0' }}>
+                            <div style={{ background: '#18181c', border: '1px solid #272730', borderRadius: '8px', padding: '0.45rem', textAlign: 'center' }}>
+                              <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#fbbf24' }}>2 MATCHES</div>
+                              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f8fafc' }}>ERANGEL</div>
+                            </div>
+                            <div style={{ background: '#18181c', border: '1px solid #272730', borderRadius: '8px', padding: '0.45rem', textAlign: 'center' }}>
+                              <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#fbbf24' }}>2 MATCHES</div>
+                              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f8fafc' }}>MIRAMAR</div>
+                            </div>
+                            <div style={{ background: '#18181c', border: '1px solid #272730', borderRadius: '8px', padding: '0.45rem', textAlign: 'center' }}>
+                              <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#fbbf24' }}>2 MATCHES</div>
+                              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f8fafc' }}>RONDO</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={styles.matchCellsGrid}>
+                            {matchTimes.map((m, idx) => (
+                              <div key={idx} className={styles.matchCellBooked}>
+                                <div className={styles.matchCellLabelBooked}>
+                                  MATCH {idx + 1}
+                                </div>
+                                <div className={styles.matchCellTime}>
+                                  {m.time}
+                                </div>
+                                <div className={styles.matchCellMap}>
+                                  {m.map}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
                         <div
                           className={styles.whatsappReasonBanner}
@@ -699,7 +697,7 @@ function loadRazorpayScript(): Promise<boolean> {
                               lineHeight: 1,
                             }}
                           >
-                            Posted 10 mins before match start
+                            Posted before tournament match start
                           </div>
                         </div>
                       </div>
@@ -737,7 +735,7 @@ function loadRazorpayScript(): Promise<boolean> {
                     `}
                   >
                     {/* Diagonal Corner Ribbon stating OFFER */}
-                    {currentFee === 1 && !isCompleted && !showFreeOption && (
+                    {currentFee === 1 && !isCompleted && !showFreeOption && !isSemiFinals && (
                       <div className={styles.cornerRibbonWrapper}>
                         <div className={styles.cornerRibbonOffer}>OFFER</div>
                       </div>
@@ -745,24 +743,35 @@ function loadRazorpayScript(): Promise<boolean> {
 
                     {/* Top Row: Spots Left Pill (Top-Left) & FREE Ribbon (Top-Right) */}
                     <div className={styles.cardTopRow}>
-                      <span className={`
-                        ${styles.spotsBadge}
-                        ${isFull || isCompleted ? styles.spotsFull : ''}
-                        ${isUrgent ? styles.spotsUrgent : ''}
-                      `}>
-                        {isCompleted ? (
-                          'CLOSED'
-                        ) : isFull ? (
-                          'SLOTS FULL (0 LEFT)'
-                        ) : isUrgent ? (
-                          <><Flame size={11} className={styles.flameIcon} /> {spotsLeft} SPOTS LEFT</>
-                        ) : (
-                          `${spotsLeft}/${slot.capacity} SPOTS LEFT`
-                        )}
-                      </span>
+                      {!isSemiFinals ? (
+                        <span
+                          className={`
+                            ${styles.spotsBadge}
+                            ${isFull || isCompleted ? styles.spotsFull : ''}
+                            ${isUrgent ? styles.spotsUrgent : ''}
+                          `}
+                        >
+                          {isCompleted ? (
+                            'CLOSED'
+                          ) : isFull ? (
+                            'SLOTS FULL (0 LEFT)'
+                          ) : isUrgent ? (
+                            <><Flame size={11} className={styles.flameIcon} /> {spotsLeft} SPOTS LEFT</>
+                          ) : (
+                            `${spotsLeft}/${slot.capacity} SPOTS LEFT`
+                          )}
+                        </span>
+                      ) : isCompleted ? (
+                        <span
+                          className={`${styles.spotsBadge} ${styles.spotsFull}`}
+                          style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.35)', fontWeight: 800 }}
+                        >
+                          REGISTRATION CLOSED
+                        </span>
+                      ) : null}
 
                       {showFreeOption && (
-                        <span className={styles.freeRibbon}>
+                        <span className={styles.freeRibbon} style={{ marginLeft: 'auto' }}>
                           <Sparkles size={10} /> FREE
                         </span>
                       )}
@@ -770,7 +779,13 @@ function loadRazorpayScript(): Promise<boolean> {
 
                     {/* Time Label (Large) */}
                     <div className={styles.cardTime}>
-                      {getSlotWindowOnly(slot.time_label)}
+                      {isSemiFinals ? (
+                        <div style={{ fontSize: '0.98rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '0.02em' }}>
+                          10–11 OCT 2026
+                        </div>
+                      ) : (
+                        getSlotWindowOnly(slot.time_label)
+                      )}
                     </div>
 
                     {slot.is_grand_finals && (
@@ -779,10 +794,15 @@ function loadRazorpayScript(): Promise<boolean> {
                       </div>
                     )}
 
-                    {/* Price / Reward Available Line */}
+                    {/* Price Line */}
                     <div className={styles.cardPriceRow}>
                       {isCompleted ? (
                         <div className={styles.priceMeta}>REGISTRATION CLOSED</div>
+                      ) : isSemiFinals ? (
+                        <div className={styles.normalPriceTag} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ color: '#fbbf24', fontWeight: 800, fontSize: '1.05rem' }}>₹{currentFee}</span>
+                          <span className={styles.priceMeta}>Squad Entry Fee</span>
+                        </div>
                       ) : showFreeOption ? (
                         <div className={styles.rewardAvailableText}>
                           <Check size={13} color="#22c55e" /> Reward available
@@ -802,22 +822,39 @@ function loadRazorpayScript(): Promise<boolean> {
                       )}
                     </div>
 
-                    {/* 3-cell match timings grid */}
-                    <div className={styles.matchCellsGrid}>
-                      {matchTimes.map((m, idx) => (
-                        <div key={idx} className={styles.matchCellOpen}>
-                          <div className={styles.matchCellLabelOpen}>
-                            MATCH {idx + 1}
-                          </div>
-                          <div className={styles.matchCellTime}>
-                            {m.time}
-                          </div>
-                          <div className={styles.matchCellMap}>
-                            {m.map}
-                          </div>
+                    {/* 3-cell match timings grid OR 3-map rotation showcase for Semi Finals */}
+                    {isSemiFinals ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', margin: '0.65rem 0' }}>
+                        <div style={{ background: '#18181c', border: '1px solid #272730', borderRadius: '8px', padding: '0.45rem', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#fbbf24' }}>2 MATCHES</div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f8fafc' }}>ERANGEL</div>
                         </div>
-                      ))}
-                    </div>
+                        <div style={{ background: '#18181c', border: '1px solid #272730', borderRadius: '8px', padding: '0.45rem', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#fbbf24' }}>2 MATCHES</div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f8fafc' }}>MIRAMAR</div>
+                        </div>
+                        <div style={{ background: '#18181c', border: '1px solid #272730', borderRadius: '8px', padding: '0.45rem', textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#fbbf24' }}>2 MATCHES</div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#f8fafc' }}>RONDO</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={styles.matchCellsGrid}>
+                        {matchTimes.map((m, idx) => (
+                          <div key={idx} className={styles.matchCellOpen}>
+                            <div className={styles.matchCellLabelOpen}>
+                              MATCH {idx + 1}
+                            </div>
+                            <div className={styles.matchCellTime}>
+                              {m.time}
+                            </div>
+                            <div className={styles.matchCellMap}>
+                              {m.map}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Bottom Action Button (Pinned) */}
                     <div className={styles.cardBottomAction}>
@@ -839,6 +876,19 @@ function loadRazorpayScript(): Promise<boolean> {
                             <><span className="spinner" /> REGISTERING...</>
                           ) : (
                             <><Sparkles size={13} /> Register Free</>
+                          )}
+                        </button>
+                      ) : isSemiFinals ? (
+                        <button
+                          className={styles.cardBtnNormal}
+                          style={{ background: '#fbbf24', color: '#111111', fontWeight: 800 }}
+                          onClick={() => handleDirectBookSlot(slot, false)}
+                          disabled={isBookingThis}
+                        >
+                          {isBookingThis ? (
+                            <><span className="spinner" /> REGISTERING...</>
+                          ) : (
+                            'Register'
                           )}
                         </button>
                       ) : (
@@ -866,8 +916,237 @@ function loadRazorpayScript(): Promise<boolean> {
               })}
             </div>
           </div>
-        )})
-      }
+        )})}
+
+        {/* ── HIGHLIGHTER SEPARATOR LINE (PROMINENT ON MOBILE) ── */}
+        <div className={styles.slotHighlightSeparator} />
+
+        {/* ── ON-PAGE FORMAT & ROADMAP SECTION (DIRECTLY UNDER SLOTS) ── */}
+        <section className={styles.onPageRoadmapSection}>
+          {/* ── SEMI FINALS FORMAT & GROUP STAGE DETAILS ── */}
+          <div className={styles.roadmapSectionBlock}>
+            <div className={styles.sectionTitleRow}>
+              <h3 className={styles.sectionHeading}>
+                Semi Finals Format &amp; Group Stage Structure
+              </h3>
+              <span className={styles.sectionTagNeutral}>10 – 11 OCT 2026</span>
+            </div>
+
+            <div className={styles.formatOverviewBox}>
+              <div className={styles.formatItem}>
+                <div className={styles.formatIconWrap}>
+                  <Users size={16} color="#94a3b8" />
+                </div>
+                <div className={styles.formatInfo}>
+                  <h4>Dynamic Group Seeding</h4>
+                  <p>Groups are formed based on the total number of squads registered for Semi Finals.</p>
+                </div>
+              </div>
+
+              <div className={styles.formatItem}>
+                <div className={styles.formatIconWrap}>
+                  <Swords size={16} color="#94a3b8" />
+                </div>
+                <div className={styles.formatInfo}>
+                  <h4>Round Robin Battles</h4>
+                  <p>Groups clash against each other in a structured round-robin schedule across both days.</p>
+                </div>
+              </div>
+
+              <div className={styles.formatItem}>
+                <div className={styles.formatIconWrap}>
+                  <Target size={16} color="#94a3b8" />
+                </div>
+                <div className={styles.formatInfo}>
+                  <h4>6 Matches Per Squad</h4>
+                  <p>Every squad plays 6 total matches (2 Erangel, 2 Miramar, 2 Rondo) for Top 6 qualification.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── OFFICIAL 3-MAP ROTATION SHOWCASE ── */}
+          <div className={styles.roadmapSectionBlock}>
+            <div className={styles.sectionTitleRow}>
+              <h3 className={styles.sectionHeading}>
+                Official Map Rotation • 6 Matches Guaranteed
+              </h3>
+              <span className={styles.sectionTagNeutral}>2 ERANGEL • 2 MIRAMAR • 2 RONDO</span>
+            </div>
+
+            <div className={styles.mapShowcaseGrid}>
+              {/* Map 1: Erangel */}
+              <div className={styles.mapCard}>
+                <div className={styles.mapImageWrapper}>
+                  <img
+                    src="/images/maps/erangel.png"
+                    alt="Erangel Map"
+                    className={styles.mapImage}
+                  />
+                  <span className={styles.mapMatchesBadge}>2 MATCHES</span>
+                </div>
+                <div className={styles.mapCardBody}>
+                  <div className={styles.mapHeaderRow}>
+                    <h4 className={styles.mapName}>ERANGEL</h4>
+                    <span className={styles.mapDim}>8x8 KM</span>
+                  </div>
+                  <p className={styles.mapDesc}>
+                    Classic tactical combat. Iconic compound holds, bridge defenses, and intense Pochinki &amp; Rozhok rotations.
+                  </p>
+                </div>
+              </div>
+
+              {/* Map 2: Miramar */}
+              <div className={styles.mapCard}>
+                <div className={styles.mapImageWrapper}>
+                  <img
+                    src="/images/maps/miramar.png"
+                    alt="Miramar Map"
+                    className={styles.mapImage}
+                  />
+                  <span className={styles.mapMatchesBadge}>2 MATCHES</span>
+                </div>
+                <div className={styles.mapCardBody}>
+                  <div className={styles.mapHeaderRow}>
+                    <h4 className={styles.mapName}>MIRAMAR</h4>
+                    <span className={styles.mapDim}>8x8 KM</span>
+                  </div>
+                  <p className={styles.mapDesc}>
+                    Rugged desert terrain. High-ground ridge supremacy, long-range sniper duels, and open-terrain vehicle rotations.
+                  </p>
+                </div>
+              </div>
+
+              {/* Map 3: Rondo */}
+              <div className={styles.mapCard}>
+                <div className={styles.mapImageWrapper}>
+                  <img
+                    src="/images/maps/rondo.png"
+                    alt="Rondo Map"
+                    className={styles.mapImage}
+                  />
+                  <span className={styles.mapMatchesBadge}>2 MATCHES</span>
+                </div>
+                <div className={styles.mapCardBody}>
+                  <div className={styles.mapHeaderRow}>
+                    <h4 className={styles.mapName}>RONDO</h4>
+                    <span className={styles.mapDim}>8x8 KM</span>
+                  </div>
+                  <p className={styles.mapDesc}>
+                    Dynamic modern warfare. Jadena City urban heights, escalators, bamboo forests, and high-intensity close combat.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── GRAND FINALS 16-TEAM ROSTER EQUATION ── */}
+          <div className={styles.finalsFormulaBar}>
+            <div className={styles.formulaInputsRow}>
+              <div className={styles.formulaItem}>
+                <span className={styles.formulaVal}>8 TEAMS</span>
+                <span className={styles.formulaLabel}>League Top 8</span>
+              </div>
+              <span className={styles.formulaOperator}>+</span>
+              <div className={styles.formulaItem}>
+                <span className={styles.formulaVal}>6 TEAMS</span>
+                <span className={styles.formulaLabel}>Semi Finals Top 6</span>
+              </div>
+              <span className={styles.formulaOperator}>+</span>
+              <div className={styles.formulaItem}>
+                <span className={styles.formulaVal}>2 TEAMS</span>
+                <span className={styles.formulaLabel}>Wildcard Entries</span>
+              </div>
+            </div>
+            <span className={styles.formulaEquals}>=</span>
+            <div className={styles.formulaResultBox}>
+              <span className={styles.formulaResultVal}>16 GRAND FINALISTS</span>
+              <span className={styles.formulaResultLabel}>Grand Finals Cup</span>
+            </div>
+          </div>
+
+          {/* ── SEMI FINALS HERO HEADER ── */}
+          <div className={styles.onPageRoadmapHero}>
+            <div className={styles.onPageRoadmapHeaderContent}>
+              <div className={styles.semiFinalsHeroBadge}>
+                <Flame size={12} color="#fbbf24" />
+                <span>SEMI FINALS STAGE • 10–11 OCT 2026</span>
+              </div>
+              <h2 className={styles.onPageRoadmapTitle}>ONE LAST CHANCE TO QUALIFY FOR GRAND FINALS</h2>
+              <p className={styles.onPageRoadmapDesc}>
+                Dynamic Round Robin Groups • 6 Matches (2 Erangel, 2 Miramar, 2 Rondo) • Top 6 teams qualify for the Grand Finals. Open for all squads to register!
+              </p>
+            </div>
+            <div className={styles.onPageRoadmapTag}>
+              <Compass size={15} color="#fbbf24" />
+              <span>ROADMAP &amp; FORMAT</span>
+            </div>
+          </div>
+
+          {/* ── STAGE PROGRESSION PIPELINE ── */}
+          <div className={styles.roadmapSectionBlock}>
+            <div className={styles.sectionTitleRow}>
+              <h3 className={styles.sectionHeading}>
+                Tournament Roadmap &amp; Qualification Path
+              </h3>
+              <span className={styles.sectionTagNeutral}>16 GRAND FINALISTS TOTAL</span>
+            </div>
+
+            <div className={styles.roadmapGrid}>
+              {/* Step 1 */}
+              <div className={styles.roadmapCardFinals}>
+                <div className={styles.roadmapCardTop}>
+                  <span className={styles.stepNum}>STEP 01</span>
+                  <span className={styles.badgeGold}>DIRECT TO FINALS</span>
+                </div>
+                <h4 className={styles.roadmapCardTitle}>Top 8 Direct Finalists</h4>
+                <p className={styles.roadmapCardText}>
+                  Top 8 teams from official league standings qualify directly for Grand Finals.
+                </p>
+                <div className={styles.stepFootNoteGold}>✓ 8 Teams Guaranteed</div>
+              </div>
+
+              {/* Step 2 */}
+              <div className={styles.roadmapCard}>
+                <div className={styles.roadmapCardTop}>
+                  <span className={styles.stepNum}>STEP 02</span>
+                  <span className={styles.badgeBlue}>SEEDED IN SEMIS</span>
+                </div>
+                <h4 className={styles.roadmapCardTitle}>Teams 9–16 Seeded</h4>
+                <p className={styles.roadmapCardText}>
+                  Teams finishing #9 to #16 in the league stage receive seeded semi-finals entry.
+                </p>
+                <div className={styles.stepFootNote}>⚡ 8 Seeded Squads</div>
+              </div>
+
+              {/* Step 3 */}
+              <div className={styles.roadmapCard}>
+                <div className={styles.roadmapCardTop}>
+                  <span className={styles.stepNum}>STEP 03</span>
+                  <span className={styles.badgeGreen}>OPEN ENTRY</span>
+                </div>
+                <h4 className={styles.roadmapCardTitle}>Open Challenger Entry</h4>
+                <p className={styles.roadmapCardText}>
+                  Any squad can book a Semi Finals slot and fight for a Grand Finals ticket.
+                </p>
+                <div className={styles.stepFootNote}>🎟️ Open For All Squads</div>
+              </div>
+
+              {/* Step 4 */}
+              <div className={styles.roadmapCardFinals}>
+                <div className={styles.roadmapCardTop}>
+                  <span className={styles.stepNum}>STEP 04</span>
+                  <span className={styles.badgeAmber}>TOP 6 ADVANCE</span>
+                </div>
+                <h4 className={styles.roadmapCardTitle}>Top 6 Advance to Finals</h4>
+                <p className={styles.roadmapCardText}>
+                  The Top 6 teams from the Semi Finals group stage advance to the Grand Finals.
+                </p>
+                <div className={styles.stepFootNoteAmber}>🔥 Top 6 Reach Finals</div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       {/* ── CONFIRM DIALOG FOR FREE SLOT ── */}
@@ -888,7 +1167,11 @@ function loadRazorpayScript(): Promise<boolean> {
             </p>
 
             <div className={styles.modalSlotPreview}>
-              <div className={styles.previewTime}>{getSlotWindowOnly(confirmFreeSlot.time_label)}</div>
+              <div className={styles.previewTime}>
+                {confirmFreeSlot.time_label && confirmFreeSlot.time_label.toLowerCase().includes('semi')
+                  ? 'Semi Finals • 10–11 OCT 2026'
+                  : getSlotWindowOnly(confirmFreeSlot.time_label)}
+              </div>
               <div className={styles.previewDate}>{fmtDateHeader(confirmFreeSlot.date)}</div>
               <div className={styles.previewFee}>
                 Entry Fee: <span style={{ textDecoration: 'line-through' }}>₹{(confirmFreeSlot.entry_fee !== undefined && confirmFreeSlot.entry_fee !== null) ? confirmFreeSlot.entry_fee : effectiveEntryFee}</span>{' '}
@@ -1066,6 +1349,8 @@ function loadRazorpayScript(): Promise<boolean> {
           </div>
         </div>
       )}
+
+
 
 
       {/* ── TOURNAMENT RULES & GUIDELINES MODAL ── */}
