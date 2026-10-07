@@ -945,20 +945,22 @@ function CustomSlotDropdown({
         disabled={slots.length === 0}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        className={`${styles.customDropdownTrigger} ${isOpen ? styles.dropdownOpen : ''}`}
         style={{
           width: '100%',
+          maxWidth: '100%',
           height: '46px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '12px',
-          padding: '0 16px',
+          gap: '10px',
+          padding: '0 14px',
           borderRadius: '8px',
           background: '#161616',
           border: isOpen ? '1px solid #facc15' : '1px solid #2a2a2a',
           color: '#ffffff',
           fontFamily: 'Inter, sans-serif',
-          fontSize: '14px',
+          fontSize: '13px',
           fontWeight: 600,
           cursor: slots.length === 0 ? 'not-allowed' : 'pointer',
           opacity: slots.length === 0 ? 0.7 : 1,
@@ -969,9 +971,23 @@ function CustomSlotDropdown({
           touchAction: 'manipulation',
           WebkitTapHighlightColor: 'transparent',
           userSelect: 'none',
+          overflow: 'hidden',
         }}
       >
-        <span style={{ color: slots.length === 0 ? '#888888' : '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none' }}>
+        <span
+          className={styles.dropdownText}
+          style={{
+            flex: '1 1 auto',
+            minWidth: 0,
+            maxWidth: '100%',
+            color: slots.length === 0 ? '#888888' : '#ffffff',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            textAlign: 'left',
+            pointerEvents: 'none',
+          }}
+        >
           {slots.length === 0 ? (emptyMessage || 'No slots created yet') : getLabel(selectedSlot)}
         </span>
         <ChevronDown
@@ -1014,10 +1030,30 @@ function CustomSlotDropdown({
                   touchAction: 'manipulation',
                   WebkitTapHighlightColor: 'transparent',
                   minHeight: '44px',
+                  width: '100%',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
                 }}
               >
-                <span>{getLabel(s)}</span>
-                {isSelected && <Check size={14} color="#facc15" />}
+                <span
+                  className={styles.customDropdownItemText}
+                  style={{
+                    flex: '1 1 auto',
+                    minWidth: 0,
+                    wordBreak: 'break-word',
+                    lineHeight: 1.35,
+                    textAlign: 'left',
+                  }}
+                >
+                  {getLabel(s)}
+                </span>
+                {isSelected && (
+                  <Check
+                    size={14}
+                    color="#facc15"
+                    style={{ flexShrink: 0, marginLeft: '6px' }}
+                  />
+                )}
               </li>
             )
           })}
