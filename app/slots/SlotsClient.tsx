@@ -625,11 +625,6 @@ function loadRazorpayScript(): Promise<boolean> {
                         <div className={styles.bookedTime}>
                           {isSemiFinals ? 'SEMI FINALS • 17–18 OCT 2026' : getSlotWindowOnly(slot.time_label)}
                         </div>
-                        {isSemiFinals && (
-                          <div style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700, marginTop: '2px', textAlign: 'center' }}>
-                            Grand Finals Date: 24–25 OCT 2026 (Top 6 Advance)
-                          </div>
-                        )}
 
                         {isSemiFinals ? (
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', margin: '0.65rem 0' }}>
@@ -784,13 +779,8 @@ function loadRazorpayScript(): Promise<boolean> {
                     {/* Time Label (Large) */}
                     <div className={styles.cardTime}>
                       {isSemiFinals ? (
-                        <div>
-                          <div style={{ fontSize: '1rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '0.02em' }}>
-                            17–18 OCT 2026
-                          </div>
-                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginTop: '3px' }}>
-                            Grand Finals: <span style={{ color: '#fbbf24', fontWeight: 800 }}>24–25 OCT 2026</span>
-                          </div>
+                        <div style={{ fontSize: '1rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '0.02em' }}>
+                          17–18 OCT 2026
                         </div>
                       ) : (
                         getSlotWindowOnly(slot.time_label)
@@ -889,23 +879,24 @@ function loadRazorpayScript(): Promise<boolean> {
                           )}
                         </button>
                       ) : isSemiFinals ? (
-                        <button
-                          className={styles.semiFinalsRegisterBtn}
-                          onClick={() => handleDirectBookSlot(slot, false)}
-                          disabled={isBookingThis}
-                        >
-                          {isBookingThis ? (
-                            <span className={styles.semiBtnLoading}>
-                              <span className="spinner" /> REGISTERING...
-                            </span>
-                          ) : (
-                            <>
-                              <span className={styles.semiBtnTitle}>REGISTER SQUAD • ₹{currentFee}</span>
-                              <span className={styles.semiBtnTiming}>Match Timings: ~7:00 PM – 11:00 PM</span>
-                              <span className={styles.semiBtnQualify}>Top 6 Qualify for Finals (24–25 Oct)</span>
-                            </>
-                          )}
-                        </button>
+                        <>
+                          <button
+                            className={styles.semiFinalsRegisterBtn}
+                            onClick={() => handleDirectBookSlot(slot, false)}
+                            disabled={isBookingThis}
+                          >
+                            {isBookingThis ? (
+                              <span className={styles.semiBtnLoading}>
+                                <span className="spinner" /> REGISTERING...
+                              </span>
+                            ) : (
+                              <span className={styles.semiBtnTitle}>REGISTER • ₹{currentFee}</span>
+                            )}
+                          </button>
+                          <div className={styles.semiBottomTiming}>
+                            Match Timings: ~7:00 PM – 11:00 PM
+                          </div>
+                        </>
                       ) : (
                         <button
                           className={styles.cardBtnNormal}
