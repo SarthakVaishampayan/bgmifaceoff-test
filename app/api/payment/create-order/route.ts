@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import Razorpay from 'razorpay'
 
@@ -13,20 +13,31 @@ export async function POST(request: Request) {
 
     const { bookingId, amount } = await request.json()
 
-    if (!bookingId || !amount) {
-      return NextResponse.json({ error: 'Missing bookingId or amount' }, { status: 400 })
+    if (!bookingId) {
+      return NextResponse.json({ error: 'Missing bookingId' }, { status: 400 })
     }
 
-    // Check if booking is a test mode booking
-    const { data: bookingRec } = await supabase
+    const admin = await createAdminClient()
+
+    // Check if booking is valid & check test mode
+    const { data: bookingRec, error: fetchErr } = await admin
       .from('bookings')
-      .select('is_test_booking')
+      .select('is_test_booking, slot_id, slots(entry_fee)')
       .eq('booking_id', bookingId)
       .maybeSingle()
 
-    if (bookingRec?.is_test_booking) {
+    if (fetchErr || !bookingRec) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    }
+
+    if (bookingRec.is_test_booking) {
       return NextResponse.json({ error: 'Test mode booking — Razorpay payment bypassed.' }, { status: 400 })
     }
+
+    const slotData = bookingRec.slots as any
+    const finalAmount = (slotData?.entry_fee !== undefined && slotData?.entry_fee !== null)
+      ? Number(slotData.entry_fee)
+      : (Number(amount) || 50)
 
     const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
     const keySecret = process.env.RAZORPAY_KEY_SECRET
@@ -40,9 +51,9 @@ export async function POST(request: Request) {
       key_secret: keySecret,
     })
 
-    // Amount in paise (₹40 = 4000 paise)
+    // Amount in paise (₹199 = 19900 paise)
     const options = {
-      amount: Math.round(amount * 100),
+      amount: Math.round(finalAmount * 100),
       currency: 'INR',
       receipt: bookingId,
       notes: {

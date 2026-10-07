@@ -554,13 +554,9 @@ function loadRazorpayScript(): Promise<boolean> {
         {/* Page header */}
         <div className={styles.pageHeader}>
           <div>
-            <div className={styles.stageLiveBadge}>
-              <span className={styles.pulseDot} />
-              <span>SEMI FINALS STAGE • 10–11 OCT 2026</span>
-            </div>
             <h1 className={styles.title}>SEMI FINALS REGISTRATION</h1>
             <p className={styles.subtitle}>
-              One last chance to qualify for the Grand Finals • Battle for the Top 6 spots.
+              Semi Finals: 10–11 Oct 2026 • Grand Finals: 17–18 Oct 2026 • Top 6 squads qualify.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -592,7 +588,10 @@ function loadRazorpayScript(): Promise<boolean> {
           const dateSlots = slotsByDate[date]
           return (
             <div key={date} className={styles.daySection}>
-            <h2 className={styles.dayHeader}>📅 {fmtDateHeader(date)}</h2>
+            <h2 className={styles.dayHeader}>
+              <Calendar size={18} color="#94a3b8" />
+              <span>{fmtDateHeader(date)}</span>
+            </h2>
 
             <div className={styles.slotGrid}>
               {dateSlots.map(slot => {
@@ -626,6 +625,11 @@ function loadRazorpayScript(): Promise<boolean> {
                         <div className={styles.bookedTime}>
                           {isSemiFinals ? 'SEMI FINALS • 10–11 OCT 2026' : getSlotWindowOnly(slot.time_label)}
                         </div>
+                        {isSemiFinals && (
+                          <div style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700, marginTop: '2px', textAlign: 'center' }}>
+                            Grand Finals Date: 17–18 OCT 2026 (Top 6 Advance)
+                          </div>
+                        )}
 
                         {isSemiFinals ? (
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', margin: '0.65rem 0' }}>
@@ -780,8 +784,13 @@ function loadRazorpayScript(): Promise<boolean> {
                     {/* Time Label (Large) */}
                     <div className={styles.cardTime}>
                       {isSemiFinals ? (
-                        <div style={{ fontSize: '0.98rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '0.02em' }}>
-                          10–11 OCT 2026
+                        <div>
+                          <div style={{ fontSize: '1rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '0.02em' }}>
+                            10–11 OCT 2026
+                          </div>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginTop: '3px' }}>
+                            Grand Finals: <span style={{ color: '#fbbf24', fontWeight: 800 }}>17–18 OCT 2026</span>
+                          </div>
                         </div>
                       ) : (
                         getSlotWindowOnly(slot.time_label)
@@ -790,7 +799,8 @@ function loadRazorpayScript(): Promise<boolean> {
 
                     {slot.is_grand_finals && (
                       <div className={styles.cardGFBadge}>
-                        🏆 Grand Finals
+                        <Trophy size={12} color="#fbbf24" />
+                        <span>Grand Finals</span>
                       </div>
                     )}
 
@@ -880,15 +890,20 @@ function loadRazorpayScript(): Promise<boolean> {
                         </button>
                       ) : isSemiFinals ? (
                         <button
-                          className={styles.cardBtnNormal}
-                          style={{ background: '#fbbf24', color: '#111111', fontWeight: 800 }}
+                          className={styles.semiFinalsRegisterBtn}
                           onClick={() => handleDirectBookSlot(slot, false)}
                           disabled={isBookingThis}
                         >
                           {isBookingThis ? (
-                            <><span className="spinner" /> REGISTERING...</>
+                            <span className={styles.semiBtnLoading}>
+                              <span className="spinner" /> REGISTERING...
+                            </span>
                           ) : (
-                            'Register'
+                            <>
+                              <span className={styles.semiBtnTitle}>REGISTER SQUAD • ₹{currentFee}</span>
+                              <span className={styles.semiBtnTiming}>Match Timings: ~7:00 PM – 11:00 PM</span>
+                              <span className={styles.semiBtnQualify}>Top 6 Qualify for Finals (17–18 Oct)</span>
+                            </>
                           )}
                         </button>
                       ) : (
@@ -1061,25 +1076,17 @@ function loadRazorpayScript(): Promise<boolean> {
             <span className={styles.formulaEquals}>=</span>
             <div className={styles.formulaResultBox}>
               <span className={styles.formulaResultVal}>16 GRAND FINALISTS</span>
-              <span className={styles.formulaResultLabel}>Grand Finals Cup</span>
+              <span className={styles.formulaResultLabel}>Grand Finals • 17–18 OCT 2026</span>
             </div>
           </div>
 
           {/* ── SEMI FINALS HERO HEADER ── */}
           <div className={styles.onPageRoadmapHero}>
             <div className={styles.onPageRoadmapHeaderContent}>
-              <div className={styles.semiFinalsHeroBadge}>
-                <Flame size={12} color="#fbbf24" />
-                <span>SEMI FINALS STAGE • 10–11 OCT 2026</span>
-              </div>
               <h2 className={styles.onPageRoadmapTitle}>ONE LAST CHANCE TO QUALIFY FOR GRAND FINALS</h2>
               <p className={styles.onPageRoadmapDesc}>
-                Dynamic Round Robin Groups • 6 Matches (2 Erangel, 2 Miramar, 2 Rondo) • Top 6 teams qualify for the Grand Finals. Open for all squads to register!
+                Dynamic Round Robin Groups • 6 Matches (2 Erangel, 2 Miramar, 2 Rondo) • Top 6 teams qualify for the Grand Finals on 17–18 Oct 2026. Open for all squads to register!
               </p>
-            </div>
-            <div className={styles.onPageRoadmapTag}>
-              <Compass size={15} color="#fbbf24" />
-              <span>ROADMAP &amp; FORMAT</span>
             </div>
           </div>
 
@@ -1101,48 +1108,48 @@ function loadRazorpayScript(): Promise<boolean> {
                 </div>
                 <h4 className={styles.roadmapCardTitle}>Top 8 Direct Finalists</h4>
                 <p className={styles.roadmapCardText}>
-                  Top 8 teams from official league standings qualify directly for Grand Finals.
+                  Top 8 teams from official league standings qualify directly for Grand Finals (17–18 Oct 2026).
                 </p>
-                <div className={styles.stepFootNoteGold}>✓ 8 Teams Guaranteed</div>
+                <div className={styles.stepFootNoteGold}>8 Teams Guaranteed</div>
               </div>
 
               {/* Step 2 */}
               <div className={styles.roadmapCard}>
                 <div className={styles.roadmapCardTop}>
                   <span className={styles.stepNum}>STEP 02</span>
-                  <span className={styles.badgeBlue}>SEEDED IN SEMIS</span>
+                  <span className={styles.badgeNeutral}>SEEDED IN SEMIS</span>
                 </div>
                 <h4 className={styles.roadmapCardTitle}>Teams 9–16 Seeded</h4>
                 <p className={styles.roadmapCardText}>
                   Teams finishing #9 to #16 in the league stage receive seeded semi-finals entry.
                 </p>
-                <div className={styles.stepFootNote}>⚡ 8 Seeded Squads</div>
+                <div className={styles.stepFootNote}>8 Seeded Squads</div>
               </div>
 
               {/* Step 3 */}
               <div className={styles.roadmapCard}>
                 <div className={styles.roadmapCardTop}>
                   <span className={styles.stepNum}>STEP 03</span>
-                  <span className={styles.badgeGreen}>OPEN ENTRY</span>
+                  <span className={styles.badgeNeutral}>OPEN ENTRY</span>
                 </div>
                 <h4 className={styles.roadmapCardTitle}>Open Challenger Entry</h4>
                 <p className={styles.roadmapCardText}>
                   Any squad can book a Semi Finals slot and fight for a Grand Finals ticket.
                 </p>
-                <div className={styles.stepFootNote}>🎟️ Open For All Squads</div>
+                <div className={styles.stepFootNote}>Open For All Squads</div>
               </div>
 
               {/* Step 4 */}
               <div className={styles.roadmapCardFinals}>
                 <div className={styles.roadmapCardTop}>
                   <span className={styles.stepNum}>STEP 04</span>
-                  <span className={styles.badgeAmber}>TOP 6 ADVANCE</span>
+                  <span className={styles.badgeGold}>TOP 6 ADVANCE</span>
                 </div>
                 <h4 className={styles.roadmapCardTitle}>Top 6 Advance to Finals</h4>
                 <p className={styles.roadmapCardText}>
-                  The Top 6 teams from the Semi Finals group stage advance to the Grand Finals.
+                  The Top 6 teams from the Semi Finals group stage advance to the Grand Finals (17–18 Oct 2026).
                 </p>
-                <div className={styles.stepFootNoteAmber}>🔥 Top 6 Reach Finals</div>
+                <div className={styles.stepFootNoteGold}>Top 6 Reach Finals</div>
               </div>
             </div>
           </div>
@@ -1192,7 +1199,7 @@ function loadRazorpayScript(): Promise<boolean> {
                   handleDirectBookSlot(slotToBook, true)
                 }}
               >
-                ✓ CONFIRM FREE REGISTRATION
+                CONFIRM FREE REGISTRATION
               </button>
               <button
                 className={styles.cancelBtn}

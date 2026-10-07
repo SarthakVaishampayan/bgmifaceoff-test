@@ -73,7 +73,8 @@ export async function POST(request: Request) {
     const slot = booking.slots as any
 
     // Re-verify slot capacity (race condition guard)
-    if (slot.status === 'full' || slot.teams_booked_count >= slot.capacity) {
+    const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
+    if (!isSemiFinals && (slot.status === 'full' || slot.teams_booked_count >= slot.capacity)) {
       // Mark this booking as failed since slot filled up
       await admin.from('bookings').update({ payment_status: 'failed' }).eq('booking_id', booking_id)
       return NextResponse.json({ error: 'Slot just filled up before payment could complete. Please choose another slot.' }, { status: 409 })
@@ -95,6 +96,19 @@ export async function POST(request: Request) {
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    }
+
+    // Increment slot capacity count
+    if (slot) {
+      const newCount = (slot.teams_booked_count || 0) + 1
+      const isFull = !isSemiFinals && (newCount >= (slot.capacity || 20))
+      await admin
+        .from('slots')
+        .update({
+          teams_booked_count: newCount,
+          status: isFull ? 'full' : slot.status,
+        })
+        .eq('slot_id', booking.slot_id)
     }
 
     // Fetch global whatsapp fallback if slot has none

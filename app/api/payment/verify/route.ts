@@ -78,8 +78,9 @@ export async function POST(request: Request) {
 
     // Increment slot capacity count
     if (slot) {
+      const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
       const newCount = (slot.teams_booked_count || 0) + 1
-      const isFull = newCount >= (slot.capacity || 20)
+      const isFull = !isSemiFinals && (newCount >= (slot.capacity || 20))
       await admin
         .from('slots')
         .update({

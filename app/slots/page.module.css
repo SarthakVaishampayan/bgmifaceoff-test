@@ -939,6 +939,74 @@
   transform: translateY(-1px);
 }
 
+/* Semi Finals Pinned Register Button */
+.semiFinalsRegisterBtn {
+  width: 100%;
+  padding: 0.75rem 0.65rem;
+  background: #fbbf24;
+  color: #111111;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(251, 191, 36, 0.22);
+}
+
+.semiFinalsRegisterBtn:hover {
+  background: #fde047;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(251, 191, 36, 0.35);
+}
+
+.semiFinalsRegisterBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.semiBtnLoading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #111111;
+}
+
+.semiBtnTitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #09090b;
+  line-height: 1.15;
+}
+
+.semiBtnTiming {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #27272a;
+  line-height: 1.2;
+}
+
+.semiBtnQualify {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #18181b;
+  background: rgba(0, 0, 0, 0.08);
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-top: 1px;
+  letter-spacing: 0.01em;
+}
+
 /* Inverted (outline) gold style for "Book free" button */
 .cardBtnFreeOutline {
   width: 100%;
@@ -2057,47 +2125,25 @@
   color: #52525b;
 }
 
-/* Badges with gentle, restrained accents */
+/* Badges with cohesive, refined dark-mode accents */
 .badgeGold {
   background: rgba(251, 191, 36, 0.1);
   color: #fbbf24;
   border: 1px solid rgba(251, 191, 36, 0.25);
   font-size: 0.58rem;
   font-weight: 800;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.04em;
 }
 
-.badgeBlue {
-  background: rgba(59, 130, 246, 0.1);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.25);
+.badgeNeutral {
+  background: #18181b;
+  color: #94a3b8;
+  border: 1px solid #27272a;
   font-size: 0.58rem;
   font-weight: 800;
-  padding: 1px 5px;
-  border-radius: 4px;
-  letter-spacing: 0.04em;
-}
-
-.badgeGreen {
-  background: rgba(16, 185, 129, 0.1);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  font-size: 0.58rem;
-  font-weight: 800;
-  padding: 1px 5px;
-  border-radius: 4px;
-  letter-spacing: 0.04em;
-}
-
-.badgeAmber {
-  background: rgba(249, 115, 22, 0.1);
-  color: #fb923c;
-  border: 1px solid rgba(249, 115, 22, 0.25);
-  font-size: 0.58rem;
-  font-weight: 800;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.04em;
 }
@@ -2293,7 +2339,7 @@
 .mapImageWrapper {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 1 / 1;
   background: #09090b;
   overflow: hidden;
 }
@@ -2302,7 +2348,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.92;
+  opacity: 1;
   transition: transform 0.3s ease;
   display: block;
 }
@@ -2483,35 +2529,17 @@
   }
 }
 
-/* ── HIGHLIGHTER SEPARATOR LINE (PROMINENT ON MOBILE) ── */
+/* ── CLEAN DIVIDER SEPARATOR ── */
 .slotHighlightSeparator {
   width: 100%;
-  height: 2px;
-  margin: 2.25rem 0 1.75rem;
-  background: linear-gradient(90deg, transparent 0%, rgba(251, 191, 36, 0.45) 15%, #fbbf24 50%, rgba(251, 191, 36, 0.45) 85%, transparent 100%);
-  box-shadow: 0 0 14px rgba(251, 191, 36, 0.5);
-  border-radius: 999px;
-  position: relative;
-}
-
-.slotHighlightSeparator::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 60px;
-  height: 4px;
-  background: #fbbf24;
-  border-radius: 999px;
-  box-shadow: 0 0 12px #fbbf24;
+  height: 1px;
+  margin: 2.25rem 0 1.5rem;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 20%, rgba(251, 191, 36, 0.25) 50%, rgba(255, 255, 255, 0.08) 80%, transparent 100%);
 }
 
 @media (max-width: 768px) {
   .slotHighlightSeparator {
     margin: 1.75rem 0 1.25rem;
-    height: 3px;
-    box-shadow: 0 0 16px rgba(251, 191, 36, 0.7);
   }
 }
 
