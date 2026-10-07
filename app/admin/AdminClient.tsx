@@ -76,7 +76,7 @@ export default function AdminClient({ userRole = 'admin', slots: initialSlots, t
   const todayStr = getTodayStr()
   const tomorrowStr = getTomorrowStr()
   const dayAfterStr = getDayAfterStr()
-  const [selectedDate, setSelectedDate] = useState('2026-10-10')
+  const [selectedDate, setSelectedDate] = useState('2026-10-17')
   const [adminEmail, setAdminEmail] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -2423,7 +2423,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     third_prize?: any
   }>>({})
 
-  // Special Semi Finals (10-11 Oct) form state
+  // Special Semi Finals (17-18 Oct) form state
   const [semiFinalsForm, setSemiFinalsForm] = useState<{
     whatsapp_link?: string
     entry_fee?: number
@@ -2871,8 +2871,10 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     setLoadingPresetId(null)
   }
 
-  // ── SPECIAL SEMI FINALS (10–11 OCT 2026) SLOT HELPERS & ACTIONS ──
+  // ── SPECIAL SEMI FINALS (17–18 OCT 2026) SLOT HELPERS & ACTIONS ──
   const semiFinalsSlot = slots.find((s: any) =>
+    s.date === '2026-10-17' ||
+    s.date === '2026-10-18' ||
     s.date === '2026-10-10' ||
     (s.time_label && s.time_label.toLowerCase().includes('semi finals'))
   )
@@ -2918,13 +2920,13 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       if (data && setSlots) {
         setSlots((prev: any[]) => prev.map((s: any) => s.slot_id === data.slot_id ? data : s))
       }
-      setMsg('✅ Semi Finals Stage (10–11 Oct 2026) is now OPEN for squad registrations!')
+      setMsg('✅ Semi Finals Stage (17–18 Oct 2026) is now OPEN for squad registrations!')
     } else {
       const { data, error } = await supabase
         .from('slots')
         .insert({
-          date: '2026-10-10',
-          time_label: 'Semi Finals Stage • 10–11 Oct 2026',
+          date: '2026-10-17',
+          time_label: 'Semi Finals Stage • 17–18 Oct 2026',
           capacity: 9999,
           teams_booked_count: 0,
           entry_fee: entryFee,
@@ -2939,7 +2941,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       if (data && setSlots) {
         setSlots((prev: any[]) => [...prev, data])
       }
-      setMsg('✅ Semi Finals Stage (10–11 Oct 2026) created and OPEN for squad registrations!')
+      setMsg('✅ Semi Finals Stage (17–18 Oct 2026) created and OPEN for squad registrations!')
     }
     setLoadingPresetId(null)
   }
@@ -3051,7 +3053,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
       <div className={styles.tabHeader} style={{ marginBottom: '1.25rem' }}>
         <div>
           <h2 className={styles.tabTitle}>
-            {selectedDate > '2026-10-04' ? 'Semi Finals Stage Management (10–11 Oct 2026)' : 'Daily Slots Management (6 Fixed Slots)'}
+            {selectedDate > '2026-10-04' ? 'Semi Finals Stage Management (17–18 Oct 2026)' : 'Daily Slots Management (6 Fixed Slots)'}
           </h2>
           <p className={styles.tabDesc}>
             {selectedDate > '2026-10-04'
@@ -3083,14 +3085,14 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
             type="button"
             className="btn btn-secondary btn-sm"
             style={{
-              background: selectedDate === '2026-10-10' ? '#fbbf24' : '#1e1e1e',
-              color: selectedDate === '2026-10-10' ? '#111111' : '#ffffff',
+              background: (selectedDate === '2026-10-17' || selectedDate === '2026-10-18') ? '#fbbf24' : '#1e1e1e',
+              color: (selectedDate === '2026-10-17' || selectedDate === '2026-10-18') ? '#111111' : '#ffffff',
               fontWeight: 800,
-              borderColor: selectedDate === '2026-10-10' ? '#fbbf24' : '#333333',
+              borderColor: (selectedDate === '2026-10-17' || selectedDate === '2026-10-18') ? '#fbbf24' : '#333333',
             }}
-            onClick={() => setSelectedDate('2026-10-10')}
+            onClick={() => setSelectedDate('2026-10-17')}
           >
-            🔥 Semi Finals (10–11 Oct)
+            🔥 Semi Finals (17–18 Oct)
           </button>
         </div>
 
@@ -3167,7 +3169,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
             <div>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(251, 191, 36, 0.12)', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '0.2rem 0.6rem', borderRadius: '6px', marginBottom: '0.4rem' }}>
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#fbbf24', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                  🔥 SEMI FINALS STAGE • 10–11 OCT 2026
+                  🔥 SEMI FINALS STAGE • 17–18 OCT 2026
                 </span>
               </div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f8fafc', margin: '0 0 0.3rem 0' }}>
@@ -9596,10 +9598,10 @@ function ConfigTab({ config, setConfig, supabase }: { config: Record<string, str
   }, [config])
 
   const fields = [
-    { key: 'grand_finals_date', label: 'Grand Finals Date (ISO)', placeholder: '2026-10-17T18:00:00+05:30', type: 'text' },
+    { key: 'grand_finals_date', label: 'Grand Finals Date (ISO)', placeholder: '2026-10-24T18:00:00+05:30', type: 'text' },
     { key: 'whatsapp_invite_link', label: 'WhatsApp Community Link', placeholder: 'https://chat.whatsapp.com/...', type: 'text' },
     { key: 'cycle_start_date', label: 'Cycle Start Date', placeholder: '2026-09-21', type: 'date' },
-    { key: 'cycle_end_date', label: 'Cycle End Date', placeholder: '2026-10-16', type: 'date' },
+    { key: 'cycle_end_date', label: 'Cycle End Date', placeholder: '2026-10-23', type: 'date' },
     { key: 'slot_entry_fee', label: 'Default Slot Entry Fee (₹)', placeholder: '50', type: 'number' },
     { key: 'slot_first_prize', label: 'Default 1st Place Cash Prize (₹)', placeholder: '160', type: 'number' },
     { key: 'slot_second_prize', label: 'Default 2nd Place Cash Prize (₹)', placeholder: '80', type: 'number' },

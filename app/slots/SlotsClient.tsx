@@ -456,10 +456,10 @@ function loadRazorpayScript(): Promise<boolean> {
     if (isNaN(d.getTime())) return dStr
     const fullDate = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 
-    if (dStr === '2026-10-10' || dStr === '2026-10-11') {
-      return 'Semi Finals (10–11 Oct 2026)'
+    if (dStr === '2026-10-17' || dStr === '2026-10-18' || dStr === '2026-10-10' || dStr === '2026-10-11') {
+      return 'Semi Finals (17–18 Oct 2026)'
     }
-    if (dStr > '2026-10-11') {
+    if (dStr > '2026-10-18') {
       return `Finals Stage (${fullDate})`
     }
 
@@ -556,7 +556,7 @@ function loadRazorpayScript(): Promise<boolean> {
           <div>
             <h1 className={styles.title}>SEMI FINALS REGISTRATION</h1>
             <p className={styles.subtitle}>
-              Semi Finals: 10–11 Oct 2026 • Grand Finals: 17–18 Oct 2026 • Top 6 squads qualify.
+              Semi Finals: 17–18 Oct 2026 • Grand Finals: 24–25 Oct 2026 • Top 6 squads qualify.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -595,7 +595,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
             <div className={styles.slotGrid}>
               {dateSlots.map(slot => {
-                const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
+                const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-17' || slot.date === '2026-10-18' || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
                 const isAlreadyBooked = bookedSlotIds.some(id => String(id).trim().toLowerCase() === String(slot.slot_id).trim().toLowerCase())
                 const isBookingThis = bookingSlotId === slot.slot_id
                 const spotsLeft = Math.max(0, slot.capacity - slot.teams_booked_count)
@@ -623,11 +623,11 @@ function loadRazorpayScript(): Promise<boolean> {
 
                       <div className={styles.bookedCenter}>
                         <div className={styles.bookedTime}>
-                          {isSemiFinals ? 'SEMI FINALS • 10–11 OCT 2026' : getSlotWindowOnly(slot.time_label)}
+                          {isSemiFinals ? 'SEMI FINALS • 17–18 OCT 2026' : getSlotWindowOnly(slot.time_label)}
                         </div>
                         {isSemiFinals && (
                           <div style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 700, marginTop: '2px', textAlign: 'center' }}>
-                            Grand Finals Date: 17–18 OCT 2026 (Top 6 Advance)
+                            Grand Finals Date: 24–25 OCT 2026 (Top 6 Advance)
                           </div>
                         )}
 
@@ -786,10 +786,10 @@ function loadRazorpayScript(): Promise<boolean> {
                       {isSemiFinals ? (
                         <div>
                           <div style={{ fontSize: '1rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '0.02em' }}>
-                            10–11 OCT 2026
+                            17–18 OCT 2026
                           </div>
                           <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginTop: '3px' }}>
-                            Grand Finals: <span style={{ color: '#fbbf24', fontWeight: 800 }}>17–18 OCT 2026</span>
+                            Grand Finals: <span style={{ color: '#fbbf24', fontWeight: 800 }}>24–25 OCT 2026</span>
                           </div>
                         </div>
                       ) : (
@@ -902,7 +902,7 @@ function loadRazorpayScript(): Promise<boolean> {
                             <>
                               <span className={styles.semiBtnTitle}>REGISTER SQUAD • ₹{currentFee}</span>
                               <span className={styles.semiBtnTiming}>Match Timings: ~7:00 PM – 11:00 PM</span>
-                              <span className={styles.semiBtnQualify}>Top 6 Qualify for Finals (17–18 Oct)</span>
+                              <span className={styles.semiBtnQualify}>Top 6 Qualify for Finals (24–25 Oct)</span>
                             </>
                           )}
                         </button>
@@ -944,7 +944,7 @@ function loadRazorpayScript(): Promise<boolean> {
               <h3 className={styles.sectionHeading}>
                 Semi Finals Format &amp; Group Stage Structure
               </h3>
-              <span className={styles.sectionTagNeutral}>10 – 11 OCT 2026</span>
+              <span className={styles.sectionTagNeutral}>17 – 18 OCT 2026</span>
             </div>
 
             <div className={styles.formatOverviewBox}>
@@ -1076,7 +1076,7 @@ function loadRazorpayScript(): Promise<boolean> {
             <span className={styles.formulaEquals}>=</span>
             <div className={styles.formulaResultBox}>
               <span className={styles.formulaResultVal}>16 GRAND FINALISTS</span>
-              <span className={styles.formulaResultLabel}>Grand Finals • 17–18 OCT 2026</span>
+              <span className={styles.formulaResultLabel}>Grand Finals • 24–25 OCT 2026</span>
             </div>
           </div>
 
@@ -1085,7 +1085,7 @@ function loadRazorpayScript(): Promise<boolean> {
             <div className={styles.onPageRoadmapHeaderContent}>
               <h2 className={styles.onPageRoadmapTitle}>ONE LAST CHANCE TO QUALIFY FOR GRAND FINALS</h2>
               <p className={styles.onPageRoadmapDesc}>
-                Dynamic Round Robin Groups • 6 Matches (2 Erangel, 2 Miramar, 2 Rondo) • Top 6 teams qualify for the Grand Finals on 17–18 Oct 2026. Open for all squads to register!
+                Dynamic Round Robin Groups • 6 Matches (2 Erangel, 2 Miramar, 2 Rondo) • Top 6 teams qualify for the Grand Finals on 24–25 Oct 2026. Open for all squads to register!
               </p>
             </div>
           </div>
@@ -1108,7 +1108,7 @@ function loadRazorpayScript(): Promise<boolean> {
                 </div>
                 <h4 className={styles.roadmapCardTitle}>Top 8 Direct Finalists</h4>
                 <p className={styles.roadmapCardText}>
-                  Top 8 teams from official league standings qualify directly for Grand Finals (17–18 Oct 2026).
+                  Top 8 teams from official league standings qualify directly for Grand Finals (24–25 Oct 2026).
                 </p>
                 <div className={styles.stepFootNoteGold}>8 Teams Guaranteed</div>
               </div>
@@ -1147,7 +1147,7 @@ function loadRazorpayScript(): Promise<boolean> {
                 </div>
                 <h4 className={styles.roadmapCardTitle}>Top 6 Advance to Finals</h4>
                 <p className={styles.roadmapCardText}>
-                  The Top 6 teams from the Semi Finals group stage advance to the Grand Finals (17–18 Oct 2026).
+                  The Top 6 teams from the Semi Finals group stage advance to the Grand Finals (24–25 Oct 2026).
                 </p>
                 <div className={styles.stepFootNoteGold}>Top 6 Reach Finals</div>
               </div>
@@ -1176,7 +1176,7 @@ function loadRazorpayScript(): Promise<boolean> {
             <div className={styles.modalSlotPreview}>
               <div className={styles.previewTime}>
                 {confirmFreeSlot.time_label && confirmFreeSlot.time_label.toLowerCase().includes('semi')
-                  ? 'Semi Finals • 10–11 OCT 2026'
+                  ? 'Semi Finals • 17–18 OCT 2026'
                   : getSlotWindowOnly(confirmFreeSlot.time_label)}
               </div>
               <div className={styles.previewDate}>{fmtDateHeader(confirmFreeSlot.date)}</div>

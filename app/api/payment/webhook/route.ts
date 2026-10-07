@@ -86,7 +86,7 @@ export async function POST(request: Request) {
 
   // Increment slot count
   if (slot) {
-    const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
+    const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-17' || slot.date === '2026-10-18' || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
     const newCount = (slot.teams_booked_count || 0) + 1
     const isFull = !isSemiFinals && (newCount >= (slot.capacity || 20))
     await supabase

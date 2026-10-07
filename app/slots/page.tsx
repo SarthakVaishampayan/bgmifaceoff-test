@@ -9,7 +9,7 @@ import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
 
 export const metadata: Metadata = {
   title: 'Semi Finals Registration | BGFS',
-  description: 'Book your match slots for Battlegrounds Faceoff Series Semi Finals (10-11 Oct). One last chance to qualify for the Grand Finals (17-18 Oct).',
+  description: 'Book your match slots for Battlegrounds Faceoff Series Semi Finals (17-18 Oct). One last chance to qualify for the Grand Finals (24-25 Oct).',
 }
 
 interface FreeCoupon {

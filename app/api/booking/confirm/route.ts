@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const slot = booking.slots as any
 
     // Re-verify slot capacity (race condition guard)
-    const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
+    const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-17' || slot.date === '2026-10-18' || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
     if (!isSemiFinals && (slot.status === 'full' || slot.teams_booked_count >= slot.capacity)) {
       // Mark this booking as failed since slot filled up
       await admin.from('bookings').update({ payment_status: 'failed' }).eq('booking_id', booking_id)
