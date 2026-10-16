@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Slot not found' }, { status: 404 })
     }
 
-    if (isSlotPastOrEnded(slot.date, slot.time_label, slot.status)) {
+    if (isSlotPastOrEnded(slot.date, slot.time_label, slot.status, (slot as any).close_time, undefined, slot.capacity)) {
       return NextResponse.json({
         error: 'Registration for this slot is closed.'
       }, { status: 400 })

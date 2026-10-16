@@ -2876,7 +2876,8 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     s.date === '2026-10-17' ||
     s.date === '2026-10-18' ||
     s.date === '2026-10-10' ||
-    (s.time_label && s.time_label.toLowerCase().includes('semi finals'))
+    (s.time_label && s.time_label.toLowerCase().includes('semi')) ||
+    (s.capacity || 0) >= 999
   )
 
   const semiFinalsBookings = useMemo(() => {
@@ -2951,7 +2952,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     setLoadingPresetId(999)
     const { data, error } = await supabase
       .from('slots')
-      .update({ status: 'full' })
+      .update({ status: 'closed' })
       .eq('slot_id', semiFinalsSlot.slot_id)
       .select()
       .single()

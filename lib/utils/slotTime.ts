@@ -152,12 +152,29 @@ export function formatMinutesToTimeString(totalMinutes: number): string {
 }
 
 /**
+ * Helper to determine if a slot is a Semi Finals tournament stage slot.
+ */
+export function isSemiFinalsSlot(
+  slot: { date?: string | null; time_label?: string | null; capacity?: number | null } | null | undefined
+): boolean {
+  if (!slot) return false
+  const label = (slot.time_label || '').toLowerCase()
+  if (label.includes('semi')) return true
+  const date = (slot.date || '').split('T')[0].trim()
+  if (date === '2026-10-17' || date === '2026-10-18' || date === '2026-10-10' || date === '2026-10-11') return true
+  if ((slot.capacity || 0) >= 999) return true
+  return false
+}
+
+/**
  * Checks if a slot is closed or past.
  * Logic:
  * 1. If admin marked as 'completed' or 'closed' -> closed.
- * 2. If slot date is earlier than today in IST -> closed.
- * 3. If slot date is later than today in IST -> not closed.
- * 4. If slot date is today:
+ * 2. Semi Finals stage slots NEVER auto-expire by clock or date.
+ *    They remain open until an admin explicitly sets status to 'closed', 'full', or 'completed'.
+ * 3. If slot date is earlier than today in IST -> closed.
+ * 4. If slot date is later than today in IST -> not closed.
+ * 5. If slot date is today:
  *    Uses customCloseTime (specific time or minutes offset), or falls back to defaultCloseMinutes (default: 13).
  */
 export function isSlotPastOrEnded(
@@ -165,10 +182,16 @@ export function isSlotPastOrEnded(
   timeLabelStr: string,
   status?: string,
   customCloseTime?: string | number | null,
-  defaultCloseMinutes: number | string = 13
+  defaultCloseMinutes: number | string = 13,
+  capacity?: number | null
 ): boolean {
   // If explicitly marked completed or closed by admin in DB
   if (status === 'completed' || status === 'closed') return true
+
+  // Semi Finals slots do not automatically expire by time or date — they remain open until admin explicitly closes or completes them
+  if (isSemiFinalsSlot({ date: dateStr, time_label: timeLabelStr, capacity })) {
+    return status === 'full'
+  }
 
   if (!dateStr) return false
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck, Calendar, AlertCircle, Trophy, CreditCard, Compass, Swords, Users, Target } from 'lucide-react'
-import { isSlotPastOrEnded, getSlotStartMinutes, getSlotWindowOnly, computeSlotMatchTimes } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getSlotStartMinutes, getSlotWindowOnly, computeSlotMatchTimes, isSemiFinalsSlot } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
 interface Slot {
@@ -16,7 +16,7 @@ interface Slot {
   entry_fee: number
   first_prize?: number
   second_prize?: number
-  status: 'open' | 'full' | 'completed'
+  status: 'open' | 'full' | 'completed' | 'closed'
   is_grand_finals: boolean
   whatsapp_link?: string
   m1_time?: string
@@ -152,7 +152,7 @@ export default function SlotsClient({
   const filteredSlots = useMemo(() => {
     const list = slotsList.filter(slot => {
       if (!mounted) return true
-      const isPast = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes)
+      const isPast = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes, slot.capacity)
       if (filterTab === 'upcoming') return !isPast
       if (filterTab === 'past') return isPast
       return true
@@ -595,14 +595,14 @@ function loadRazorpayScript(): Promise<boolean> {
 
             <div className={styles.slotGrid}>
               {dateSlots.map(slot => {
-                const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-17' || slot.date === '2026-10-18' || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
+                const isSemiFinals = isSemiFinalsSlot(slot)
                 const isAlreadyBooked = bookedSlotIds.some(id => String(id).trim().toLowerCase() === String(slot.slot_id).trim().toLowerCase())
                 const isBookingThis = bookingSlotId === slot.slot_id
                 const spotsLeft = Math.max(0, slot.capacity - slot.teams_booked_count)
 
                 // Strict expiration check
-                const isEnded = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes)
-                const isCompleted = isEnded || slot.status === 'completed'
+                const isEnded = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes, slot.capacity)
+                const isCompleted = isEnded || slot.status === 'completed' || (isSemiFinals && (slot.status === 'closed' || slot.status === 'full'))
                 const isFull = !isCompleted && !isSemiFinals && (spotsLeft <= 0 || slot.status === 'full')
                 const isUrgent = !isFull && !isCompleted && !isAlreadyBooked && !isSemiFinals && spotsLeft < 5
 

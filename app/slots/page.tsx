@@ -5,7 +5,7 @@ import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 import SlotsClient from './SlotsClient'
 import type { Metadata } from 'next'
 
-import { isSlotPastOrEnded, getSlotStartMinutes } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getSlotStartMinutes, isSemiFinalsSlot } from '@/lib/utils/slotTime'
 
 export const metadata: Metadata = {
   title: 'Semi Finals Registration | BGFS',
@@ -94,9 +94,13 @@ export default async function SlotsPage() {
     return aMins - bMins
   })
 
-  // Auto-close slots whose registration cutoff has passed
+  // Auto-close slots whose registration cutoff has passed (never auto-close Semi Finals)
   const autoCloseSlotIds = slots
-    .filter(s => s.status === 'open' && isSlotPastOrEnded(s.date, s.time_label, s.status, (s as any).close_time, defaultCloseMin))
+    .filter(s => {
+      if (s.status !== 'open') return false
+      if (isSemiFinalsSlot(s)) return false
+      return isSlotPastOrEnded(s.date, s.time_label, s.status, (s as any).close_time, defaultCloseMin, s.capacity)
+    })
     .map(s => s.slot_id)
 
   if (autoCloseSlotIds.length > 0) {

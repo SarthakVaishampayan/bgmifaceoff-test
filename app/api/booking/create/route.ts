@@ -1,6 +1,6 @@
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { isSlotPastOrEnded } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, isSemiFinalsSlot } from '@/lib/utils/slotTime'
 import { isSuperAdminEmail } from '@/lib/auth/adminGuard'
 import { getNextAvailableRoomSlot } from '@/lib/utils/roomSlot'
 
@@ -90,18 +90,18 @@ export async function POST(request: Request) {
     }
 
     // Guard: Prevent booking expired / past date-time slots
-    if (isSlotPastOrEnded(slot.date, slot.time_label, slot.status)) {
+    if (isSlotPastOrEnded(slot.date, slot.time_label, slot.status, (slot as any).close_time, undefined, slot.capacity)) {
       return NextResponse.json({
         error: 'Registration for this slot is closed.'
       }, { status: 400 })
     }
 
     // Check slot capacity (Semi Finals has unlimited capacity / no limit)
-    const isSemiFinals = (slot.time_label && slot.time_label.toLowerCase().includes('semi finals')) || slot.date === '2026-10-17' || slot.date === '2026-10-18' || slot.date === '2026-10-10' || (slot.capacity || 0) >= 999
+    const isSemiFinals = isSemiFinalsSlot(slot)
     if (!isSemiFinals && (slot.status === 'full' || slot.teams_booked_count >= slot.capacity)) {
       return NextResponse.json({ error: 'This slot is full. Please choose another slot.' }, { status: 409 })
     }
-    if (isSemiFinals && slot.status === 'full') {
+    if (isSemiFinals && (slot.status === 'full' || slot.status === 'closed' || slot.status === 'completed')) {
       return NextResponse.json({ error: 'Registration for the Semi Finals is currently closed.' }, { status: 409 })
     }
 
