@@ -108,7 +108,7 @@ export default async function SlotsPage() {
     slots = slots.map(s => autoCloseSlotIds.includes(s.slot_id) ? { ...s, status: 'closed' as const } : s)
     // Fire-and-forget DB update to sync DB status
     createAdminClient().then(admin =>
-      admin.from('slots').update({ status: 'closed' }).in('slot_id', autoCloseSlotIds)
+      admin.from('slots').update({ status: 'full' }).in('slot_id', autoCloseSlotIds)
     ).catch(() => {})
   }
 

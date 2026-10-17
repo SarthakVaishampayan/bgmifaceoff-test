@@ -150,8 +150,8 @@ export default function SlotListTab({
 
   // Filter out any slots marked as done / completed
   const activeSlots = slots.filter(s => s.status !== 'completed' && s.status !== 'done')
-  const closedSlots = activeSlots.filter(s => s.status === 'closed' || isSlotPastOrEnded(s.date, s.time_label, s.status))
-  const openSlots = activeSlots.filter(s => !(s.status === 'closed' || isSlotPastOrEnded(s.date, s.time_label, s.status)))
+  const closedSlots = activeSlots.filter(s => s.status === 'closed' || s.status === 'full' || isSlotPastOrEnded(s.date, s.time_label, s.status))
+  const openSlots = activeSlots.filter(s => !(s.status === 'closed' || s.status === 'full' || isSlotPastOrEnded(s.date, s.time_label, s.status)))
 
   const displayedSlots = slotFilter === 'closed'
     ? closedSlots
@@ -508,7 +508,7 @@ export default function SlotListTab({
                   </>
                 ) : (
                   displayedSlots.map((s) => {
-                    const isClosed = s.status === 'closed' || isSlotPastOrEnded(s.date, s.time_label, s.status)
+                    const isClosed = s.status === 'closed' || s.status === 'full' || isSlotPastOrEnded(s.date, s.time_label, s.status)
                     return (
                       <option key={s.slot_id} value={s.slot_id}>
                         {s.date} • {getSlotWindowOnly(s.time_label)} {isClosed ? '🔴 [CLOSED]' : '🟢 [OPEN]'} ({s.teams_booked_count || 0} teams)

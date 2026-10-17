@@ -2952,7 +2952,7 @@ function SlotsTab({ slots, setSlots, supabase, teams, onSyncPayouts, selectedDat
     setLoadingPresetId(999)
     const { data, error } = await supabase
       .from('slots')
-      .update({ status: 'closed' })
+      .update({ status: 'full' })
       .eq('slot_id', semiFinalsSlot.slot_id)
       .select()
       .single()

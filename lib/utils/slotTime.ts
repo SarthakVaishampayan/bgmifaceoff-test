@@ -185,8 +185,8 @@ export function isSlotPastOrEnded(
   defaultCloseMinutes: number | string = 13,
   capacity?: number | null
 ): boolean {
-  // If explicitly marked completed or closed by admin in DB
-  if (status === 'completed' || status === 'closed') return true
+  // If explicitly marked completed, closed, or full by admin in DB
+  if (status === 'completed' || status === 'closed' || status === 'full') return true
 
   // Semi Finals slots do not automatically expire by time or date — they remain open until admin explicitly closes or completes them
   if (isSemiFinalsSlot({ date: dateStr, time_label: timeLabelStr, capacity })) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Sparkles, X, Lock, MessageCircle, Flame, Key, FlaskConical, Ticket, BookOpen, FileText, ShieldAlert, ShieldCheck, Calendar, AlertCircle, Trophy, CreditCard, Compass, Swords, Users, Target } from 'lucide-react'
-import { isSlotPastOrEnded, getSlotStartMinutes, getSlotWindowOnly, computeSlotMatchTimes, isSemiFinalsSlot } from '@/lib/utils/slotTime'
+import { isSlotPastOrEnded, getSlotStartMinutes, getSlotWindowOnly, computeSlotMatchTimes, isSemiFinalsSlot, getISTParts } from '@/lib/utils/slotTime'
 import styles from './page.module.css'
 
 interface Slot {
@@ -148,13 +148,19 @@ export default function SlotsClient({
     } catch (e) {}
   }
 
-  // Filter slots based on date/time expiration (auto-closes based on custom cutoff or default minutes)
+  // Filter slots to display: keep Semi Finals, user-booked slots, and upcoming/today slots visible so closed slots show REGISTRATION CLOSED
   const filteredSlots = useMemo(() => {
+    const ist = getISTParts()
     const list = slotsList.filter(slot => {
       if (!mounted) return true
-      const isPast = isSlotPastOrEnded(slot.date, slot.time_label, slot.status, slot.close_time, defaultSlotCloseMinutes, slot.capacity)
-      if (filterTab === 'upcoming') return !isPast
-      if (filterTab === 'past') return isPast
+      const isSemiFinals = isSemiFinalsSlot(slot)
+      const isBooked = bookedSlotIds.some(id => String(id).trim().toLowerCase() === String(slot.slot_id).trim().toLowerCase())
+      if (isSemiFinals || isBooked) return true
+
+      const cleanSlotDate = String(slot.date || '').split('T')[0].trim()
+      // Only filter out old expired match days from previous dates
+      if (cleanSlotDate < ist.dateStr) return false
+
       return true
     })
 
@@ -168,7 +174,7 @@ export default function SlotsClient({
       const bMins = getSlotStartMinutes(b.time_label)
       return aMins - bMins
     })
-  }, [slotsList, filterTab, mounted, tick])
+  }, [slotsList, bookedSlotIds, mounted, tick])
 
   // Group filtered slots by date, ensuring morning to night ordering within each date
   const slotsByDate = useMemo(() => {
@@ -619,6 +625,11 @@ function loadRazorpayScript(): Promise<boolean> {
                         <span className={styles.bookedBadge}>
                           <Check size={10} /> {isSemiFinals ? 'SEMI FINALS REGISTERED' : 'REGISTERED'}
                         </span>
+                        {(isCompleted || isFull) && (
+                          <span style={{ marginLeft: 'auto', fontSize: '0.65rem', fontWeight: 800, color: '#f87171', background: 'rgba(239, 68, 68, 0.15)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                            REGISTRATION CLOSED
+                          </span>
+                        )}
                       </div>
 
                       <div className={styles.bookedCenter}>
@@ -742,34 +753,29 @@ function loadRazorpayScript(): Promise<boolean> {
 
                     {/* Top Row: Spots Left Pill (Top-Left) & FREE Ribbon (Top-Right) */}
                     <div className={styles.cardTopRow}>
-                      {!isSemiFinals ? (
-                        <span
-                          className={`
-                            ${styles.spotsBadge}
-                            ${isFull || isCompleted ? styles.spotsFull : ''}
-                            ${isUrgent ? styles.spotsUrgent : ''}
-                          `}
-                        >
-                          {isCompleted ? (
-                            'CLOSED'
-                          ) : isFull ? (
-                            'SLOTS FULL (0 LEFT)'
-                          ) : isUrgent ? (
-                            <><Flame size={11} className={styles.flameIcon} /> {spotsLeft} SPOTS LEFT</>
-                          ) : (
-                            `${spotsLeft}/${slot.capacity} SPOTS LEFT`
-                          )}
-                        </span>
-                      ) : isCompleted ? (
+                      {isCompleted || isFull ? (
                         <span
                           className={`${styles.spotsBadge} ${styles.spotsFull}`}
                           style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.35)', fontWeight: 800 }}
                         >
                           REGISTRATION CLOSED
                         </span>
+                      ) : !isSemiFinals ? (
+                        <span
+                          className={`
+                            ${styles.spotsBadge}
+                            ${isUrgent ? styles.spotsUrgent : ''}
+                          `}
+                        >
+                          {isUrgent ? (
+                            <><Flame size={11} className={styles.flameIcon} /> {spotsLeft} SPOTS LEFT</>
+                          ) : (
+                            `${spotsLeft}/${slot.capacity} SPOTS LEFT`
+                          )}
+                        </span>
                       ) : null}
 
-                      {showFreeOption && (
+                      {showFreeOption && !isCompleted && !isFull && (
                         <span className={styles.freeRibbon} style={{ marginLeft: 'auto' }}>
                           <Sparkles size={10} /> FREE
                         </span>
@@ -796,7 +802,7 @@ function loadRazorpayScript(): Promise<boolean> {
 
                     {/* Price Line */}
                     <div className={styles.cardPriceRow}>
-                      {isCompleted ? (
+                      {isCompleted || isFull ? (
                         <div className={styles.priceMeta}>REGISTRATION CLOSED</div>
                       ) : isSemiFinals ? (
                         <div className={styles.normalPriceTag} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -858,13 +864,9 @@ function loadRazorpayScript(): Promise<boolean> {
 
                     {/* Bottom Action Button (Pinned) */}
                     <div className={styles.cardBottomAction}>
-                      {isCompleted ? (
+                      {isCompleted || isFull ? (
                         <button disabled className={styles.cardBtnDisabled}>
                           REGISTRATION CLOSED
-                        </button>
-                      ) : isFull ? (
-                        <button disabled className={styles.cardBtnDisabled}>
-                          <Lock size={13} /> Full
                         </button>
                       ) : showFreeOption ? (
                         <button
