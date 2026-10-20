@@ -1,0 +1,717 @@
+/* ==========================================================================
+   BGFS PRIZE POOL SECTION — HOMEPAGE COMPONENT
+   Faithful to bgfs-prize-pool.html with full responsiveness and accessibility.
+   ========================================================================== */
+
+.wrap {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding-block: 64px 72px;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px));
+  color: #f2f1ee;
+  font-family: 'Barlow', 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+/* ── HEADER ── */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #2b261b;
+}
+
+.eyebrow {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #f6b90f;
+  margin: 0 0 10px;
+}
+
+.title {
+  font-family: 'Barlow Condensed', 'Rajdhani', 'Arial Narrow', sans-serif;
+  font-weight: 700;
+  font-size: clamp(44px, 8vw, 76px);
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  margin: 0;
+  color: #f2f1ee;
+}
+
+.titleHighlight {
+  font-style: normal;
+  color: #f6b90f;
+}
+
+.paid {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #151310;
+  border: 1px solid #2b261b;
+  border-radius: 6px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2fd17a;
+  box-shadow: 0 0 10px #2fd17a;
+  flex: none;
+}
+
+.paid small {
+  display: block;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9a958a;
+}
+
+.paid strong {
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: #f2f1ee;
+}
+
+.paid span {
+  font-size: 13px;
+  color: #9a958a;
+  margin-left: 4px;
+}
+
+.lede {
+  max-width: 60ch;
+  color: #9a958a;
+  margin: 22px 0 32px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ── BOARD ── */
+.board {
+  display: grid;
+  gap: 12px;
+}
+
+/* ── 1ST PLACE CHAMPION CARD ── */
+.champ {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 28px;
+  padding: 36px clamp(20px, 4vw, 44px);
+  border: 1px solid #8a6508;
+  border-radius: 6px;
+  background:
+    radial-gradient(120% 140% at 100% 50%, rgba(246, 185, 15, 0.16), transparent 60%),
+    linear-gradient(180deg, #19150b, #12100a);
+  box-shadow: 0 0 40px rgba(246, 185, 15, 0.10), inset 0 0 0 1px rgba(246, 185, 15, 0.06);
+  animation: glow 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 28px rgba(246, 185, 15, 0.07), inset 0 0 0 1px rgba(246, 185, 15, 0.06);
+  }
+  to {
+    box-shadow: 0 0 56px rgba(246, 185, 15, 0.16), inset 0 0 0 1px rgba(246, 185, 15, 0.10);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .champ {
+    animation: none;
+  }
+}
+
+.crest {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #8a6508;
+  background: rgba(246, 185, 15, 0.08);
+  border-radius: 6px;
+  color: #f6b90f;
+  flex-shrink: 0;
+}
+
+.crest svg {
+  width: 40px;
+  height: 40px;
+}
+
+.tag {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.champ .tag {
+  color: #f6b90f;
+}
+
+.place {
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: 1;
+  text-transform: uppercase;
+  margin-top: 4px;
+  color: #f2f1ee;
+}
+
+.amt {
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 0.9;
+  letter-spacing: 0.005em;
+}
+
+.champ .amt {
+  font-size: clamp(64px, 11vw, 124px);
+  color: #f6b90f;
+  text-shadow: 0 0 36px rgba(246, 185, 15, 0.35);
+  text-align: right;
+}
+
+/* ── TROPHY ASIDE (INSIDE 1ST PLACE CARD) ── */
+.reward {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 32px);
+  margin-top: 4px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(246, 185, 15, 0.22);
+}
+
+.stage {
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  width: clamp(190px, 22vw, 240px);
+  height: 340px;
+  border-radius: 6px;
+  border: 1px solid #3b3d42;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 18px;
+  background:
+    radial-gradient(70% 55% at 50% 38%, #5d6066 0%, #3a3c41 50%, rgba(20, 21, 23, 0) 100%),
+    linear-gradient(180deg, #2c2e32 0%, #1a1b1e 62%, #0d0d0f 62%, #0a0a0b 100%);
+}
+
+.stage::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 62%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.trophyImg {
+  position: relative;
+  z-index: 1;
+  height: 226px;
+  width: auto;
+  max-width: 78%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.5));
+}
+
+.refl {
+  position: relative;
+  width: 100%;
+  height: 62px;
+  margin-top: -1px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  opacity: 0.3;
+  -webkit-mask-image: linear-gradient(180deg, #000, transparent 85%);
+  mask-image: linear-gradient(180deg, #000, transparent 85%);
+}
+
+.reflImg {
+  height: 226px;
+  width: auto;
+  max-width: 78%;
+  object-fit: contain;
+  transform: scaleY(-1);
+  filter: blur(1px);
+  flex: none;
+}
+
+.rewardCopy {
+  min-width: 0;
+}
+
+.rewardCopy .eyebrow {
+  margin: 0 0 6px;
+}
+
+.rewardHeading {
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: clamp(26px, 3.6vw, 36px);
+  line-height: 1;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  color: #f2f1ee;
+}
+
+.rewardText {
+  margin: 0;
+  color: #cfcbc2;
+  max-width: 56ch;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── CHAMPIONS WALL (SEPARATE BLOCK UNDER 1ST PLACE) ── */
+.hall {
+  margin: 16px 0 12px;
+}
+
+.wallHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
+.wallTitle {
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: clamp(24px, 3.4vw, 32px);
+  text-transform: uppercase;
+  margin: 0;
+  color: #f2f1ee;
+}
+
+.wallLabel {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #f6b90f;
+  margin: 0;
+}
+
+.banner {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  min-height: clamp(380px, 46vw, 480px);
+  padding: clamp(22px, 4vw, 44px);
+  border: 1px solid #2b261b;
+  border-radius: 6px;
+  overflow: hidden;
+  background:
+    radial-gradient(40% 55% at 78% 18%, rgba(246, 185, 15, 0.38), transparent 70%),
+    radial-gradient(30% 40% at 92% 40%, rgba(246, 185, 15, 0.18), transparent 70%),
+    radial-gradient(35% 45% at 60% 25%, rgba(120, 140, 190, 0.20), transparent 70%),
+    linear-gradient(135deg, #1b1a18, #0c0b0a 70%);
+}
+
+.bannerPhoto {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(10, 10, 9, 0.96) 0%, rgba(10, 10, 9, 0.78) 34%, rgba(10, 10, 9, 0) 68%),
+    linear-gradient(0deg, rgba(10, 10, 9, 0.75), transparent 45%);
+}
+
+/* Dashed photo placeholder */
+.slot {
+  position: absolute;
+  z-index: -2;
+  right: clamp(14px, 3vw, 36px);
+  top: clamp(14px, 3vw, 32px);
+  width: min(52%, 520px);
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  border: 1.5px dashed rgba(246, 185, 15, 0.5);
+  border-radius: 6px;
+  color: rgba(246, 185, 15, 0.85);
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 16px;
+}
+
+.slot svg {
+  width: 34px;
+  height: 34px;
+  display: block;
+  margin: 0 auto 10px;
+}
+
+.bannerCopy {
+  position: relative;
+  max-width: 440px;
+}
+
+.chip {
+  display: inline-block;
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  border: 1.5px solid #f2f1ee;
+  border-radius: 4px;
+  padding: 2px 10px 0;
+  margin-bottom: 18px;
+  color: #f2f1ee;
+}
+
+.bannerTitle {
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-weight: 800;
+  font-size: clamp(44px, 7vw, 68px);
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: #f6b90f;
+  margin: 0 0 12px;
+}
+
+.bannerText {
+  margin: 0 0 22px;
+  color: #d8d6d0;
+  max-width: 40ch;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.btnGhost {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #f2f1ee;
+  text-decoration: none;
+  border: 1px solid #4a463c;
+  background: rgba(21, 19, 16, 0.7);
+  padding: 10px 16px;
+  border-radius: 4px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.btnGhost:hover {
+  border-color: #f6b90f;
+  background: rgba(21, 19, 16, 0.9);
+}
+
+.btnGhost:focus-visible {
+  outline: 2px solid #f2f1ee;
+  outline-offset: 3px;
+}
+
+/* ── SMALLER PAYOUTS GRID (2x2) ── */
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px clamp(18px, 3vw, 32px);
+  background: #151310;
+  border: 1px solid #2b261b;
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.tile .place {
+  font-size: clamp(28px, 4vw, 38px);
+}
+
+.tile .amt {
+  font-size: clamp(44px, 6.5vw, 68px);
+}
+
+.tileSilver {
+  border-color: #4a4f5a;
+}
+
+.tileSilver .tag,
+.tileSilver .amt {
+  color: #c7ccd6;
+}
+
+.tileBronze {
+  border-color: #5a3d27;
+}
+
+.tileBronze .tag,
+.tileBronze .amt {
+  color: #e0955a;
+}
+
+.tileFourth .place {
+  margin: 0;
+}
+
+.tileMvp {
+  border-color: #8a6508;
+  background: linear-gradient(180deg, #17140c, #12100a);
+}
+
+.tileMvp .tag {
+  color: #f6b90f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tileMvp .tag svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tileMvp .amt {
+  color: #f6b90f;
+}
+
+.tileMvp .place {
+  margin: 0;
+}
+
+/* ── PERKS SECTION ── */
+.perksHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 56px 0 18px;
+}
+
+.perksTitle {
+  font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: clamp(28px, 4.5vw, 40px);
+  text-transform: uppercase;
+  margin: 0;
+  letter-spacing: 0.01em;
+  color: #f2f1ee;
+}
+
+.perksLabel {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #f6b90f;
+  margin: 0;
+}
+
+.perksList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.perkItem {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 18px;
+  background: #151310;
+  border: 1px solid #2b261b;
+  border-radius: 6px;
+  min-height: 150px;
+}
+
+.perkIconWrap {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(246, 185, 15, 0.10);
+  color: #f6b90f;
+}
+
+.perkIconWrap svg {
+  width: 20px;
+  height: 20px;
+}
+
+.perkText {
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.3;
+  color: #f2f1ee;
+}
+
+/* ── CALL TO ACTION STRIP ── */
+.cta {
+  margin-top: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px;
+  background: #151310;
+  border: 1px solid #2b261b;
+  border-radius: 6px;
+}
+
+.ctaTitle {
+  display: block;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f2f1ee;
+}
+
+.ctaDesc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #9a958a;
+  max-width: 52ch;
+}
+
+.btnCta {
+  display: inline-block;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #130e00;
+  background: #f6b90f;
+  padding: 13px 20px;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: filter 0.2s ease;
+}
+
+.btnCta:hover {
+  filter: brightness(1.08);
+}
+
+.btnCta:focus-visible {
+  outline: 2px solid #f2f1ee;
+  outline-offset: 3px;
+}
+
+/* ── RESPONSIVE RULES ── */
+@media (max-width: 900px) {
+  .perksList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .perkItem {
+    min-height: 0;
+    gap: 18px;
+  }
+  .perkItem:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    padding-block: 44px 48px;
+  }
+  .champ {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 24px 20px;
+  }
+  .crest {
+    width: 56px;
+    height: 56px;
+  }
+  .crest svg {
+    width: 30px;
+    height: 30px;
+  }
+  .champ .amt {
+    text-align: left;
+  }
+  .reward {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .stage {
+    width: 100%;
+    max-width: 280px;
+  }
+  .wallHeader {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .banner {
+    min-height: 440px;
+  }
+  .banner::before {
+    background:
+      linear-gradient(0deg, rgba(10, 10, 9, 0.97) 0%, rgba(10, 10, 9, 0.85) 45%, rgba(10, 10, 9, 0) 85%);
+  }
+  .slot {
+    width: calc(100% - 28px);
+    right: 14px;
+    aspect-ratio: auto;
+    height: 46%;
+  }
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+  .tile {
+    padding: 20px;
+  }
+  .perksHeader {
+    flex-direction: column;
+    gap: 6px;
+  }
+}

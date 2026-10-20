@@ -6,6 +6,7 @@ import { Users, Calendar, Crosshair, Trophy, Medal, Award, Zap, Check, ArrowRigh
 import CountdownTimer from '@/components/CountdownTimer'
 import HeroCTA from '@/components/HeroCTA'
 import Roadmap from '@/components/Roadmap'
+import HomePrizePool from '@/components/HomePrizePool'
 import HowItWorks from '@/components/HowItWorks'
 import { createClient } from '@/lib/supabase/server'
 import styles from './page.module.css'
@@ -77,6 +78,9 @@ export default async function LandingPage() {
             </div>
           </div>
         </section>
+
+        {/* ── PRIZE POOL SECTION ── */}
+        <HomePrizePool />
 
         {/* ── ROADMAP SECTION ── */}
         <Roadmap />

@@ -1,5 +1,4 @@
-import Link from 'next/link'
-import { Trophy, Shield, Swords, Award, ArrowRight, Zap, Flame } from 'lucide-react'
+import { Trophy, Shield, Swords, Award, Zap, Flame } from 'lucide-react'
 import styles from './Roadmap.module.css'
 
 export default function Roadmap() {
@@ -131,21 +130,6 @@ export default function Roadmap() {
               </div>
             )
           })}
-        </div>
-
-        {/* Broadcast Footer */}
-        <div className={styles.broadcastFooter}>
-          <div className={styles.footerLeftText}>
-            <h4 className={styles.footerTitle}>Semi Finals Registrations Are Now Live</h4>
-            <p className={styles.footerSubtitle}>
-              One last chance to qualify for the Grand Finals! Teams 9–16 &amp; open squads battle in dynamic groups across 6 matches for the Top 6 spots.
-            </p>
-          </div>
-
-          <Link href="/slots" className={styles.footerCta}>
-            <span>REGISTER FOR SEMI FINALS</span>
-            <ArrowRight size={16} />
-          </Link>
         </div>
       </div>
     </section>
